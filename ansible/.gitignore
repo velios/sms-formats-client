@@ -1,0 +1,19 @@
+# Local inventories with real IPs/hosts (never commit)
+inventory/*.local.yml
+inventory/*.local.yaml
+
+# Secrets / vault files
+vars/secrets.yml
+*.vault-pass
+.vault-pass
+
+# SSH keys
+*.pem
+*.key
+
+# Ansible runtime artifacts
+*.retry
+/tmp/ansible_facts
+
+# OS/editor
+.DS_Store

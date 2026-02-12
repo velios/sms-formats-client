@@ -1,0 +1,67 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["ultracite/biome/core"],
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "noExportedImports": "off",
+        "noNestedTernary": "off",
+        "noNonNullAssertion": "off",
+        "noParameterAssign": "off",
+        "useFilenamingConvention": "off"
+      },
+      "complexity": {
+        "noForEach": "off",
+        "noVoid": "off"
+      },
+      "correctness": {
+        "noUnusedFunctionParameters": "off",
+        "useExhaustiveDependencies": "off"
+      },
+      "suspicious": {
+        "noAlert": "off",
+        "noArrayIndexKey": "off",
+        "noAssignInExpressions": "off",
+        "noExplicitAny": "off",
+        "noEvolvingTypes": "off",
+        "noTemplateCurlyInString": "off",
+        "useAwait": "off",
+        "useIterableCallbackReturn": "off"
+      },
+      "performance": {
+        "useTopLevelRegex": "off",
+        "noBarrelFile": "off",
+        "noNamespaceImport": "off"
+      },
+      "a11y": {
+        "noLabelWithoutControl": "off",
+        "noNoninteractiveElementInteractions": "off",
+        "noStaticElementInteractions": "off",
+        "useButtonType": "off",
+        "useKeyWithClickEvents": "off",
+        "useSemanticElements": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        ".codex/skills/**/*.js",
+        ".codex/skills/**/*.mjs",
+        ".codex/skills/**/*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          }
+        }
+      }
+    }
+  ]
+}

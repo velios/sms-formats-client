@@ -1,0 +1,407 @@
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import {
+  useBranches,
+  useOpenPRs,
+  useStartableIssues,
+  useSwitchSource,
+} from "@/hooks/useGitHub";
+
+type Mode = "branch" | "pr" | "issue";
+
+function filterBranches(
+  branches: Array<{ name: string }> | undefined,
+  query: string
+) {
+  const normalized = query.toLowerCase();
+  return (branches ?? []).filter((branch) =>
+    branch.name.toLowerCase().includes(normalized)
+  );
+}
+
+function filterPullRequests(
+  prs: Array<{ number: number; title: string; headRef: string }> | undefined,
+  query: string
+) {
+  const normalized = query.toLowerCase();
+  return (prs ?? []).filter(
+    (pr) =>
+      pr.title.toLowerCase().includes(normalized) ||
+      `#${pr.number}`.includes(query)
+  );
+}
+
+function filterIssues(
+  issues:
+    | Array<{ number: number; title: string; state: "open" | "closed" }>
+    | undefined,
+  query: string
+) {
+  const normalized = query.toLowerCase();
+  return (issues ?? []).filter(
+    (issue) =>
+      issue.title.toLowerCase().includes(normalized) ||
+      `#${issue.number}`.includes(query)
+  );
+}
+
+function resolveModeItems(
+  mode: Mode,
+  filteredBranches: Array<{ name: string }>,
+  filteredPRs: Array<{ number: number; title: string; headRef: string }>,
+  filteredIssues: Array<{
+    number: number;
+    title: string;
+    state: "open" | "closed";
+  }>
+) {
+  if (mode === "branch") {
+    return filteredBranches;
+  }
+  if (mode === "pr") {
+    return filteredPRs;
+  }
+  return filteredIssues;
+}
+
+function resolveSearchPlaceholder(
+  mode: Mode,
+  t: (key: string) => string
+): string {
+  if (mode === "branch") {
+    return t("source.searchBranch");
+  }
+  if (mode === "pr") {
+    return t("source.searchPR");
+  }
+  return t("source.searchIssue");
+}
+
+function resolveNoItemsText(mode: Mode, t: (key: string) => string): string {
+  return mode === "issue" ? t("source.noStartableIssues") : t("bank.noResults");
+}
+
+function resolveRefreshingState(
+  mode: Mode,
+  states: {
+    isBranchesFetching: boolean;
+    isPRsFetching: boolean;
+    isIssuesFetching: boolean;
+  }
+): boolean {
+  if (mode === "branch") {
+    return states.isBranchesFetching;
+  }
+  if (mode === "pr") {
+    return states.isPRsFetching;
+  }
+  return states.isIssuesFetching;
+}
+
+async function refreshModeData(
+  mode: Mode,
+  actions: {
+    refetchBranches: () => Promise<unknown>;
+    refetchPRs: () => Promise<unknown>;
+    refetchIssues: () => Promise<unknown>;
+  }
+): Promise<void> {
+  if (mode === "branch") {
+    await actions.refetchBranches();
+    return;
+  }
+  if (mode === "pr") {
+    await actions.refetchPRs();
+    return;
+  }
+  await actions.refetchIssues();
+}
+
+function renderItemsList(params: {
+  mode: Mode;
+  activeIndex: number;
+  filteredBranches: Array<{ name: string }>;
+  filteredPRs: Array<{ number: number; title: string }>;
+  filteredIssues: Array<{
+    number: number;
+    title: string;
+    state: "open" | "closed";
+  }>;
+  onSelect: (index: number) => void;
+  onHover: (index: number) => void;
+  t: (key: string) => string;
+}) {
+  const {
+    mode,
+    activeIndex,
+    filteredBranches,
+    filteredPRs,
+    filteredIssues,
+    onSelect,
+    onHover,
+    t,
+  } = params;
+
+  if (mode === "branch") {
+    return filteredBranches.map((branch, index) => (
+      <div
+        className={`autocomplete__item ${index === activeIndex ? "autocomplete__item--active" : ""}`}
+        key={branch.name}
+        onClick={() => onSelect(index)}
+        onMouseEnter={() => onHover(index)}
+      >
+        <span className="text-mono text-sm">{branch.name}</span>
+      </div>
+    ));
+  }
+
+  if (mode === "pr") {
+    return filteredPRs.map((pr, index) => (
+      <div
+        className={`autocomplete__item ${index === activeIndex ? "autocomplete__item--active" : ""}`}
+        key={pr.number}
+        onClick={() => onSelect(index)}
+        onMouseEnter={() => onHover(index)}
+      >
+        <span className="text-muted text-sm">#{pr.number}</span>
+        <span className="truncate text-sm">{pr.title}</span>
+      </div>
+    ));
+  }
+
+  return filteredIssues.map((issue, index) => (
+    <div
+      className={`autocomplete__item ${index === activeIndex ? "autocomplete__item--active" : ""}`}
+      key={issue.number}
+      onClick={() => onSelect(index)}
+      onMouseEnter={() => onHover(index)}
+    >
+      <span className="text-muted text-sm">#{issue.number}</span>
+      <span className="truncate text-sm">{issue.title}</span>
+      <span
+        className={`badge ${issue.state === "open" ? "badge--success" : "badge--warning"}`}
+      >
+        {t(`source.issueState.${issue.state}`)}
+      </span>
+    </div>
+  ));
+}
+
+export function SourceSelector() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>("branch");
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const switchSource = useSwitchSource();
+
+  const {
+    data: branches,
+    refetch: refetchBranches,
+    isFetching: isBranchesFetching,
+  } = useBranches(open && mode === "branch");
+  const {
+    data: prs,
+    refetch: refetchPRs,
+    isFetching: isPRsFetching,
+  } = useOpenPRs(open && mode === "pr");
+  const {
+    data: issues,
+    refetch: refetchIssues,
+    isFetching: isIssuesFetching,
+  } = useStartableIssues(open && mode === "issue");
+
+  // Close on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filteredBranches = filterBranches(branches, query);
+  const filteredPRs = filterPullRequests(prs, query);
+  const filteredIssues = filterIssues(issues, query);
+
+  const items = resolveModeItems(
+    mode,
+    filteredBranches,
+    filteredPRs,
+    filteredIssues
+  );
+  const itemCount = items.length;
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (itemCount === 0) {
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, itemCount - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && itemCount > 0) {
+      e.preventDefault();
+      handleSelect(activeIndex);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  const handleSelect = async (index: number) => {
+    if (mode === "branch") {
+      const b = filteredBranches[index];
+      if (b) {
+        await switchSource("branch", b.name);
+        setOpen(false);
+        setQuery("");
+      }
+    } else if (mode === "pr") {
+      const pr = filteredPRs[index];
+      if (pr) {
+        await switchSource("pr", pr.headRef, pr.number);
+        setOpen(false);
+        setQuery("");
+      }
+    } else {
+      const issue = filteredIssues[index];
+      if (issue) {
+        try {
+          sessionStorage.setItem(
+            "sms-game-selected-issue",
+            JSON.stringify(issue)
+          );
+        } catch {
+          // ignore storage errors, fallback to network fetch on next screen
+        }
+        navigate(
+          `/share-your-sms?stage=issue&issue=${issue.number}&autostart=1`
+        );
+        setOpen(false);
+        setQuery("");
+      }
+    }
+  };
+
+  const switchMode = (nextMode: Mode) => {
+    setMode(nextMode);
+    setQuery("");
+    setActiveIndex(0);
+  };
+
+  const isRefreshing = resolveRefreshingState(mode, {
+    isBranchesFetching,
+    isPRsFetching,
+    isIssuesFetching,
+  });
+
+  const refreshCurrentMode = async () => {
+    setActiveIndex(0);
+    await refreshModeData(mode, {
+      refetchBranches,
+      refetchPRs,
+      refetchIssues,
+    });
+  };
+
+  const searchPlaceholder = resolveSearchPlaceholder(mode, t);
+
+  const noItemsText = resolveNoItemsText(mode, t);
+
+  return (
+    <div className="autocomplete" ref={ref}>
+      <button className="btn btn--sm" onClick={() => setOpen(!open)}>
+        {t("source.label")}
+      </button>
+
+      {open && (
+        <div
+          className="autocomplete__dropdown"
+          style={{ width: "420px", right: 0, left: "auto" }}
+        >
+          <div
+            className="flex items-center justify-between gap-sm"
+            style={{
+              padding: "8px",
+              borderBottom: "1px solid var(--c-border)",
+            }}
+          >
+            <div className="flex gap-xs">
+              <button
+                className={`tab ${mode === "branch" ? "tab--active" : ""}`}
+                onClick={() => switchMode("branch")}
+              >
+                {t("source.branch")}
+              </button>
+              <button
+                className={`tab ${mode === "pr" ? "tab--active" : ""}`}
+                onClick={() => switchMode("pr")}
+              >
+                {t("source.pullRequest")}
+              </button>
+              <button
+                className={`tab ${mode === "issue" ? "tab--active" : ""}`}
+                onClick={() => switchMode("issue")}
+              >
+                {t("source.startIssue")}
+              </button>
+            </div>
+            <button
+              className="btn btn--sm"
+              disabled={isRefreshing}
+              onClick={() => {
+                void refreshCurrentMode();
+              }}
+            >
+              {isRefreshing ? t("app.loading") : t("source.refresh")}
+            </button>
+          </div>
+
+          <div style={{ padding: "8px" }}>
+            <input
+              autoFocus
+              className="input"
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder={searchPlaceholder}
+              value={query}
+            />
+          </div>
+
+          <div style={{ maxHeight: "260px", overflowY: "auto" }}>
+            {renderItemsList({
+              mode,
+              activeIndex,
+              filteredBranches,
+              filteredPRs,
+              filteredIssues,
+              onSelect: handleSelect,
+              onHover: setActiveIndex,
+              t,
+            })}
+
+            {itemCount === 0 && (
+              <div className="autocomplete__item text-muted text-sm">
+                {noItemsText}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
