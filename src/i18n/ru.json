@@ -35,6 +35,8 @@
   "bank": {
     "search": "Поиск банка…",
     "searchFormat": "Поиск формата…",
+    "searchIndexing": "Индексируем примеры: {{loaded}} / {{total}}",
+    "searchIndexingWithErrors": "Индексируем примеры: {{loaded}} / {{total}} (ошибок: {{errors}})",
     "changedFormats": "Измененные",
     "noResults": "Банки не найдены",
     "banks": "Банки",

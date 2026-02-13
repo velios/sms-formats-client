@@ -35,6 +35,8 @@
   "bank": {
     "search": "Search bank…",
     "searchFormat": "Search format…",
+    "searchIndexing": "Indexing examples: {{loaded}} / {{total}}",
+    "searchIndexingWithErrors": "Indexing examples: {{loaded}} / {{total}} (errors: {{errors}})",
     "changedFormats": "Changed",
     "noResults": "No banks found",
     "banks": "Banks",

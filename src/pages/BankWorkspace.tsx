@@ -3,11 +3,15 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
+import { parseFormatFile } from "@/domain/format";
+import { fetchFileContent } from "@/domain/github";
+import { type FormatSearchDoc, searchFormatPaths } from "@/domain/search";
 import type { BankInfo } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
@@ -20,6 +24,8 @@ import { useDraftStore, useSourceStore } from "@/store";
 // ─── Recent formats persistence ───
 const RECENT_FORMATS_KEY = "sms-formats-recent-formats";
 const MAX_RECENT_FORMATS = 10;
+const SEARCH_EXAMPLE_MIN_QUERY_LENGTH = 2;
+const SEARCH_INDEX_PARALLELISM = 4;
 
 function getRecentFormats(bankPath: string): string[] {
   try {
@@ -112,8 +118,8 @@ function sortFormatPaths(
     if (aChanged !== bChanged) {
       return aChanged ? -1 : 1;
     }
-    const aName = a.split("/").pop() ?? a;
-    const bName = b.split("/").pop() ?? b;
+    const aName = extractFormatFileName(a);
+    const bName = extractFormatFileName(b);
     return aName.localeCompare(bName, undefined, { sensitivity: "base" });
   });
 }
@@ -137,15 +143,331 @@ function collectAllFormatFiles(
   );
 }
 
-function filterFormatsByQuery(formatPaths: string[], query: string): string[] {
-  if (!query) {
-    return formatPaths;
+function extractFormatFileName(path: string): string {
+  return path.split("/").pop() ?? path;
+}
+
+function extractExamplesForSearch(content: string, filePath: string): string {
+  return parseFormatFile(content, filePath).examples.join("\n");
+}
+
+function shouldStartExampleIndexing(query: string, formatTab: string): boolean {
+  if (!(formatTab === "all" || formatTab === "changed")) {
+    return false;
   }
-  const normalizedQuery = query.toLowerCase();
-  return formatPaths.filter((path) => {
-    const name = path.split("/").pop() ?? path;
-    return name.toLowerCase().includes(normalizedQuery);
+  return query.trim().length >= SEARCH_EXAMPLE_MIN_QUERY_LENGTH;
+}
+
+function upsertRemoteSearchDoc(
+  prev: Map<string, FormatSearchDoc>,
+  path: string,
+  exampleText: string
+): Map<string, FormatSearchDoc> {
+  const next = new Map(prev);
+  const previous = next.get(path);
+  next.set(path, {
+    path,
+    name: previous?.name ?? extractFormatFileName(path),
+    exampleText,
+    isLoaded: true,
+    source: "remote",
   });
+  return next;
+}
+
+function upsertRemoteErrorDoc(
+  prev: Map<string, FormatSearchDoc>,
+  path: string
+): Map<string, FormatSearchDoc> {
+  const next = new Map(prev);
+  const previous = next.get(path);
+  next.set(path, {
+    path,
+    name: previous?.name ?? extractFormatFileName(path),
+    exampleText: previous?.exampleText ?? "",
+    isLoaded: true,
+    source: "remote-error",
+  });
+  return next;
+}
+
+function syncSearchDocs(params: {
+  previousDocs: Map<string, FormatSearchDoc>;
+  formatPaths: string[];
+  draftStore: {
+    getDraft: (
+      filePath: string
+    ) => { content: string; remoteContent: string } | undefined;
+  };
+}): Map<string, FormatSearchDoc> {
+  const { previousDocs, formatPaths, draftStore } = params;
+  const next = new Map<string, FormatSearchDoc>();
+  for (const path of formatPaths) {
+    const draft = draftStore.getDraft(path);
+    if (draft) {
+      next.set(path, {
+        path,
+        name: extractFormatFileName(path),
+        exampleText: extractExamplesForSearch(draft.content, path),
+        isLoaded: true,
+        source: "draft",
+      });
+      continue;
+    }
+
+    const previous = previousDocs.get(path);
+    if (previous) {
+      next.set(path, {
+        ...previous,
+        path,
+        name: extractFormatFileName(path),
+      });
+      continue;
+    }
+
+    next.set(path, {
+      path,
+      name: extractFormatFileName(path),
+      exampleText: "",
+      isLoaded: false,
+      source: "none",
+    });
+  }
+  return next;
+}
+
+interface SearchDraftStore {
+  drafts: Map<string, { content: string; remoteContent: string }>;
+  getDraft: (
+    filePath: string
+  ) => { content: string; remoteContent: string } | undefined;
+}
+
+function useBankFormatSearch(params: {
+  allFormatFiles: string[];
+  changedFormats: string[];
+  changedFormatFiles: Set<string>;
+  draftStore: SearchDraftStore;
+  formatSearch: string;
+  formatTab: "all" | "recent" | "changed";
+  bankPath: string;
+  repository: { owner: string; repo: string };
+  sourceRefNameForContent: string | undefined;
+}) {
+  const {
+    allFormatFiles,
+    changedFormats,
+    changedFormatFiles,
+    draftStore,
+    formatSearch,
+    formatTab,
+    bankPath,
+    repository,
+    sourceRefNameForContent,
+  } = params;
+  const [searchDocsByPath, setSearchDocsByPath] = useState<
+    Map<string, FormatSearchDoc>
+  >(new Map());
+  const [indexingInFlight, setIndexingInFlight] = useState(0);
+  const [indexingErrors, setIndexingErrors] = useState(0);
+  const indexingSessionRef = useRef("");
+  const inFlightSearchPathsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    setSearchDocsByPath((prev) =>
+      syncSearchDocs({
+        previousDocs: prev,
+        formatPaths: allFormatFiles,
+        draftStore,
+      })
+    );
+  }, [allFormatFiles, draftStore, draftStore.drafts]);
+
+  const activeSearchScope = useMemo(() => {
+    if (formatTab === "changed") {
+      return changedFormats;
+    }
+    return allFormatFiles;
+  }, [allFormatFiles, changedFormats, formatTab]);
+  const shouldIndexExamples = shouldStartExampleIndexing(
+    formatSearch,
+    formatTab
+  );
+  const searchSessionId = `${repository.owner}/${repository.repo}:${sourceRefNameForContent ?? ""}:${bankPath}`;
+
+  useEffect(() => {
+    indexingSessionRef.current = searchSessionId;
+    inFlightSearchPathsRef.current.clear();
+    setIndexingInFlight(0);
+    setIndexingErrors(0);
+  }, [searchSessionId]);
+
+  const loadRemoteSearchDoc = useCallback(
+    async (path: string, sessionId: string) => {
+      if (!sourceRefNameForContent) {
+        return;
+      }
+      try {
+        const remoteContent = await fetchFileContent(
+          path,
+          sourceRefNameForContent,
+          repository
+        );
+        if (indexingSessionRef.current !== sessionId) {
+          return;
+        }
+        const exampleText = extractExamplesForSearch(remoteContent, path);
+        setSearchDocsByPath((prev) =>
+          upsertRemoteSearchDoc(prev, path, exampleText)
+        );
+      } catch {
+        if (indexingSessionRef.current !== sessionId) {
+          return;
+        }
+        setSearchDocsByPath((prev) => upsertRemoteErrorDoc(prev, path));
+        setIndexingErrors((prev) => prev + 1);
+      } finally {
+        inFlightSearchPathsRef.current.delete(path);
+        if (indexingSessionRef.current === sessionId) {
+          setIndexingInFlight((prev) => Math.max(prev - 1, 0));
+        }
+      }
+    },
+    [repository, sourceRefNameForContent]
+  );
+
+  useEffect(() => {
+    if (!(shouldIndexExamples && sourceRefNameForContent)) {
+      return;
+    }
+
+    const availableSlots =
+      SEARCH_INDEX_PARALLELISM - inFlightSearchPathsRef.current.size;
+    if (availableSlots <= 0) {
+      return;
+    }
+
+    const pendingPaths = activeSearchScope.filter((path) => {
+      if (inFlightSearchPathsRef.current.has(path)) {
+        return false;
+      }
+      if (draftStore.getDraft(path)) {
+        return false;
+      }
+      const doc = searchDocsByPath.get(path);
+      return !doc?.isLoaded;
+    });
+    if (pendingPaths.length === 0) {
+      return;
+    }
+
+    const sessionId = indexingSessionRef.current;
+    const batch = pendingPaths.slice(0, availableSlots);
+    for (const path of batch) {
+      inFlightSearchPathsRef.current.add(path);
+      setIndexingInFlight((prev) => prev + 1);
+      void loadRemoteSearchDoc(path, sessionId);
+    }
+  }, [
+    activeSearchScope,
+    draftStore,
+    draftStore.drafts,
+    loadRemoteSearchDoc,
+    searchDocsByPath,
+    shouldIndexExamples,
+    sourceRefNameForContent,
+  ]);
+
+  const indexedScopeSummary = useMemo(() => {
+    let loadedCount = 0;
+    for (const path of activeSearchScope) {
+      const draft = draftStore.getDraft(path);
+      if (draft) {
+        loadedCount += 1;
+        continue;
+      }
+      if (searchDocsByPath.get(path)?.isLoaded) {
+        loadedCount += 1;
+      }
+    }
+    return {
+      loadedCount,
+      total: activeSearchScope.length,
+    };
+  }, [activeSearchScope, draftStore, draftStore.drafts, searchDocsByPath]);
+
+  const filteredFormatFiles = useMemo(
+    () =>
+      searchFormatPaths({
+        formatPaths: allFormatFiles,
+        query: formatSearch,
+        docsByPath: searchDocsByPath,
+        changedFormatFiles,
+      }),
+    [allFormatFiles, changedFormatFiles, formatSearch, searchDocsByPath]
+  );
+
+  const filteredChangedFormats = useMemo(
+    () =>
+      searchFormatPaths({
+        formatPaths: changedFormats,
+        query: formatSearch,
+        docsByPath: searchDocsByPath,
+        changedFormatFiles,
+      }),
+    [changedFormatFiles, changedFormats, formatSearch, searchDocsByPath]
+  );
+
+  return {
+    filteredFormatFiles,
+    filteredChangedFormats,
+    shouldIndexExamples,
+    indexedScopeSummary,
+    indexingInFlight,
+    indexingErrors,
+  };
+}
+
+function useAutoSelectFormat(params: {
+  requestedFile: string | null;
+  allFormatFiles: string[];
+  selectedFile: string | null;
+  setSelectedFile: (filePath: string | null) => void;
+  setShowSenders: (value: boolean) => void;
+}) {
+  const {
+    requestedFile,
+    allFormatFiles,
+    selectedFile,
+    setSelectedFile,
+    setShowSenders,
+  } = params;
+
+  useEffect(() => {
+    if (
+      !(
+        requestedFile &&
+        allFormatFiles.includes(requestedFile) &&
+        selectedFile !== requestedFile
+      )
+    ) {
+      return;
+    }
+    setSelectedFile(requestedFile);
+    setShowSenders(false);
+  }, [
+    requestedFile,
+    allFormatFiles,
+    selectedFile,
+    setSelectedFile,
+    setShowSenders,
+  ]);
+
+  useEffect(() => {
+    if (!selectedFile && allFormatFiles.length > 0) {
+      setSelectedFile(allFormatFiles[0]!);
+    }
+  }, [allFormatFiles, selectedFile, setSelectedFile]);
 }
 
 function resolveVisibleFormats(params: {
@@ -201,6 +523,130 @@ function renderWorkspaceContent(params: {
   return (
     <div className="flex h-full items-center justify-center text-muted">
       {t("bank.formats")}: {t("bank.noResults")}
+    </div>
+  );
+}
+
+function FormatsPanel(params: {
+  t: (key: string) => string;
+  formatTab: "all" | "recent" | "changed";
+  setFormatTab: (value: "all" | "recent" | "changed") => void;
+  setShowCreateFormat: (value: boolean) => void;
+  formatSearch: string;
+  setFormatSearch: (value: string) => void;
+  showSearchIndexStatus: boolean;
+  searchIndexingLabel: string;
+  visibleFormats: string[];
+  changedFormatFiles: Set<string>;
+  selectedFile: string | null;
+  handleSelectFile: (path: string) => void;
+  repository: { owner: string; repo: string };
+  refName: string;
+}): ReactNode {
+  const {
+    t,
+    formatTab,
+    setFormatTab,
+    setShowCreateFormat,
+    formatSearch,
+    setFormatSearch,
+    showSearchIndexStatus,
+    searchIndexingLabel,
+    visibleFormats,
+    changedFormatFiles,
+    selectedFile,
+    handleSelectFile,
+    repository,
+    refName,
+  } = params;
+
+  return (
+    <div className="panel">
+      <div className="panel__header">
+        {t("bank.formats")}
+        <button
+          className="btn btn--ghost btn--sm"
+          onClick={() => setShowCreateFormat(true)}
+        >
+          +
+        </button>
+      </div>
+      <div className="tabs">
+        <button
+          className={`tab ${formatTab === "all" ? "tab--active" : ""}`}
+          onClick={() => setFormatTab("all")}
+        >
+          {t("bank.formats")}
+        </button>
+        <button
+          className={`tab ${formatTab === "changed" ? "tab--active" : ""}`}
+          onClick={() => setFormatTab("changed")}
+        >
+          {t("bank.changedFormats")}
+        </button>
+        <button
+          className={`tab ${formatTab === "recent" ? "tab--active" : ""}`}
+          onClick={() => setFormatTab("recent")}
+        >
+          {t("bank.recentFormats")}
+        </button>
+      </div>
+      {(formatTab === "all" || formatTab === "changed") && (
+        <div
+          style={{
+            padding: "8px",
+            borderBottom: "1px solid var(--c-border)",
+          }}
+        >
+          <input
+            className="input"
+            onChange={(e) => setFormatSearch(e.target.value)}
+            placeholder={t("bank.searchFormat")}
+            style={{ fontSize: 12, padding: "4px 8px" }}
+            value={formatSearch}
+          />
+          {showSearchIndexStatus && (
+            <div className="text-muted text-sm" style={{ marginTop: 6 }}>
+              {searchIndexingLabel}
+            </div>
+          )}
+        </div>
+      )}
+      <div>
+        {visibleFormats.map((f) => {
+          const name = extractFormatFileName(f);
+          const isModified = changedFormatFiles.has(f);
+          const isSelected = selectedFile === f;
+          const encodedPath = f.split("/").map(encodeURIComponent).join("/");
+          const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
+          return (
+            <div
+              className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""}`}
+              key={f}
+              onClick={() => handleSelectFile(f)}
+            >
+              <span className="truncate text-mono text-sm">{name}</span>
+              {isModified && (
+                <span className="badge badge--modified text-sm">●</span>
+              )}
+              <a
+                aria-label={`${t("bank.openFormatInRepo")}: ${name}`}
+                className="format-row-link"
+                href={repoUrl}
+                onClick={(e) => e.stopPropagation()}
+                rel="noreferrer"
+                target="_blank"
+                title={t("bank.openFormatInRepo")}
+              >
+                ↗
+              </a>
+            </div>
+          );
+        })}
+        {visibleFormats.length === 0 && (
+          <div className="p-md text-muted text-sm">{t("bank.noResults")}</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -332,47 +778,43 @@ export function BankWorkspace() {
     );
   }, [bank, bankPath, changedFormatFiles, draftStore.drafts]);
 
-  // Filtered format files by search
-  const filteredFormatFiles = useMemo(
-    () => filterFormatsByQuery(allFormatFiles, formatSearch),
-    [allFormatFiles, formatSearch]
+  const changedFormats = useMemo(
+    () => allFormatFiles.filter((path) => changedFormatFiles.has(path)),
+    [allFormatFiles, changedFormatFiles]
   );
+  const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
+  const {
+    filteredFormatFiles,
+    filteredChangedFormats,
+    shouldIndexExamples,
+    indexedScopeSummary,
+    indexingInFlight,
+    indexingErrors,
+  } = useBankFormatSearch({
+    allFormatFiles,
+    changedFormats,
+    changedFormatFiles,
+    draftStore,
+    formatSearch,
+    formatTab,
+    bankPath,
+    repository,
+    sourceRefNameForContent,
+  });
 
   // Recent formats
   const recentFormats = useMemo(() => {
     const recent = getRecentFormats(bankPath);
     return recent.filter((f) => allFormatFiles.includes(f));
   }, [bankPath, allFormatFiles]);
-  const changedFormats = useMemo(
-    () => allFormatFiles.filter((path) => changedFormatFiles.has(path)),
-    [allFormatFiles, changedFormatFiles]
-  );
-  const filteredChangedFormats = useMemo(
-    () => filterFormatsByQuery(changedFormats, formatSearch),
-    [changedFormats, formatSearch]
-  );
 
-  // Auto-select first file
-  useEffect(() => {
-    if (
-      !(
-        requestedFile &&
-        allFormatFiles.includes(requestedFile) &&
-        selectedFile !== requestedFile
-      )
-    ) {
-      return;
-    }
-    setSelectedFile(requestedFile);
-    setShowSenders(false);
-  }, [requestedFile, allFormatFiles, selectedFile]);
-
-  // Auto-select first file
-  useEffect(() => {
-    if (!selectedFile && allFormatFiles.length > 0) {
-      setSelectedFile(allFormatFiles[0]!);
-    }
-  }, [allFormatFiles, selectedFile]);
+  useAutoSelectFormat({
+    requestedFile,
+    allFormatFiles,
+    selectedFile,
+    setSelectedFile,
+    setShowSenders,
+  });
 
   const handleSelectFile = useCallback(
     (f: string) => {
@@ -424,6 +866,23 @@ export function BankWorkspace() {
     filteredFormatFiles,
   });
   const sendersChanged = changedFilesInBank.has(sendersPath);
+  const showSearchIndexStatus =
+    shouldIndexExamples &&
+    indexedScopeSummary.total > 0 &&
+    (indexingInFlight > 0 ||
+      indexedScopeSummary.loadedCount < indexedScopeSummary.total ||
+      indexingErrors > 0);
+  const searchIndexingLabel =
+    indexingErrors > 0
+      ? t("bank.searchIndexingWithErrors", {
+          loaded: indexedScopeSummary.loadedCount,
+          total: indexedScopeSummary.total,
+          errors: indexingErrors,
+        })
+      : t("bank.searchIndexing", {
+          loaded: indexedScopeSummary.loadedCount,
+          total: indexedScopeSummary.total,
+        });
 
   return (
     <div className="grid-sidebar">
@@ -462,94 +921,22 @@ export function BankWorkspace() {
           </button>
         </div>
 
-        {/* Formats and recent list */}
-        <div className="panel">
-          <div className="panel__header">
-            {t("bank.formats")}
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={() => setShowCreateFormat(true)}
-            >
-              +
-            </button>
-          </div>
-          <div className="tabs">
-            <button
-              className={`tab ${formatTab === "all" ? "tab--active" : ""}`}
-              onClick={() => setFormatTab("all")}
-            >
-              {t("bank.formats")}
-            </button>
-            <button
-              className={`tab ${formatTab === "changed" ? "tab--active" : ""}`}
-              onClick={() => setFormatTab("changed")}
-            >
-              {t("bank.changedFormats")}
-            </button>
-            <button
-              className={`tab ${formatTab === "recent" ? "tab--active" : ""}`}
-              onClick={() => setFormatTab("recent")}
-            >
-              {t("bank.recentFormats")}
-            </button>
-          </div>
-          {(formatTab === "all" || formatTab === "changed") && (
-            <div
-              style={{
-                padding: "8px",
-                borderBottom: "1px solid var(--c-border)",
-              }}
-            >
-              <input
-                className="input"
-                onChange={(e) => setFormatSearch(e.target.value)}
-                placeholder={t("bank.searchFormat")}
-                style={{ fontSize: 12, padding: "4px 8px" }}
-                value={formatSearch}
-              />
-            </div>
-          )}
-          <div>
-            {visibleFormats.map((f) => {
-              const name = f.split("/").pop() ?? f;
-              const isModified = changedFormatFiles.has(f);
-              const isSelected = selectedFile === f;
-              const encodedPath = f
-                .split("/")
-                .map(encodeURIComponent)
-                .join("/");
-              const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
-              return (
-                <div
-                  className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""}`}
-                  key={f}
-                  onClick={() => handleSelectFile(f)}
-                >
-                  <span className="truncate text-mono text-sm">{name}</span>
-                  {isModified && (
-                    <span className="badge badge--modified text-sm">●</span>
-                  )}
-                  <a
-                    aria-label={`${t("bank.openFormatInRepo")}: ${name}`}
-                    className="format-row-link"
-                    href={repoUrl}
-                    onClick={(e) => e.stopPropagation()}
-                    rel="noreferrer"
-                    target="_blank"
-                    title={t("bank.openFormatInRepo")}
-                  >
-                    ↗
-                  </a>
-                </div>
-              );
-            })}
-            {visibleFormats.length === 0 && (
-              <div className="p-md text-muted text-sm">
-                {t("bank.noResults")}
-              </div>
-            )}
-          </div>
-        </div>
+        <FormatsPanel
+          changedFormatFiles={changedFormatFiles}
+          formatSearch={formatSearch}
+          formatTab={formatTab}
+          handleSelectFile={handleSelectFile}
+          refName={refName}
+          repository={repository}
+          searchIndexingLabel={searchIndexingLabel}
+          selectedFile={selectedFile}
+          setFormatSearch={setFormatSearch}
+          setFormatTab={setFormatTab}
+          setShowCreateFormat={setShowCreateFormat}
+          showSearchIndexStatus={showSearchIndexStatus}
+          t={t}
+          visibleFormats={visibleFormats}
+        />
 
         {/* Senders */}
         <button
