@@ -12,6 +12,7 @@ interface Props {
   filePath: string;
   allFormatFiles: string[];
   onRenameFile: (fromPath: string, toPath: string) => boolean;
+  onOpenValidation: () => void;
 }
 
 function isRegexValid(value: string): boolean {
@@ -54,6 +55,7 @@ export function FormatEditor({
   filePath,
   allFormatFiles,
   onRenameFile,
+  onOpenValidation,
 }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
@@ -113,9 +115,14 @@ export function FormatEditor({
 
   const saveDraft = useCallback(
     (content: string) => {
-      draftStore.setDraft(filePath, content, baseSha, remoteContent ?? "");
+      const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
+      if (content === remoteBaseline) {
+        draftStore.removeDraft(filePath);
+        return;
+      }
+      draftStore.setDraft(filePath, content, baseSha, remoteBaseline);
     },
-    [draftStore, filePath, baseSha, remoteContent]
+    [draftStore, filePath, baseSha, draft?.remoteContent, remoteContent]
   );
 
   const syncRawFromStructured = useCallback(
@@ -225,10 +232,8 @@ export function FormatEditor({
   const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
   const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
   const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
-  const saveLabel =
-    mode === "structured" ? t("editor.saveStructured") : t("editor.saveRaw");
-  const resetLabel =
-    mode === "structured" ? t("editor.resetStructured") : t("editor.resetRaw");
+  const saveLabel = t("app.save");
+  const resetLabel = t("app.reset");
   const handleSave =
     mode === "structured" ? handleSaveStructured : handleSaveRaw;
   const saveDisabled = mode === "structured" ? !structuredRawCandidate : false;
@@ -309,18 +314,21 @@ export function FormatEditor({
         </div>
         <div className="flex gap-sm">
           <button
-            className="btn btn--primary btn--sm"
-            disabled={saveDisabled}
-            onClick={handleSave}
-          >
-            {saveLabel}
-          </button>
-          <button
-            className="btn btn--sm"
+            className="btn bank-actions__btn"
             disabled={initialContent == null}
             onClick={handleReset}
           >
             {resetLabel}
+          </button>
+          <button className="btn bank-actions__btn" onClick={onOpenValidation}>
+            {t("editor.validation")}
+          </button>
+          <button
+            className="btn btn--primary bank-actions__btn"
+            disabled={saveDisabled}
+            onClick={handleSave}
+          >
+            {saveLabel}
           </button>
         </div>
       </div>

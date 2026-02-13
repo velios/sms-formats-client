@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { BankInfo, ValidationIssue } from "@/domain/types";
+import { fetchFileContent } from "@/domain/github";
+import type { BankInfo, RepoRef, ValidationIssue } from "@/domain/types";
 import { validateBankLevel } from "@/domain/validation";
-import { useDraftStore } from "@/store";
+import { useDraftStore, useSourceStore } from "@/store";
 
 interface Props {
   bankPath: string;
@@ -10,55 +11,172 @@ interface Props {
   onClose: () => void;
 }
 
+interface ValidationDraftStore {
+  drafts: Map<string, { content: string; remoteContent: string }>;
+  getDraft: (
+    filePath: string
+  ) => { content: string; remoteContent: string } | undefined;
+}
+
+function isBankFormatPath(bankPath: string, path: string): boolean {
+  return path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt");
+}
+
+function collectAllFormatPaths(
+  bankPath: string,
+  bank: BankInfo,
+  draftStore: ValidationDraftStore
+): string[] {
+  const allPaths = new Set(bank.formatFiles);
+  for (const [path] of draftStore.drafts) {
+    if (isBankFormatPath(bankPath, path)) {
+      allPaths.add(path);
+    }
+  }
+  return Array.from(allPaths);
+}
+
+function splitDraftAndRemotePaths(
+  paths: string[],
+  draftStore: ValidationDraftStore
+): { formatContents: Map<string, string>; pathsToLoadRemotely: string[] } {
+  const formatContents = new Map<string, string>();
+  const pathsToLoadRemotely: string[] = [];
+
+  for (const path of paths) {
+    const draft = draftStore.getDraft(path);
+    if (draft && draft.content !== draft.remoteContent) {
+      formatContents.set(path, draft.content);
+      continue;
+    }
+    pathsToLoadRemotely.push(path);
+  }
+
+  return { formatContents, pathsToLoadRemotely };
+}
+
+async function loadRemoteFormatContents(params: {
+  pathsToLoadRemotely: string[];
+  sourceRefName: string;
+  repository: RepoRef;
+  draftStore: ValidationDraftStore;
+  formatContents: Map<string, string>;
+}) {
+  const {
+    pathsToLoadRemotely,
+    sourceRefName,
+    repository,
+    draftStore,
+    formatContents,
+  } = params;
+
+  await Promise.all(
+    pathsToLoadRemotely.map(async (path) => {
+      try {
+        const remoteContent = await fetchFileContent(
+          path,
+          sourceRefName,
+          repository
+        );
+        formatContents.set(path, remoteContent);
+      } catch {
+        const draft = draftStore.getDraft(path);
+        if (draft) {
+          formatContents.set(path, draft.content);
+        }
+      }
+    })
+  );
+}
+
+function loadDraftFallbackContents(params: {
+  pathsToLoadRemotely: string[];
+  draftStore: ValidationDraftStore;
+  formatContents: Map<string, string>;
+}) {
+  const { pathsToLoadRemotely, draftStore, formatContents } = params;
+  for (const path of pathsToLoadRemotely) {
+    const draft = draftStore.getDraft(path);
+    if (draft) {
+      formatContents.set(path, draft.content);
+    }
+  }
+}
+
+function hasDraftSenders(
+  bankPath: string,
+  draftStore: ValidationDraftStore
+): boolean {
+  return !!draftStore.getDraft(`${bankPath}/senders.txt`);
+}
+
 export function ValidationPanel({ bankPath, bank, onClose }: Props) {
   const { t } = useTranslation();
   const draftStore = useDraftStore();
+  const sourceRef = useSourceStore((s) => s.sourceRef);
+  const repository = useSourceStore((s) => s.repository);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [ran, setRan] = useState(false);
+  const [running, setRunning] = useState(false);
+  const hasAutoRun = useRef(false);
 
-  const runValidation = useCallback(() => {
-    if (!bank) {
-      setIssues([
-        {
-          code: "NO_BANK",
-          level: "error",
-          filePath: bankPath,
-          message: "Bank not found",
-        },
-      ]);
+  const runValidation = useCallback(async () => {
+    setRunning(true);
+
+    try {
+      if (!bank) {
+        setIssues([
+          {
+            code: "NO_BANK",
+            level: "error",
+            filePath: bankPath,
+            message: "Bank not found",
+          },
+        ]);
+        return;
+      }
+
+      const sourceRefName = sourceRef?.sha ?? sourceRef?.name ?? null;
+      const allPaths = collectAllFormatPaths(bankPath, bank, draftStore);
+      const { formatContents, pathsToLoadRemotely } = splitDraftAndRemotePaths(
+        allPaths,
+        draftStore
+      );
+
+      if (sourceRefName) {
+        await loadRemoteFormatContents({
+          pathsToLoadRemotely,
+          sourceRefName,
+          repository,
+          draftStore,
+          formatContents,
+        });
+      } else {
+        loadDraftFallbackContents({
+          pathsToLoadRemotely,
+          draftStore,
+          formatContents,
+        });
+      }
+
+      const bankForValidation: BankInfo = {
+        ...bank,
+        hasSenders: bank.hasSenders || hasDraftSenders(bankPath, draftStore),
+      };
+      setIssues(validateBankLevel(bankForValidation, formatContents));
+    } finally {
       setRan(true);
+      setRunning(false);
+    }
+  }, [bank, bankPath, draftStore, repository, sourceRef]);
+
+  useEffect(() => {
+    if (hasAutoRun.current) {
       return;
     }
-
-    // Gather all format contents from drafts or mark as missing
-    const formatContents = new Map<string, string>();
-
-    // Include remote + draft format files
-    const allPaths = new Set([...bank.formatFiles]);
-    for (const [path] of draftStore.drafts) {
-      if (path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")) {
-        allPaths.add(path);
-      }
-    }
-
-    for (const path of allPaths) {
-      const draft = draftStore.getDraft(path);
-      if (draft) {
-        formatContents.set(path, draft.content);
-      }
-    }
-
-    // Also check if senders.txt exists in drafts for new banks
-    const sendersPath = `${bankPath}/senders.txt`;
-    const sendersDraft = draftStore.getDraft(sendersPath);
-    const hasSenders = bank.hasSenders || !!sendersDraft;
-
-    const bankForValidation: BankInfo = { ...bank, hasSenders };
-
-    const result = validateBankLevel(bankForValidation, formatContents);
-    setIssues(result);
-    setRan(true);
-  }, [bank, bankPath, draftStore]);
+    hasAutoRun.current = true;
+    void runValidation();
+  }, [runValidation]);
 
   const errors = issues.filter((i) => i.level === "error");
   const warnings = issues.filter((i) => i.level === "warning");
@@ -72,7 +190,12 @@ export function ValidationPanel({ bankPath, bank, onClose }: Props) {
       >
         <div className="modal__title">{t("validation.title")}</div>
 
-        {ran ? (
+        {running ? (
+          <div className="flex items-center gap-sm">
+            <span className="spinner" />
+            <span>{t("app.loading")}</span>
+          </div>
+        ) : ran ? (
           <div className="flex-col gap-md">
             {/* Summary */}
             <div className="flex gap-sm">
@@ -114,20 +237,17 @@ export function ValidationPanel({ bankPath, bank, onClose }: Props) {
               ))}
             </div>
           </div>
-        ) : (
-          <div className="flex-col items-center gap-md">
-            <button className="btn btn--primary" onClick={runValidation}>
-              {t("validation.runValidation")}
-            </button>
-          </div>
-        )}
+        ) : null}
 
         <div className="modal__actions">
           <button className="btn" onClick={onClose}>
             {t("app.close")}
           </button>
-          {ran && (
-            <button className="btn btn--primary" onClick={runValidation}>
+          {!running && ran && (
+            <button
+              className="btn btn--primary"
+              onClick={() => void runValidation()}
+            >
               {t("app.retry")}
             </button>
           )}

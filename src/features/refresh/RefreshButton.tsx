@@ -146,7 +146,7 @@ export function RefreshButton({ bankPath }: Props) {
   return (
     <>
       <button
-        className="btn btn--sm w-full"
+        className="btn bank-actions__btn w-full"
         disabled={loading}
         onClick={handleRefresh}
       >

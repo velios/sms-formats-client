@@ -16,6 +16,7 @@ import type { BankInfo } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { PublishPanel } from "@/features/publish-panel/PublishPanel";
+import { QuickCheckPanel } from "@/features/quick-check/QuickCheckPanel";
 import { RefreshButton } from "@/features/refresh/RefreshButton";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
@@ -151,8 +152,11 @@ function extractExamplesForSearch(content: string, filePath: string): string {
   return parseFormatFile(content, filePath).examples.join("\n");
 }
 
-function shouldStartExampleIndexing(query: string, formatTab: string): boolean {
-  if (!(formatTab === "all" || formatTab === "changed")) {
+function shouldStartExampleIndexing(
+  query: string,
+  formatTab: "all" | "recent"
+): boolean {
+  if (formatTab !== "all") {
     return false;
   }
   return query.trim().length >= SEARCH_EXAMPLE_MIN_QUERY_LENGTH;
@@ -245,18 +249,16 @@ interface SearchDraftStore {
 
 function useBankFormatSearch(params: {
   allFormatFiles: string[];
-  changedFormats: string[];
   changedFormatFiles: Set<string>;
   draftStore: SearchDraftStore;
   formatSearch: string;
-  formatTab: "all" | "recent" | "changed";
+  formatTab: "all" | "recent";
   bankPath: string;
   repository: { owner: string; repo: string };
   sourceRefNameForContent: string | undefined;
 }) {
   const {
     allFormatFiles,
-    changedFormats,
     changedFormatFiles,
     draftStore,
     formatSearch,
@@ -283,12 +285,7 @@ function useBankFormatSearch(params: {
     );
   }, [allFormatFiles, draftStore, draftStore.drafts]);
 
-  const activeSearchScope = useMemo(() => {
-    if (formatTab === "changed") {
-      return changedFormats;
-    }
-    return allFormatFiles;
-  }, [allFormatFiles, changedFormats, formatTab]);
+  const activeSearchScope = allFormatFiles;
   const shouldIndexExamples = shouldStartExampleIndexing(
     formatSearch,
     formatTab
@@ -407,20 +404,8 @@ function useBankFormatSearch(params: {
     [allFormatFiles, changedFormatFiles, formatSearch, searchDocsByPath]
   );
 
-  const filteredChangedFormats = useMemo(
-    () =>
-      searchFormatPaths({
-        formatPaths: changedFormats,
-        query: formatSearch,
-        docsByPath: searchDocsByPath,
-        changedFormatFiles,
-      }),
-    [changedFormatFiles, changedFormats, formatSearch, searchDocsByPath]
-  );
-
   return {
     filteredFormatFiles,
-    filteredChangedFormats,
     shouldIndexExamples,
     indexedScopeSummary,
     indexingInFlight,
@@ -432,6 +417,7 @@ function useAutoSelectFormat(params: {
   requestedFile: string | null;
   allFormatFiles: string[];
   selectedFile: string | null;
+  showSenders: boolean;
   setSelectedFile: (filePath: string | null) => void;
   setShowSenders: (value: boolean) => void;
 }) {
@@ -439,54 +425,44 @@ function useAutoSelectFormat(params: {
     requestedFile,
     allFormatFiles,
     selectedFile,
+    showSenders,
     setSelectedFile,
     setShowSenders,
   } = params;
+  const appliedRequestedFileRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (
-      !(
-        requestedFile &&
-        allFormatFiles.includes(requestedFile) &&
-        selectedFile !== requestedFile
-      )
-    ) {
+    if (!requestedFile) {
+      appliedRequestedFileRef.current = null;
       return;
     }
+    if (!allFormatFiles.includes(requestedFile)) {
+      return;
+    }
+    if (appliedRequestedFileRef.current === requestedFile) {
+      return;
+    }
+
     setSelectedFile(requestedFile);
     setShowSenders(false);
-  }, [
-    requestedFile,
-    allFormatFiles,
-    selectedFile,
-    setSelectedFile,
-    setShowSenders,
-  ]);
+    appliedRequestedFileRef.current = requestedFile;
+  }, [requestedFile, allFormatFiles, setSelectedFile, setShowSenders]);
 
   useEffect(() => {
-    if (!selectedFile && allFormatFiles.length > 0) {
+    if (!(showSenders || selectedFile || allFormatFiles.length === 0)) {
       setSelectedFile(allFormatFiles[0]!);
     }
-  }, [allFormatFiles, selectedFile, setSelectedFile]);
+  }, [allFormatFiles, selectedFile, setSelectedFile, showSenders]);
 }
 
 function resolveVisibleFormats(params: {
-  formatTab: "all" | "recent" | "changed";
+  formatTab: "all" | "recent";
   recentFormats: string[];
-  filteredChangedFormats: string[];
   filteredFormatFiles: string[];
 }): string[] {
-  const {
-    formatTab,
-    recentFormats,
-    filteredChangedFormats,
-    filteredFormatFiles,
-  } = params;
+  const { formatTab, recentFormats, filteredFormatFiles } = params;
   if (formatTab === "recent") {
     return recentFormats;
-  }
-  if (formatTab === "changed") {
-    return filteredChangedFormats;
   }
   return filteredFormatFiles;
 }
@@ -497,6 +473,7 @@ function renderWorkspaceContent(params: {
   selectedFile: string | null;
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
+  onOpenValidation: () => void;
   t: (key: string) => string;
 }): ReactNode {
   const {
@@ -505,6 +482,7 @@ function renderWorkspaceContent(params: {
     selectedFile,
     allFormatFiles,
     handleRenameFile,
+    onOpenValidation,
     t,
   } = params;
   if (showSenders) {
@@ -516,6 +494,7 @@ function renderWorkspaceContent(params: {
         allFormatFiles={allFormatFiles}
         filePath={selectedFile}
         key={selectedFile}
+        onOpenValidation={onOpenValidation}
         onRenameFile={handleRenameFile}
       />
     );
@@ -529,8 +508,9 @@ function renderWorkspaceContent(params: {
 
 function FormatsPanel(params: {
   t: (key: string) => string;
-  formatTab: "all" | "recent" | "changed";
-  setFormatTab: (value: "all" | "recent" | "changed") => void;
+  totalFormatsCount: number;
+  formatTab: "all" | "recent";
+  setFormatTab: (value: "all" | "recent") => void;
   setShowCreateFormat: (value: boolean) => void;
   formatSearch: string;
   setFormatSearch: (value: string) => void;
@@ -545,6 +525,7 @@ function FormatsPanel(params: {
 }): ReactNode {
   const {
     t,
+    totalFormatsCount,
     formatTab,
     setFormatTab,
     setShowCreateFormat,
@@ -561,9 +542,12 @@ function FormatsPanel(params: {
   } = params;
 
   return (
-    <div className="panel">
+    <div className="panel formats-panel">
       <div className="panel__header">
-        {t("bank.formats")}
+        <span>
+          {t("bank.formats")}{" "}
+          <span className="text-muted text-sm">({totalFormatsCount})</span>
+        </span>
         <button
           className="btn btn--ghost btn--sm"
           onClick={() => setShowCreateFormat(true)}
@@ -576,13 +560,7 @@ function FormatsPanel(params: {
           className={`tab ${formatTab === "all" ? "tab--active" : ""}`}
           onClick={() => setFormatTab("all")}
         >
-          {t("bank.formats")}
-        </button>
-        <button
-          className={`tab ${formatTab === "changed" ? "tab--active" : ""}`}
-          onClick={() => setFormatTab("changed")}
-        >
-          {t("bank.changedFormats")}
+          {t("bank.allFormats")}
         </button>
         <button
           className={`tab ${formatTab === "recent" ? "tab--active" : ""}`}
@@ -591,7 +569,7 @@ function FormatsPanel(params: {
           {t("bank.recentFormats")}
         </button>
       </div>
-      {(formatTab === "all" || formatTab === "changed") && (
+      {formatTab === "all" && (
         <div
           style={{
             padding: "8px",
@@ -612,7 +590,7 @@ function FormatsPanel(params: {
           )}
         </div>
       )}
-      <div>
+      <div className="formats-panel__list">
         {visibleFormats.map((f) => {
           const name = extractFormatFileName(f);
           const isModified = changedFormatFiles.has(f);
@@ -744,10 +722,9 @@ export function BankWorkspace() {
   const [showCreateFormat, setShowCreateFormat] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
+  const [showQuickCheck, setShowQuickCheck] = useState(false);
   const [formatSearch, setFormatSearch] = useState("");
-  const [formatTab, setFormatTab] = useState<"all" | "recent" | "changed">(
-    "all"
-  );
+  const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
 
   // Get all format files including draft-only (new) files
   const draftStore = useDraftStore();
@@ -778,21 +755,15 @@ export function BankWorkspace() {
     );
   }, [bank, bankPath, changedFormatFiles, draftStore.drafts]);
 
-  const changedFormats = useMemo(
-    () => allFormatFiles.filter((path) => changedFormatFiles.has(path)),
-    [allFormatFiles, changedFormatFiles]
-  );
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
   const {
     filteredFormatFiles,
-    filteredChangedFormats,
     shouldIndexExamples,
     indexedScopeSummary,
     indexingInFlight,
     indexingErrors,
   } = useBankFormatSearch({
     allFormatFiles,
-    changedFormats,
     changedFormatFiles,
     draftStore,
     formatSearch,
@@ -812,6 +783,7 @@ export function BankWorkspace() {
     requestedFile,
     allFormatFiles,
     selectedFile,
+    showSenders,
     setSelectedFile,
     setShowSenders,
   });
@@ -862,7 +834,6 @@ export function BankWorkspace() {
   const visibleFormats = resolveVisibleFormats({
     formatTab,
     recentFormats,
-    filteredChangedFormats,
     filteredFormatFiles,
   });
   const sendersChanged = changedFilesInBank.has(sendersPath);
@@ -905,19 +876,38 @@ export function BankWorkspace() {
         </div>
 
         {/* Action bar */}
-        <div className="flex-col gap-xs">
-          <RefreshButton bankPath={bankPath} />
+        <div className="bank-actions flex-col">
           <button
-            className="btn btn--sm w-full"
-            onClick={() => setShowValidation(true)}
-          >
-            {t("validation.runValidation")}
-          </button>
-          <button
-            className="btn btn--primary btn--sm w-full"
+            className="btn btn--primary bank-actions__btn w-full"
             onClick={() => setShowPublish(true)}
           >
             {t("publish.createPR")}
+          </button>
+          <button
+            className="btn bank-actions__btn w-full"
+            onClick={() => setShowQuickCheck(true)}
+          >
+            {t("quickCheck.open")}
+          </button>
+          <RefreshButton bankPath={bankPath} />
+          <button
+            className={`btn bank-actions__btn w-full ${showSenders ? "btn--primary" : ""}`}
+            onClick={() => {
+              setShowSenders(true);
+              setSelectedFile(null);
+            }}
+          >
+            {t("bank.senders")}
+            {sendersChanged && (
+              <span className="badge badge--modified" style={{ marginLeft: 8 }}>
+                ●
+              </span>
+            )}
+            {bank && !bank.hasSenders && !draftStore.getDraft(sendersPath) && (
+              <span className="badge badge--warning" style={{ marginLeft: 8 }}>
+                !
+              </span>
+            )}
           </button>
         </div>
 
@@ -935,29 +925,9 @@ export function BankWorkspace() {
           setShowCreateFormat={setShowCreateFormat}
           showSearchIndexStatus={showSearchIndexStatus}
           t={t}
+          totalFormatsCount={allFormatFiles.length}
           visibleFormats={visibleFormats}
         />
-
-        {/* Senders */}
-        <button
-          className={`btn btn--sm w-full ${showSenders ? "btn--primary" : ""}`}
-          onClick={() => {
-            setShowSenders(true);
-            setSelectedFile(null);
-          }}
-        >
-          {t("bank.senders")}
-          {sendersChanged && (
-            <span className="badge badge--modified" style={{ marginLeft: 8 }}>
-              ●
-            </span>
-          )}
-          {bank && !bank.hasSenders && !draftStore.getDraft(sendersPath) && (
-            <span className="badge badge--warning" style={{ marginLeft: 8 }}>
-              !
-            </span>
-          )}
-        </button>
       </div>
 
       {/* ─── Main content ─── */}
@@ -968,6 +938,7 @@ export function BankWorkspace() {
           selectedFile,
           allFormatFiles,
           handleRenameFile,
+          onOpenValidation: () => setShowValidation(true),
           t,
         })}
       </div>
@@ -995,6 +966,14 @@ export function BankWorkspace() {
           bank={bank ?? null}
           bankPath={bankPath}
           onClose={() => setShowValidation(false)}
+        />
+      )}
+      {showQuickCheck && (
+        <QuickCheckPanel
+          bankName={displayName}
+          bankPath={bankPath}
+          formatPaths={allFormatFiles}
+          onClose={() => setShowQuickCheck(false)}
         />
       )}
     </div>
