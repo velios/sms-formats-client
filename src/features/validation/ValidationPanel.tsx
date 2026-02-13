@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetchFileContent } from "@/domain/github";
 import type { BankInfo, RepoRef, ValidationIssue } from "@/domain/types";
@@ -112,6 +112,7 @@ function hasDraftSenders(
 
 export function ValidationPanel({ bankPath, bank, onClose }: Props) {
   const { t } = useTranslation();
+  const dialogTitleId = useId();
   const draftStore = useDraftStore();
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const repository = useSourceStore((s) => s.repository);
@@ -184,19 +185,28 @@ export function ValidationPanel({ bankPath, bank, onClose }: Props) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        aria-labelledby={dialogTitleId}
+        aria-modal="true"
         className="modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
         style={{ minWidth: 500 }}
       >
-        <div className="modal__title">{t("validation.title")}</div>
+        <div className="modal__title" id={dialogTitleId}>
+          {t("validation.title")}
+        </div>
 
         {running ? (
-          <div className="flex items-center gap-sm">
+          <div
+            aria-live="polite"
+            className="flex items-center gap-sm"
+            role="status"
+          >
             <span className="spinner" />
             <span>{t("app.loading")}</span>
           </div>
         ) : ran ? (
-          <div className="flex-col gap-md">
+          <div aria-live="polite" className="flex-col gap-md" role="status">
             {/* Summary */}
             <div className="flex gap-sm">
               {errors.length === 0 && warnings.length === 0 ? (

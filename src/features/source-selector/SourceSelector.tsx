@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { config } from "@/config";
@@ -178,24 +178,30 @@ function renderItemsList(params: {
 
   if (mode === "branch") {
     return filteredBranches.map((branch, index) => (
-      <div
+      <button
+        aria-label={branch.name}
         className={`autocomplete__item ${index === activeIndex ? "autocomplete__item--active" : ""}`}
         key={branch.name}
         onClick={() => onSelect(index)}
+        onFocus={() => onHover(index)}
         onMouseEnter={() => onHover(index)}
+        type="button"
       >
         <span className="text-mono text-sm">{branch.name}</span>
-      </div>
+      </button>
     ));
   }
 
   if (mode === "pr") {
     return filteredPRs.map((pr, index) => (
-      <div
+      <button
+        aria-label={`#${pr.number} ${pr.title}`}
         className={`autocomplete__item ${index === activeIndex ? "autocomplete__item--active" : ""}`}
         key={pr.number}
         onClick={() => onSelect(index)}
+        onFocus={() => onHover(index)}
         onMouseEnter={() => onHover(index)}
+        type="button"
       >
         <span className="text-muted text-sm">#{pr.number}</span>
         <div className="flex-col" style={{ minWidth: 0 }}>
@@ -204,16 +210,19 @@ function renderItemsList(params: {
             {repoSlug(pr.headOwner, pr.headRepo)}:{pr.headRef}
           </span>
         </div>
-      </div>
+      </button>
     ));
   }
 
   return filteredIssues.map((issue, index) => (
-    <div
+    <button
+      aria-label={`#${issue.number} ${issue.title}`}
       className={`autocomplete__item ${index === activeIndex ? "autocomplete__item--active" : ""}`}
       key={issue.number}
       onClick={() => onSelect(index)}
+      onFocus={() => onHover(index)}
       onMouseEnter={() => onHover(index)}
+      type="button"
     >
       <span className="text-muted text-sm">#{issue.number}</span>
       <span className="truncate text-sm">{issue.title}</span>
@@ -222,13 +231,14 @@ function renderItemsList(params: {
       >
         {t(`source.issueState.${issue.state}`)}
       </span>
-    </div>
+    </button>
   ));
 }
 
 export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const repoSelectId = useId();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("branch");
   const [query, setQuery] = useState("");
@@ -435,12 +445,17 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                 borderBottom: "1px solid var(--c-border)",
               }}
             >
-              <div className="text-muted text-sm" style={{ marginBottom: 6 }}>
+              <label
+                className="text-muted text-sm"
+                htmlFor={repoSelectId}
+                style={{ marginBottom: 6 }}
+              >
                 {t("source.repository")}
-              </div>
+              </label>
               <select
                 className="input"
                 disabled={isReposFetching}
+                id={repoSelectId}
                 onChange={(e) => {
                   void handleRepositoryChange(e.target.value);
                 }}
@@ -470,6 +485,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
 
           <div style={{ padding: "8px" }}>
             <input
+              aria-label={searchPlaceholder}
               autoFocus
               className="input"
               onChange={(e) => {

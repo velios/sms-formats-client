@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { config } from "@/config";
 import {
@@ -168,6 +168,9 @@ async function publishBankChanges(params: {
 
 export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   const { t } = useTranslation();
+  const dialogTitleId = useId();
+  const tokenInputId = useId();
+  const prTitleInputId = useId();
   const draftStore = useDraftStore();
   const publishStore = usePublishStore();
   const _sourceRef = useSourceStore((s) => s.sourceRef);
@@ -274,11 +277,16 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        aria-labelledby={dialogTitleId}
+        aria-modal="true"
         className="modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
         style={{ minWidth: 500 }}
       >
-        <div className="modal__title">{t("publish.title")}</div>
+        <div className="modal__title" id={dialogTitleId}>
+          {t("publish.title")}
+        </div>
 
         {/* Preflight info */}
         <div className="mb-md flex-col gap-md">
@@ -308,11 +316,12 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
         {showTokenInput && step === "idle" && (
           <div className="mb-md flex-col gap-md">
             <div className="flex-col gap-xs">
-              <label className="text-muted text-sm">
+              <label className="text-muted text-sm" htmlFor={tokenInputId}>
                 {t("publish.tokenLabel")}
               </label>
               <input
                 className="input input--mono"
+                id={tokenInputId}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder="ghp_..."
                 type="password"
@@ -331,11 +340,12 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
             </label>
 
             <div className="flex-col gap-xs">
-              <label className="text-muted text-sm">
+              <label className="text-muted text-sm" htmlFor={prTitleInputId}>
                 {t("publish.prTitle")}
               </label>
               <input
                 className="input"
+                id={prTitleInputId}
                 onChange={(e) => setPrTitle(e.target.value)}
                 value={prTitle}
               />
@@ -345,7 +355,11 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
 
         {/* Publish progress */}
         {step !== "idle" && (
-          <div className="publish-progress mb-md">
+          <div
+            aria-live="polite"
+            className="publish-progress mb-md"
+            role="status"
+          >
             <PublishStepItem
               label={t("publish.validating")}
               status={stepStatus("validating", step)}
@@ -371,7 +385,11 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
 
         {/* Success */}
         {step === "done" && publishStore.prUrl && (
-          <div className="mb-md flex-col gap-sm">
+          <div
+            aria-live="polite"
+            className="mb-md flex-col gap-sm"
+            role="status"
+          >
             <div className="badge badge--success">{t("publish.success")}</div>
             <a
               href={publishStore.prUrl}
@@ -385,7 +403,11 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
 
         {/* Error */}
         {step === "error" && publishStore.error && (
-          <div className="issue-item issue-item--error mb-md">
+          <div
+            aria-live="assertive"
+            className="issue-item issue-item--error mb-md"
+            role="alert"
+          >
             {publishStore.error}
           </div>
         )}

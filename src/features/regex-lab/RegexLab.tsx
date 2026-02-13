@@ -1,5 +1,12 @@
 import type { RefObject } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import type {
   RegexExplanation,
@@ -63,6 +70,7 @@ export function RegexLab({
   const [columnPickerGroupIndex, setColumnPickerGroupIndex] = useState<
     number | null
   >(null);
+  const columnPickerTitleId = useId();
   const editableRegexInputRef = useRef<HTMLInputElement>(null);
 
   const matchResult = useMemo(
@@ -278,7 +286,12 @@ export function RegexLab({
           <div className="panel__header">
             <div className="flex items-center gap-sm">
               {t("editor.testString")}
-              <button className="btn btn--ghost btn--sm" onClick={onAddExample}>
+              <button
+                aria-label={t("editor.addExample")}
+                className="btn btn--ghost btn--sm"
+                onClick={onAddExample}
+                type="button"
+              >
                 +
               </button>
             </div>
@@ -314,6 +327,7 @@ export function RegexLab({
                 </button>
                 {examples.length > 1 && (
                   <button
+                    aria-label={t("editor.removeExample")}
                     className="btn btn--ghost btn--sm"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -325,6 +339,7 @@ export function RegexLab({
                       color: "var(--c-text-dim)",
                     }}
                     title={t("editor.removeExample")}
+                    type="button"
                   >
                     ×
                   </button>
@@ -406,6 +421,7 @@ export function RegexLab({
             handleSelectColumn(columnPickerGroupIndex, columnName)
           }
           selectedColumns={columns}
+          titleId={columnPickerTitleId}
         />
       )}
     </div>
@@ -875,9 +891,11 @@ function MatchInfoPanel({
                             </button>
                             {currentValue && (
                               <button
+                                aria-label={t("app.close")}
                                 className="btn btn--ghost btn--sm"
                                 onClick={() => onClearColumn(g.index)}
                                 title={t("app.close")}
+                                type="button"
                               >
                                 ×
                               </button>
@@ -944,6 +962,12 @@ function ExplanationPanel({
               onBlur={() => onPatternTokenHover(null)}
               onClick={() => onPatternTokenActivate(index)}
               onFocus={() => onPatternTokenActivate(index)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onPatternTokenActivate(index);
+                }
+              }}
               onMouseEnter={() => onPatternTokenHover(index)}
               onMouseLeave={() => onPatternTokenHover(null)}
               onMouseUp={() => onPatternTokenActivate(index)}
@@ -972,12 +996,14 @@ function ColumnPickerModal({
   currentValue,
   onClose,
   onSelectColumn,
+  titleId,
 }: {
   groupIndex: number;
   selectedColumns: string[];
   currentValue: string;
   onClose: () => void;
   onSelectColumn: (columnName: string) => void;
+  titleId: string;
 }) {
   const { t, i18n } = useTranslation();
   const [search, setSearch] = useState("");
@@ -1014,10 +1040,13 @@ function ColumnPickerModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        aria-labelledby={titleId}
+        aria-modal="true"
         className="modal regex-column-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
       >
-        <div className="modal__title">
+        <div className="modal__title" id={titleId}>
           {t("columns.selectForGroup", { index: groupIndex })}
         </div>
         <input

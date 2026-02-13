@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   fetchBranchSha,
@@ -19,6 +19,7 @@ interface Props {
 
 export function RefreshButton({ bankPath }: Props) {
   const { t } = useTranslation();
+  const confirmTitleId = useId();
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [mergeResults, setMergeResults] = useState<MergeResult[]>([]);
@@ -157,8 +158,16 @@ export function RefreshButton({ bankPath }: Props) {
       {/* Confirm dialog */}
       {showConfirm && (
         <div className="modal-overlay" onClick={() => setShowConfirm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal__title">{t("refresh.confirmTitle")}</div>
+          <div
+            aria-labelledby={confirmTitleId}
+            aria-modal="true"
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+          >
+            <div className="modal__title" id={confirmTitleId}>
+              {t("refresh.confirmTitle")}
+            </div>
             <p className="text-muted text-sm">{t("refresh.confirmMessage")}</p>
             <div className="modal__actions">
               <button className="btn" onClick={() => setShowConfirm(false)}>

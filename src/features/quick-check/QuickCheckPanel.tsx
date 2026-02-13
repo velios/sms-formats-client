@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { parseFormatFile, testRegex } from "@/domain/format";
@@ -280,6 +280,8 @@ export function QuickCheckPanel({
   onClose,
 }: Props) {
   const { t } = useTranslation();
+  const dialogTitleId = useId();
+  const smsInputId = useId();
   const navigate = useNavigate();
   const draftStore = useDraftStore();
   const sourceRef = useSourceStore((s) => s.sourceRef);
@@ -367,20 +369,24 @@ export function QuickCheckPanel({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        aria-labelledby={dialogTitleId}
+        aria-modal="true"
         className="modal quick-check-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
         style={{ minWidth: 760, maxWidth: 960 }}
       >
-        <div className="modal__title">
+        <div className="modal__title" id={dialogTitleId}>
           {t("quickCheck.title", { bank: bankName })}
         </div>
 
         <div className="flex-col gap-xs">
-          <label className="text-muted text-sm">
+          <label className="text-muted text-sm" htmlFor={smsInputId}>
             {t("quickCheck.smsLabel")}
           </label>
           <textarea
             className="textarea quick-check__input"
+            id={smsInputId}
             onChange={(event) => setSmsText(event.target.value)}
             placeholder={t("quickCheck.smsPlaceholder")}
             value={smsText}
@@ -391,13 +397,21 @@ export function QuickCheckPanel({
         </div>
 
         {errorMessage && (
-          <div className="issue-item issue-item--error quick-check__feedback">
+          <div
+            aria-live="assertive"
+            className="issue-item issue-item--error quick-check__feedback"
+            role="alert"
+          >
             {errorMessage}
           </div>
         )}
 
         {summary && (
-          <div className="quick-check__summary">
+          <div
+            aria-live="polite"
+            className="quick-check__summary"
+            role="status"
+          >
             <span className="badge badge--info">
               {t("quickCheck.summaryChecked", {
                 checked: summary.checkedRegexes,

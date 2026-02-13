@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
@@ -1825,6 +1825,7 @@ function SmsGameMarkupNode({
           {t("smsGame.emptySlot")}
         </button>
         <button
+          aria-label={t("smsGame.deleteChip")}
           className="sms-game__chip-remove sms-game__chip-remove--empty"
           onClick={(event) => {
             event.stopPropagation();
@@ -1855,6 +1856,7 @@ function SmsGameMarkupNode({
         {`\${${node.placeholder}}`}
       </button>
       <button
+        aria-label={t("smsGame.deleteChip")}
         className="sms-game__chip-remove"
         onClick={(event) => {
           event.stopPropagation();
@@ -2015,6 +2017,7 @@ function SmsGameSavedFormatItem({
             key={`${format.id}-${exampleIndex}`}
           >
             <textarea
+              aria-label={t("smsGame.similarExamples")}
               className="textarea"
               onChange={(event) =>
                 updateFormatExample(format.id, exampleIndex, event.target.value)
@@ -2065,6 +2068,7 @@ function SmsGameBankStage(props: SmsMarkupGameLayoutProps) {
             {t("smsGame.bankInputLabel")}
           </label>
           <input
+            aria-label={t("smsGame.bankInputLabel")}
             className="input"
             onChange={(event) => setBankName(event.target.value)}
             placeholder={t("smsGame.bankInputPlaceholder")}
@@ -2075,6 +2079,7 @@ function SmsGameBankStage(props: SmsMarkupGameLayoutProps) {
             {t("smsGame.sendersInputLabel")}
           </label>
           <textarea
+            aria-label={t("smsGame.sendersInputLabel")}
             className="textarea"
             onChange={(event) => setSendersTemplate(event.target.value)}
             placeholder={t("smsGame.sendersInputPlaceholder")}
@@ -2203,6 +2208,7 @@ function SmsGameIssueImportPanel({
                 {t("smsGame.importTargetExistingLabel")}
               </label>
               <select
+                aria-label={t("smsGame.importTargetExistingLabel")}
                 className="input"
                 disabled={importBanks.length === 0}
                 onChange={(event) =>
@@ -2234,6 +2240,7 @@ function SmsGameIssueImportPanel({
                 {t("smsGame.importTargetNewLabel")}
               </label>
               <input
+                aria-label={t("smsGame.importTargetNewLabel")}
                 className="input"
                 onChange={(event) => setNewImportBankName(event.target.value)}
                 placeholder={t("smsGame.bankInputPlaceholder")}
@@ -2461,6 +2468,7 @@ function ColumnPickerModal({
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
+  const titleId = useId();
 
   const currentBaseName = toComparableBase(currentValue);
   const usedBaseNames = useMemo(() => {
@@ -2492,10 +2500,13 @@ function ColumnPickerModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        aria-labelledby={titleId}
+        aria-modal="true"
         className="modal regex-column-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
       >
-        <div className="modal__title">
+        <div className="modal__title" id={titleId}>
           {t("columns.selectForGroup", { index: groupIndex })}
         </div>
         {selectionText && (

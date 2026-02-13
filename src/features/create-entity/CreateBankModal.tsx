@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FORMAT_TEMPLATE } from "@/domain/format";
 import { useDraftStore, useSourceStore } from "@/store";
@@ -9,6 +9,9 @@ interface Props {
 
 export function CreateBankModal({ onClose }: Props) {
   const { t } = useTranslation();
+  const dialogTitleId = useId();
+  const bankNameInputId = useId();
+  const bankIdInputId = useId();
   const [bankName, setBankName] = useState("");
   const [bankId, setBankId] = useState("");
   const draftStore = useDraftStore();
@@ -59,15 +62,26 @@ export function CreateBankModal({ onClose }: Props) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal__title">{t("bank.createBank")}</div>
+      <div
+        aria-labelledby={dialogTitleId}
+        aria-modal="true"
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+      >
+        <div className="modal__title" id={dialogTitleId}>
+          {t("bank.createBank")}
+        </div>
 
         <div className="flex-col gap-md">
           <div className="flex-col gap-xs">
-            <label className="text-muted text-sm">{t("bank.bankName")} *</label>
+            <label className="text-muted text-sm" htmlFor={bankNameInputId}>
+              {t("bank.bankName")} *
+            </label>
             <input
               autoFocus
               className="input"
+              id={bankNameInputId}
               onChange={(e) => setBankName(e.target.value)}
               placeholder="Банк"
               value={bankName}
@@ -75,9 +89,12 @@ export function CreateBankModal({ onClose }: Props) {
           </div>
 
           <div className="flex-col gap-xs">
-            <label className="text-muted text-sm">{t("bank.bankId")}</label>
+            <label className="text-muted text-sm" htmlFor={bankIdInputId}>
+              {t("bank.bankId")}
+            </label>
             <input
               className="input"
+              id={bankIdInputId}
               onChange={(e) => setBankId(e.target.value.replace(/\D/g, ""))}
               placeholder="123"
               value={bankId}

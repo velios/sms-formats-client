@@ -549,6 +549,7 @@ function FormatsPanel(params: {
           <span className="text-muted text-sm">({totalFormatsCount})</span>
         </span>
         <button
+          aria-label={t("bank.createFormat")}
           className="btn btn--ghost btn--sm"
           onClick={() => setShowCreateFormat(true)}
         >
@@ -577,6 +578,7 @@ function FormatsPanel(params: {
           }}
         >
           <input
+            aria-label={t("bank.searchFormat")}
             className="input"
             onChange={(e) => setFormatSearch(e.target.value)}
             placeholder={t("bank.searchFormat")}
@@ -602,6 +604,14 @@ function FormatsPanel(params: {
               className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""}`}
               key={f}
               onClick={() => handleSelectFile(f)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  handleSelectFile(f);
+                }
+              }}
+              role="button"
+              tabIndex={0}
             >
               <span className="truncate text-mono text-sm">{name}</span>
               {isModified && (

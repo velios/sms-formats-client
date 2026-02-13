@@ -349,6 +349,15 @@
     @apply flex cursor-pointer items-center gap-2 px-3 py-2 text-[13px];
   }
 
+  button.autocomplete__item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+
   .autocomplete__item:hover,
   .autocomplete__item--active {
     background: var(--c-bg-hover);

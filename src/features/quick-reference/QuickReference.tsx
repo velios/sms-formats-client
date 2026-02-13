@@ -179,6 +179,11 @@ export function QuickReference() {
         }}
       >
         <input
+          aria-label={
+            lang === "ru"
+              ? "Поиск по справочнику regex"
+              : "Search regex reference"
+          }
           className="input"
           onChange={(e) => setSearch(e.target.value)}
           placeholder={lang === "ru" ? "Поиск…" : "Search…"}

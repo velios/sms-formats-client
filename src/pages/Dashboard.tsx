@@ -241,6 +241,7 @@ export function Dashboard() {
           >
             <div className="autocomplete">
               <input
+                aria-label={t("bank.search")}
                 autoFocus
                 className="input"
                 onChange={(e) => setQuery(e.target.value)}
@@ -325,8 +326,17 @@ function BankListItem({
     <div
       className={`autocomplete__item ${isActive ? "autocomplete__item--active" : ""}`}
       onClick={onClick}
+      onFocus={onMouseEnter}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       onMouseEnter={onMouseEnter}
+      role="button"
       style={{ padding: "10px 16px" }}
+      tabIndex={0}
     >
       <div className="flex-col gap-xs" style={{ flex: 1 }}>
         <div className="flex items-center gap-sm">
