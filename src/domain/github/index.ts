@@ -10,8 +10,13 @@ export {
   fetchFileContent,
   fetchIssue,
   fetchOpenPRs,
+  fetchPullRequestFiles,
+  fetchPullRequestHead,
   fetchRepoTree,
+  fetchSourceRepoForks,
   fetchStartableIssues,
+  getDefaultRepo,
+  getSourceRepo,
   indexBanksFromTree,
   validateToken,
 } from "./client";

@@ -38,8 +38,11 @@ export function Dashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const sourceRef = useSourceStore((s) => s.sourceRef);
+  const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
+  const repository = useSourceStore((s) => s.repository);
   const banks = useSourceStore((s) => s.banks);
   const switchSource = useSwitchSource();
+  const draftStore = useDraftStore();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [showCreateBank, setShowCreateBank] = useState(false);
@@ -50,18 +53,51 @@ export function Dashboard() {
   // Load tree when source is set
   const { isLoading, error } = useRepoTree(sourceRef?.sha);
 
+  const localChangedFiles = useMemo(
+    () => draftStore.getChangedFiles().map((item) => item.filePath),
+    [draftStore, draftStore.drafts]
+  );
+
+  const changedFilesByBank = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    const allChanged = [...sourceChangedFiles, ...localChangedFiles];
+    for (const path of allChanged) {
+      if (!path.startsWith("src/")) {
+        continue;
+      }
+      const bankPath = path.split("/").slice(0, 2).join("/");
+      const current = map.get(bankPath) ?? new Set<string>();
+      current.add(path);
+      map.set(bankPath, current);
+    }
+    return map;
+  }, [sourceChangedFiles, localChangedFiles]);
+
+  const sortedBanks = useMemo(() => {
+    return [...banks].sort((a, b) => {
+      const aChanged = changedFilesByBank.get(a.folderPath)?.size ?? 0;
+      const bChanged = changedFilesByBank.get(b.folderPath)?.size ?? 0;
+      if (aChanged !== bChanged) {
+        return bChanged - aChanged;
+      }
+      return a.displayName.localeCompare(b.displayName, undefined, {
+        sensitivity: "base",
+      });
+    });
+  }, [banks, changedFilesByBank]);
+
   const filtered = useMemo(() => {
     if (!query) {
-      return banks;
+      return sortedBanks;
     }
     const q = query.toLowerCase();
-    return banks.filter(
+    return sortedBanks.filter(
       (b) =>
         b.displayName.toLowerCase().includes(q) ||
         b.bankId?.includes(q) ||
         b.folderPath.toLowerCase().includes(q)
     );
-  }, [banks, query]);
+  }, [sortedBanks, query]);
 
   // Recent banks resolved to BankInfo
   const recentBanks = useMemo(() => {
@@ -223,6 +259,9 @@ export function Dashboard() {
             visibleBanks.map((bank, i) => (
               <BankListItem
                 bank={bank}
+                changedFiles={Array.from(
+                  changedFilesByBank.get(bank.folderPath) ?? []
+                )}
                 isActive={banksTab === "all" && i === activeIndex}
                 key={bank.folderPath}
                 onClick={() => handleSelect(bank)}
@@ -232,7 +271,10 @@ export function Dashboard() {
                   }
                 }}
                 openInRepoLabel={t("bank.openBankFolderInRepo")}
-                sourceRefName={sourceRef?.name ?? config.defaultBranch}
+                repository={repository}
+                sourceRefName={
+                  sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch
+                }
               />
             ))
           )}
@@ -248,6 +290,8 @@ export function Dashboard() {
 
 function BankListItem({
   bank,
+  changedFiles,
+  repository,
   sourceRefName,
   openInRepoLabel,
   isActive,
@@ -255,22 +299,27 @@ function BankListItem({
   onMouseEnter,
 }: {
   bank: BankInfo;
+  changedFiles: string[];
+  repository: { owner: string; repo: string };
   sourceRefName: string;
   openInRepoLabel: string;
   isActive: boolean;
   onClick: () => void;
   onMouseEnter: () => void;
 }) {
-  const draftStore = useDraftStore();
-  const hasLocalChanges = bank.formatFiles.some((f) => {
-    const draft = draftStore.getDraft(f);
-    return draft && draft.content !== draft.remoteContent;
-  });
+  const hasChanges = changedFiles.length > 0;
+  const changedLabels = changedFiles
+    .map((path) => path.split("/").pop() ?? path)
+    .slice(0, 3);
+  const extraChangedCount = Math.max(
+    changedFiles.length - changedLabels.length,
+    0
+  );
   const encodedFolderPath = bank.folderPath
     .split("/")
     .map(encodeURIComponent)
     .join("/");
-  const repoUrl = `https://github.com/${config.owner}/${config.repo}/tree/${encodeURIComponent(sourceRefName)}/${encodedFolderPath}`;
+  const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/tree/${encodeURIComponent(sourceRefName)}/${encodedFolderPath}`;
 
   return (
     <div
@@ -285,7 +334,7 @@ function BankListItem({
           {bank.bankId && (
             <span className="text-dim text-sm">#{bank.bankId}</span>
           )}
-          {hasLocalChanges && <span className="badge badge--modified">●</span>}
+          {hasChanges && <span className="badge badge--modified">●</span>}
         </div>
         <div className="text-muted text-sm">
           {bank.formatFiles.length} format(s)
@@ -298,6 +347,12 @@ function BankListItem({
             </span>
           )}
         </div>
+        {hasChanges && (
+          <div className="text-dim text-sm">
+            {changedLabels.join(", ")}
+            {extraChangedCount > 0 && ` +${extraChangedCount}`}
+          </div>
+        )}
       </div>
       <a
         aria-label={`${openInRepoLabel}: ${bank.displayName}`}

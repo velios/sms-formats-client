@@ -15,7 +15,7 @@ export function SendersEditor({ bankPath }: Props) {
 
   const { data: remoteContent, isLoading } = useFileContent(
     filePath,
-    sourceRef?.name
+    sourceRef?.sha ?? sourceRef?.name
   );
 
   const draft = draftStore.getDraft(filePath);

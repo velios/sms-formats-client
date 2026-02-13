@@ -1,10 +1,30 @@
 import { Octokit } from "@octokit/rest";
 import { config } from "@/config";
 import { isSmsGameIssue } from "@/domain/sms-game/issue-import";
-import type { BankInfo, FileEntry } from "../types";
+import type { BankInfo, FileEntry, RepoRef } from "../types";
 import { decodeBase64Utf8, encodeBase64Utf8 } from "./encoding";
 
-const { owner, repo } = config;
+const defaultRepoRef: RepoRef = {
+  owner: config.defaultSourceOwner,
+  repo: config.defaultSourceRepo,
+};
+
+const sourceRepoRef: RepoRef = {
+  owner: config.sourceOwner,
+  repo: config.sourceRepo,
+};
+
+function resolveRepo(repoRef?: RepoRef): RepoRef {
+  return repoRef ?? defaultRepoRef;
+}
+
+export function getDefaultRepo(): RepoRef {
+  return { ...defaultRepoRef };
+}
+
+export function getSourceRepo(): RepoRef {
+  return { ...sourceRepoRef };
+}
 
 // ─── Default API client (uses shared env token when provided) ───
 
@@ -19,23 +39,32 @@ export function createAuthenticatedOctokit(token: string): Octokit {
 
 // ─── Source loading ───
 
-export async function fetchBranches(): Promise<
-  { name: string; sha: string }[]
-> {
+export async function fetchBranches(
+  repoRef?: RepoRef
+): Promise<{ name: string; sha: string }[]> {
+  const repo = resolveRepo(repoRef);
   const res = await publicOctokit.repos.listBranches({
-    owner,
-    repo,
+    owner: repo.owner,
+    repo: repo.repo,
     per_page: 100,
   });
   return res.data.map((b) => ({ name: b.name, sha: b.commit.sha }));
 }
 
-export async function fetchOpenPRs(): Promise<
-  { number: number; title: string; headRef: string; headSha: string }[]
+export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
+  {
+    number: number;
+    title: string;
+    headRef: string;
+    headSha: string;
+    headOwner: string;
+    headRepo: string;
+  }[]
 > {
+  const repo = resolveRepo(repoRef);
   const res = await publicOctokit.pulls.list({
-    owner,
-    repo,
+    owner: repo.owner,
+    repo: repo.repo,
     state: "open",
     per_page: 100,
   });
@@ -44,10 +73,46 @@ export async function fetchOpenPRs(): Promise<
     title: pr.title,
     headRef: pr.head.ref,
     headSha: pr.head.sha,
+    headOwner: pr.head.repo?.owner?.login ?? repo.owner,
+    headRepo: pr.head.repo?.name ?? repo.repo,
   }));
 }
 
-export async function fetchStartableIssues(): Promise<
+export async function fetchPullRequestHead(
+  prNumber: number,
+  repoRef?: RepoRef
+): Promise<{ headRef: string; headSha: string }> {
+  const repo = resolveRepo(repoRef);
+  const pr = await publicOctokit.pulls.get({
+    owner: repo.owner,
+    repo: repo.repo,
+    pull_number: prNumber,
+  });
+
+  return {
+    headRef: pr.data.head.ref,
+    headSha: pr.data.head.sha,
+  };
+}
+
+export async function fetchPullRequestFiles(
+  prNumber: number,
+  repoRef?: RepoRef
+): Promise<string[]> {
+  const repo = resolveRepo(repoRef);
+  const files = await publicOctokit.paginate(publicOctokit.pulls.listFiles, {
+    owner: repo.owner,
+    repo: repo.repo,
+    pull_number: prNumber,
+    per_page: 100,
+  });
+
+  return files
+    .map((file) => file.filename)
+    .filter((path): path is string => !!path);
+}
+
+export async function fetchStartableIssues(repoRef?: RepoRef): Promise<
   {
     number: number;
     title: string;
@@ -57,11 +122,12 @@ export async function fetchStartableIssues(): Promise<
     updatedAt: string;
   }[]
 > {
+  const repo = resolveRepo(repoRef);
   const allIssues = await publicOctokit.paginate(
     publicOctokit.issues.listForRepo,
     {
-      owner,
-      repo,
+      owner: repo.owner,
+      repo: repo.repo,
       state: "all",
       per_page: 100,
     }
@@ -81,17 +147,71 @@ export async function fetchStartableIssues(): Promise<
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export async function fetchBranchSha(branch: string): Promise<string> {
-  const res = await publicOctokit.repos.getBranch({ owner, repo, branch });
+export async function fetchBranchSha(
+  branch: string,
+  repoRef?: RepoRef
+): Promise<string> {
+  const repo = resolveRepo(repoRef);
+  const res = await publicOctokit.repos.getBranch({
+    owner: repo.owner,
+    repo: repo.repo,
+    branch,
+  });
   return res.data.commit.sha;
+}
+
+export async function fetchSourceRepoForks(): Promise<RepoRef[]> {
+  const forks = await publicOctokit.paginate(publicOctokit.repos.listForks, {
+    owner: sourceRepoRef.owner,
+    repo: sourceRepoRef.repo,
+    per_page: 100,
+  });
+
+  const bySlug = new Map<string, RepoRef>();
+  const addRepo = (owner: string, repo: string) => {
+    const slug = `${owner}/${repo}`;
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, { owner, repo });
+    }
+  };
+
+  addRepo(sourceRepoRef.owner, sourceRepoRef.repo);
+  addRepo(defaultRepoRef.owner, defaultRepoRef.repo);
+
+  for (const fork of forks) {
+    const owner = fork.owner?.login;
+    const repo = fork.name;
+    if (owner && repo) {
+      addRepo(owner, repo);
+    }
+  }
+
+  const items = Array.from(bySlug.values());
+  const sourceSlug = `${sourceRepoRef.owner}/${sourceRepoRef.repo}`;
+
+  return items.sort((a, b) => {
+    const aSlug = `${a.owner}/${a.repo}`;
+    const bSlug = `${b.owner}/${b.repo}`;
+    if (aSlug === sourceSlug) {
+      return -1;
+    }
+    if (bSlug === sourceSlug) {
+      return 1;
+    }
+    return aSlug.localeCompare(bSlug, undefined, { sensitivity: "base" });
+  });
 }
 
 // ─── Tree and file loading ───
 
-export async function fetchRepoTree(sha: string): Promise<FileEntry[]> {
+export async function fetchRepoTree(
+  sha: string,
+  repoRef?: RepoRef
+): Promise<FileEntry[]> {
+  const repo = resolveRepo(repoRef);
   const res = await publicOctokit.git.getTree({
-    owner,
-    repo,
+    owner: repo.owner,
+    repo: repo.repo,
     tree_sha: sha,
     recursive: "true",
   });
@@ -109,9 +229,16 @@ export async function fetchRepoTree(sha: string): Promise<FileEntry[]> {
 
 export async function fetchFileContent(
   path: string,
-  ref: string
+  ref: string,
+  repoRef?: RepoRef
 ): Promise<string> {
-  const res = await publicOctokit.repos.getContent({ owner, repo, path, ref });
+  const repo = resolveRepo(repoRef);
+  const res = await publicOctokit.repos.getContent({
+    owner: repo.owner,
+    repo: repo.repo,
+    path,
+    ref,
+  });
   const data = res.data as { content?: string; encoding?: string };
   if (data.content && data.encoding === "base64") {
     return decodeBase64Utf8(data.content.replace(/\n/g, ""));
@@ -176,21 +303,26 @@ export function indexBanksFromTree(tree: FileEntry[]): BankInfo[] {
 // ─── Publish operations (require auth) ───
 
 export async function ensureFork(
-  octokit: Octokit
+  octokit: Octokit,
+  repoRef?: RepoRef
 ): Promise<{ owner: string; repo: string }> {
+  const target = resolveRepo(repoRef);
   try {
     const user = await octokit.users.getAuthenticated();
     const forkOwner = user.data.login;
 
     try {
-      await octokit.repos.get({ owner: forkOwner, repo });
-      return { owner: forkOwner, repo };
+      await octokit.repos.get({ owner: forkOwner, repo: target.repo });
+      return { owner: forkOwner, repo: target.repo };
     } catch {
       // Fork doesn't exist — create it
-      await octokit.repos.createFork({ owner, repo });
+      await octokit.repos.createFork({
+        owner: target.owner,
+        repo: target.repo,
+      });
       // Wait a bit for fork to be ready
       await new Promise((resolve) => setTimeout(resolve, 3000));
-      return { owner: forkOwner, repo };
+      return { owner: forkOwner, repo: target.repo };
     }
   } catch (e) {
     throw new Error(
@@ -203,26 +335,33 @@ export async function createOrUpdateBranch(
   octokit: Octokit,
   forkOwner: string,
   branchName: string,
-  baseSha: string
+  baseSha: string,
+  repoRef?: RepoRef
 ): Promise<void> {
+  const target = resolveRepo(repoRef);
   const ref = `refs/heads/${branchName}`;
   try {
     await octokit.git.getRef({
       owner: forkOwner,
-      repo,
+      repo: target.repo,
       ref: `heads/${branchName}`,
     });
     // Branch exists, update it
     await octokit.git.updateRef({
       owner: forkOwner,
-      repo,
+      repo: target.repo,
       ref: `heads/${branchName}`,
       sha: baseSha,
       force: true,
     });
   } catch {
     // Branch doesn't exist, create it
-    await octokit.git.createRef({ owner: forkOwner, repo, ref, sha: baseSha });
+    await octokit.git.createRef({
+      owner: forkOwner,
+      repo: target.repo,
+      ref,
+      sha: baseSha,
+    });
   }
 }
 
@@ -232,14 +371,17 @@ export async function createCommit(
   branchName: string,
   parentSha: string,
   files: { path: string; content: string }[],
-  message: string
+  message: string,
+  repoRef?: RepoRef
 ): Promise<string> {
+  const target = resolveRepo(repoRef);
+
   // Create blobs
   const blobs = await Promise.all(
     files.map(async (f) => {
       const blob = await octokit.git.createBlob({
         owner: forkOwner,
-        repo,
+        repo: target.repo,
         content: encodeBase64Utf8(f.content),
         encoding: "base64",
       });
@@ -255,7 +397,7 @@ export async function createCommit(
   // Get base tree
   const parentCommit = await octokit.git.getCommit({
     owner: forkOwner,
-    repo,
+    repo: target.repo,
     commit_sha: parentSha,
   });
   const baseTreeSha = parentCommit.data.tree.sha;
@@ -263,7 +405,7 @@ export async function createCommit(
   // Create new tree
   const newTree = await octokit.git.createTree({
     owner: forkOwner,
-    repo,
+    repo: target.repo,
     base_tree: baseTreeSha,
     tree: blobs,
   });
@@ -271,7 +413,7 @@ export async function createCommit(
   // Create commit
   const commit = await octokit.git.createCommit({
     owner: forkOwner,
-    repo,
+    repo: target.repo,
     message,
     tree: newTree.data.sha,
     parents: [parentSha],
@@ -280,7 +422,7 @@ export async function createCommit(
   // Update branch ref
   await octokit.git.updateRef({
     owner: forkOwner,
-    repo,
+    repo: target.repo,
     ref: `heads/${branchName}`,
     sha: commit.data.sha,
   });
@@ -293,11 +435,13 @@ export async function createPullRequest(
   forkOwner: string,
   branchName: string,
   title: string,
-  body: string
+  body: string,
+  repoRef?: RepoRef
 ): Promise<{ url: string; number: number }> {
+  const target = resolveRepo(repoRef);
   const pr = await octokit.pulls.create({
-    owner,
-    repo,
+    owner: target.owner,
+    repo: target.repo,
     title,
     body,
     head: `${forkOwner}:${branchName}`,
@@ -315,11 +459,13 @@ export async function validateToken(token: string): Promise<string> {
 export async function createIssue(
   octokit: Octokit,
   title: string,
-  body: string
+  body: string,
+  repoRef?: RepoRef
 ): Promise<{ url: string; number: number }> {
+  const target = resolveRepo(repoRef);
   const issue = await octokit.issues.create({
-    owner,
-    repo,
+    owner: target.owner,
+    repo: target.repo,
     title,
     body,
   });
@@ -328,12 +474,14 @@ export async function createIssue(
 
 export async function fetchIssue(
   issueNumber: number,
-  octokit?: Octokit
+  octokit?: Octokit,
+  repoRef?: RepoRef
 ): Promise<{ number: number; title: string; body: string; url: string }> {
+  const target = resolveRepo(repoRef);
   const api = octokit ?? publicOctokit;
   const issue = await api.issues.get({
-    owner,
-    repo,
+    owner: target.owner,
+    repo: target.repo,
     issue_number: issueNumber,
   });
 

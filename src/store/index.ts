@@ -1,7 +1,9 @@
 import { create } from "zustand";
+import { config } from "@/config";
 import type {
   BankInfo,
   FileEntry,
+  RepoRef,
   SourceRef,
   ValidationIssue,
 } from "@/domain/types";
@@ -10,12 +12,16 @@ import { deleteDraft, loadAllDrafts, saveDraft } from "./persistence";
 // ─── Source store ───
 
 interface SourceState {
+  repository: RepoRef;
   sourceRef: SourceRef | null;
+  sourceChangedFiles: string[];
   tree: FileEntry[];
   banks: BankInfo[];
   loading: boolean;
   error: string | null;
+  setRepository: (repository: RepoRef) => void;
   setSource: (ref: SourceRef) => void;
+  setSourceChangedFiles: (files: string[]) => void;
   setTree: (tree: FileEntry[]) => void;
   setBanks: (banks: BankInfo[]) => void;
   setLoading: (v: boolean) => void;
@@ -23,12 +29,19 @@ interface SourceState {
 }
 
 export const useSourceStore = create<SourceState>((set) => ({
+  repository: {
+    owner: config.defaultSourceOwner,
+    repo: config.defaultSourceRepo,
+  },
   sourceRef: null,
+  sourceChangedFiles: [],
   tree: [],
   banks: [],
   loading: false,
   error: null,
+  setRepository: (repository) => set({ repository }),
   setSource: (ref) => set({ sourceRef: ref, error: null }),
+  setSourceChangedFiles: (sourceChangedFiles) => set({ sourceChangedFiles }),
   setTree: (tree) => set({ tree }),
   setBanks: (banks) => set({ banks }),
   setLoading: (loading) => set({ loading }),
@@ -62,6 +75,10 @@ interface DraftState {
   restoreFromDB: (sourceRef: string) => Promise<void>;
 }
 
+function makeDraftSourceKey(sourceRef: SourceRef, repository: RepoRef): string {
+  return `${repository.owner}/${repository.repo}:${sourceRef.type}:${sourceRef.name}`;
+}
+
 export const useDraftStore = create<DraftState>((set, get) => ({
   drafts: new Map(),
 
@@ -79,11 +96,12 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     set({ drafts: newDrafts });
 
     // Persist to IndexedDB
-    const sourceRef = useSourceStore.getState().sourceRef;
+    const sourceState = useSourceStore.getState();
+    const sourceRef = sourceState.sourceRef;
     if (sourceRef) {
       const bankPath = filePath.split("/").slice(0, 2).join("/");
       saveDraft({
-        sourceRef: `${sourceRef.type}:${sourceRef.name}`,
+        sourceRef: makeDraftSourceKey(sourceRef, sourceState.repository),
         bankPath,
         filePath,
         baseSha,
@@ -100,9 +118,13 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     newDrafts.delete(filePath);
     set({ drafts: newDrafts });
 
-    const sourceRef = useSourceStore.getState().sourceRef;
+    const sourceState = useSourceStore.getState();
+    const sourceRef = sourceState.sourceRef;
     if (sourceRef) {
-      deleteDraft(`${sourceRef.type}:${sourceRef.name}`, filePath);
+      deleteDraft(
+        makeDraftSourceKey(sourceRef, sourceState.repository),
+        filePath
+      );
     }
   },
 
@@ -123,9 +145,10 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     newDrafts.set(newFilePath, newEntry);
     set({ drafts: newDrafts });
 
-    const sourceRef = useSourceStore.getState().sourceRef;
+    const sourceState = useSourceStore.getState();
+    const sourceRef = sourceState.sourceRef;
     if (sourceRef) {
-      const sourceKey = `${sourceRef.type}:${sourceRef.name}`;
+      const sourceKey = makeDraftSourceKey(sourceRef, sourceState.repository);
       deleteDraft(sourceKey, oldFilePath);
       const bankPath = newFilePath.split("/").slice(0, 2).join("/");
       saveDraft({

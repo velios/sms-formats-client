@@ -30,6 +30,11 @@ export interface SourceRef {
   prNumber?: number;
 }
 
+export interface RepoRef {
+  owner: string;
+  repo: string;
+}
+
 export interface FileEntry {
   path: string;
   sha: string;

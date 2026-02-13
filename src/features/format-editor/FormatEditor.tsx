@@ -57,12 +57,13 @@ export function FormatEditor({
 }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
+  const repository = useSourceStore((s) => s.repository);
   const draftStore = useDraftStore();
 
   // Load remote content
   const { data: remoteContent, isLoading } = useFileContent(
     filePath,
-    sourceRef?.name
+    sourceRef?.sha ?? sourceRef?.name
   );
 
   const draft = draftStore.getDraft(filePath);
@@ -224,9 +225,9 @@ export function FormatEditor({
   const isModified = draft ? draft.content !== draft.remoteContent : false;
   const fileName = filePath.split("/").pop() ?? filePath;
   const fileDirPath = filePath.split("/").slice(0, -1).join("/");
-  const refName = sourceRef?.name ?? config.defaultBranch;
+  const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
   const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-  const formatRepoUrl = `https://github.com/${config.owner}/${config.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
+  const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
   const saveLabel =
     mode === "structured" ? t("editor.saveStructured") : t("editor.saveRaw");
   const resetLabel =

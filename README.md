@@ -28,8 +28,9 @@ bun run verify       # full gate: typecheck + tests + secrets + lint
 ```
 
 ## Minimal Env Notes
-- Defaults already target `zenmoney/sms-formats`.
-- If needed, adjust `VITE_GITHUB_OWNER`, `VITE_GITHUB_REPO`, `VITE_DEFAULT_BRANCH` in `.env`.
+- `VITE_GITHUB_SOURCE_REPO` defines upstream source (`owner/repo`) used to discover forks for repository switching.
+- `VITE_GITHUB_DEFAULT_SOURCE_REPO` defines which repository is selected by default when app opens (can be fork or upstream).
+- Keep `VITE_DEFAULT_BRANCH` aligned with the default branch for these repositories.
 
 ## Publish
 - Open Publish panel in the app.

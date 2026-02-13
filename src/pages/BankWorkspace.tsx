@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
+import type { BankInfo } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { PublishPanel } from "@/features/publish-panel/PublishPanel";
@@ -55,26 +62,231 @@ function replaceRecentFormat(
   }
 }
 
+function decodeRequestedFileValue(
+  searchParams: URLSearchParams
+): string | null {
+  const rawValue = searchParams.get("file");
+  if (!rawValue) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(rawValue);
+  } catch {
+    return rawValue;
+  }
+}
+
+function collectChangedFilesInBank(
+  bankPath: string,
+  sourceChangedFiles: string[],
+  localChangedFiles: string[]
+): Set<string> {
+  const files = [...sourceChangedFiles, ...localChangedFiles];
+  const result = new Set<string>();
+  for (const filePath of files) {
+    if (filePath.startsWith(`${bankPath}/`)) {
+      result.add(filePath);
+    }
+  }
+  return result;
+}
+
+function collectChangedFormatFiles(
+  bankPath: string,
+  changedFilesInBank: Set<string>
+): Set<string> {
+  return new Set(
+    Array.from(changedFilesInBank).filter(
+      (path) => path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
+    )
+  );
+}
+
+function sortFormatPaths(
+  formatPaths: string[],
+  changedFormatFiles: Set<string>
+): string[] {
+  return [...formatPaths].sort((a, b) => {
+    const aChanged = changedFormatFiles.has(a);
+    const bChanged = changedFormatFiles.has(b);
+    if (aChanged !== bChanged) {
+      return aChanged ? -1 : 1;
+    }
+    const aName = a.split("/").pop() ?? a;
+    const bName = b.split("/").pop() ?? b;
+    return aName.localeCompare(bName, undefined, { sensitivity: "base" });
+  });
+}
+
+function collectAllFormatFiles(
+  bankPath: string,
+  remoteFormatFiles: string[],
+  draftPaths: Iterable<string>,
+  changedFormatFiles: Set<string>
+): string[] {
+  const remoteFiles = new Set(remoteFormatFiles);
+  const draftFiles = new Set<string>();
+  for (const path of draftPaths) {
+    if (path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")) {
+      draftFiles.add(path);
+    }
+  }
+  return sortFormatPaths(
+    Array.from(new Set([...remoteFiles, ...draftFiles])),
+    changedFormatFiles
+  );
+}
+
+function filterFormatsByQuery(formatPaths: string[], query: string): string[] {
+  if (!query) {
+    return formatPaths;
+  }
+  const normalizedQuery = query.toLowerCase();
+  return formatPaths.filter((path) => {
+    const name = path.split("/").pop() ?? path;
+    return name.toLowerCase().includes(normalizedQuery);
+  });
+}
+
+function resolveVisibleFormats(params: {
+  formatTab: "all" | "recent" | "changed";
+  recentFormats: string[];
+  filteredChangedFormats: string[];
+  filteredFormatFiles: string[];
+}): string[] {
+  const {
+    formatTab,
+    recentFormats,
+    filteredChangedFormats,
+    filteredFormatFiles,
+  } = params;
+  if (formatTab === "recent") {
+    return recentFormats;
+  }
+  if (formatTab === "changed") {
+    return filteredChangedFormats;
+  }
+  return filteredFormatFiles;
+}
+
+function renderWorkspaceContent(params: {
+  showSenders: boolean;
+  bankPath: string;
+  selectedFile: string | null;
+  allFormatFiles: string[];
+  handleRenameFile: (fromPath: string, toPath: string) => boolean;
+  t: (key: string) => string;
+}): ReactNode {
+  const {
+    showSenders,
+    bankPath,
+    selectedFile,
+    allFormatFiles,
+    handleRenameFile,
+    t,
+  } = params;
+  if (showSenders) {
+    return <SendersEditor bankPath={bankPath} />;
+  }
+  if (selectedFile) {
+    return (
+      <FormatEditor
+        allFormatFiles={allFormatFiles}
+        filePath={selectedFile}
+        key={selectedFile}
+        onRenameFile={handleRenameFile}
+      />
+    );
+  }
+  return (
+    <div className="flex h-full items-center justify-center text-muted">
+      {t("bank.formats")}: {t("bank.noResults")}
+    </div>
+  );
+}
+
+function renameDraftFormat(params: {
+  fromPath: string;
+  toPath: string;
+  bankPath: string;
+  allFormatFiles: string[];
+  draftStore: {
+    getDraft: (
+      filePath: string
+    ) => { content: string; remoteContent: string } | undefined;
+    renameDraft: (oldFilePath: string, newFilePath: string) => void;
+  };
+  setBanks: (banks: BankInfo[]) => void;
+  currentSelectedFile: string | null;
+  setSelectedFile: (filePath: string | null) => void;
+}): boolean {
+  const {
+    fromPath,
+    toPath,
+    bankPath,
+    allFormatFiles,
+    draftStore,
+    setBanks,
+    currentSelectedFile,
+    setSelectedFile,
+  } = params;
+  if (fromPath === toPath) {
+    return true;
+  }
+  if (!(toPath.startsWith(`${bankPath}/formats/`) && toPath.endsWith(".txt"))) {
+    return false;
+  }
+  if (allFormatFiles.includes(toPath)) {
+    return false;
+  }
+
+  const draft = draftStore.getDraft(fromPath);
+  if (!draft || draft.remoteContent !== "") {
+    return false;
+  }
+
+  draftStore.renameDraft(fromPath, toPath);
+  replaceRecentFormat(bankPath, fromPath, toPath);
+
+  const currentBanks = useSourceStore.getState().banks;
+  const nextBanks = currentBanks.map((item) => {
+    if (item.folderPath !== bankPath) {
+      return item;
+    }
+    if (!item.formatFiles.includes(fromPath)) {
+      return item;
+    }
+    const renamedFormatFiles = item.formatFiles.map((path) =>
+      path === fromPath ? toPath : path
+    );
+    return {
+      ...item,
+      formatFiles: Array.from(new Set(renamedFormatFiles)),
+    };
+  });
+  setBanks(nextBanks);
+
+  if (currentSelectedFile === fromPath) {
+    setSelectedFile(toPath);
+  }
+  return true;
+}
+
 export function BankWorkspace() {
   const { t } = useTranslation();
   const { bankPath: encodedBankPath } = useParams();
   const [searchParams] = useSearchParams();
   const bankPath = decodeURIComponent(encodedBankPath ?? "");
-  const requestedFile = useMemo(() => {
-    const rawValue = searchParams.get("file");
-    if (!rawValue) {
-      return null;
-    }
-    try {
-      return decodeURIComponent(rawValue);
-    } catch {
-      return rawValue;
-    }
-  }, [searchParams]);
+  const requestedFile = useMemo(
+    () => decodeRequestedFileValue(searchParams),
+    [searchParams]
+  );
 
   const banks = useSourceStore((s) => s.banks);
   const setBanks = useSourceStore((s) => s.setBanks);
   const sourceRef = useSourceStore((s) => s.sourceRef);
+  const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
+  const repository = useSourceStore((s) => s.repository);
 
   const bank = useMemo(
     () => banks.find((b) => b.folderPath === bankPath),
@@ -87,52 +299,68 @@ export function BankWorkspace() {
   const [showPublish, setShowPublish] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [formatSearch, setFormatSearch] = useState("");
-  const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
+  const [formatTab, setFormatTab] = useState<"all" | "recent" | "changed">(
+    "all"
+  );
 
   // Get all format files including draft-only (new) files
   const draftStore = useDraftStore();
+  const localChangedFiles = useMemo(
+    () => draftStore.getChangedFiles().map((item) => item.filePath),
+    [draftStore, draftStore.drafts]
+  );
+  const changedFilesInBank = useMemo(
+    () =>
+      collectChangedFilesInBank(
+        bankPath,
+        sourceChangedFiles,
+        localChangedFiles
+      ),
+    [bankPath, localChangedFiles, sourceChangedFiles]
+  );
+  const changedFormatFiles = useMemo(
+    () => collectChangedFormatFiles(bankPath, changedFilesInBank),
+    [bankPath, changedFilesInBank]
+  );
+
   const allFormatFiles = useMemo(() => {
-    const remoteFiles = new Set(bank?.formatFiles ?? []);
-    const draftFiles = new Set<string>();
-    for (const [path] of draftStore.drafts) {
-      if (path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")) {
-        draftFiles.add(path);
-      }
-    }
-    return Array.from(new Set([...remoteFiles, ...draftFiles])).sort((a, b) => {
-      const aName = a.split("/").pop() ?? a;
-      const bName = b.split("/").pop() ?? b;
-      return aName.localeCompare(bName, undefined, { sensitivity: "base" });
-    });
-  }, [bank, bankPath, draftStore.drafts]);
+    return collectAllFormatFiles(
+      bankPath,
+      bank?.formatFiles ?? [],
+      draftStore.drafts.keys(),
+      changedFormatFiles
+    );
+  }, [bank, bankPath, changedFormatFiles, draftStore.drafts]);
 
   // Filtered format files by search
-  const filteredFormatFiles = useMemo(() => {
-    if (!formatSearch) {
-      return allFormatFiles;
-    }
-    const q = formatSearch.toLowerCase();
-    return allFormatFiles.filter((f) => {
-      const name = f.split("/").pop() ?? f;
-      return name.toLowerCase().includes(q);
-    });
-  }, [allFormatFiles, formatSearch]);
+  const filteredFormatFiles = useMemo(
+    () => filterFormatsByQuery(allFormatFiles, formatSearch),
+    [allFormatFiles, formatSearch]
+  );
 
   // Recent formats
   const recentFormats = useMemo(() => {
     const recent = getRecentFormats(bankPath);
     return recent.filter((f) => allFormatFiles.includes(f));
   }, [bankPath, allFormatFiles]);
+  const changedFormats = useMemo(
+    () => allFormatFiles.filter((path) => changedFormatFiles.has(path)),
+    [allFormatFiles, changedFormatFiles]
+  );
+  const filteredChangedFormats = useMemo(
+    () => filterFormatsByQuery(changedFormats, formatSearch),
+    [changedFormats, formatSearch]
+  );
 
   // Auto-select first file
   useEffect(() => {
-    if (!requestedFile) {
-      return;
-    }
-    if (!allFormatFiles.includes(requestedFile)) {
-      return;
-    }
-    if (selectedFile === requestedFile) {
+    if (
+      !(
+        requestedFile &&
+        allFormatFiles.includes(requestedFile) &&
+        selectedFile !== requestedFile
+      )
+    ) {
       return;
     }
     setSelectedFile(requestedFile);
@@ -157,48 +385,16 @@ export function BankWorkspace() {
 
   const handleRenameFile = useCallback(
     (fromPath: string, toPath: string): boolean => {
-      if (fromPath === toPath) {
-        return true;
-      }
-      if (
-        !(toPath.startsWith(`${bankPath}/formats/`) && toPath.endsWith(".txt"))
-      ) {
-        return false;
-      }
-      if (allFormatFiles.includes(toPath)) {
-        return false;
-      }
-
-      const draft = draftStore.getDraft(fromPath);
-      if (!draft || draft.remoteContent !== "") {
-        return false;
-      }
-
-      draftStore.renameDraft(fromPath, toPath);
-      replaceRecentFormat(bankPath, fromPath, toPath);
-
-      const currentBanks = useSourceStore.getState().banks;
-      const nextBanks = currentBanks.map((item) => {
-        if (item.folderPath !== bankPath) {
-          return item;
-        }
-        if (!item.formatFiles.includes(fromPath)) {
-          return item;
-        }
-        const renamedFormatFiles = item.formatFiles.map((path) =>
-          path === fromPath ? toPath : path
-        );
-        return {
-          ...item,
-          formatFiles: Array.from(new Set(renamedFormatFiles)),
-        };
+      return renameDraftFormat({
+        fromPath,
+        toPath,
+        bankPath,
+        allFormatFiles,
+        draftStore,
+        setBanks,
+        currentSelectedFile: selectedFile,
+        setSelectedFile,
       });
-      setBanks(nextBanks);
-
-      if (selectedFile === fromPath) {
-        setSelectedFile(toPath);
-      }
-      return true;
     },
     [allFormatFiles, bankPath, draftStore, selectedFile, setBanks]
   );
@@ -215,14 +411,19 @@ export function BankWorkspace() {
 
   const sendersPath = `${bankPath}/senders.txt`;
   const displayName = bank?.displayName ?? bankPath.replace("src/", "");
-  const refName = sourceRef?.name ?? config.defaultBranch;
+  const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
   const encodedBankPathSegments = bankPath
     .split("/")
     .map(encodeURIComponent)
     .join("/");
-  const bankRepoUrl = `https://github.com/${config.owner}/${config.repo}/tree/${encodeURIComponent(refName)}/${encodedBankPathSegments}`;
-  const visibleFormats =
-    formatTab === "recent" ? recentFormats : filteredFormatFiles;
+  const bankRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/tree/${encodeURIComponent(refName)}/${encodedBankPathSegments}`;
+  const visibleFormats = resolveVisibleFormats({
+    formatTab,
+    recentFormats,
+    filteredChangedFormats,
+    filteredFormatFiles,
+  });
+  const sendersChanged = changedFilesInBank.has(sendersPath);
 
   return (
     <div className="grid-sidebar">
@@ -280,13 +481,19 @@ export function BankWorkspace() {
               {t("bank.formats")}
             </button>
             <button
+              className={`tab ${formatTab === "changed" ? "tab--active" : ""}`}
+              onClick={() => setFormatTab("changed")}
+            >
+              {t("bank.changedFormats")}
+            </button>
+            <button
               className={`tab ${formatTab === "recent" ? "tab--active" : ""}`}
               onClick={() => setFormatTab("recent")}
             >
               {t("bank.recentFormats")}
             </button>
           </div>
-          {formatTab === "all" && (
+          {(formatTab === "all" || formatTab === "changed") && (
             <div
               style={{
                 padding: "8px",
@@ -305,14 +512,13 @@ export function BankWorkspace() {
           <div>
             {visibleFormats.map((f) => {
               const name = f.split("/").pop() ?? f;
-              const draft = draftStore.getDraft(f);
-              const isModified = draft && draft.content !== draft.remoteContent;
+              const isModified = changedFormatFiles.has(f);
               const isSelected = selectedFile === f;
               const encodedPath = f
                 .split("/")
                 .map(encodeURIComponent)
                 .join("/");
-              const repoUrl = `https://github.com/${config.owner}/${config.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
+              const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
               return (
                 <div
                   className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""}`}
@@ -354,6 +560,11 @@ export function BankWorkspace() {
           }}
         >
           {t("bank.senders")}
+          {sendersChanged && (
+            <span className="badge badge--modified" style={{ marginLeft: 8 }}>
+              ●
+            </span>
+          )}
           {bank && !bank.hasSenders && !draftStore.getDraft(sendersPath) && (
             <span className="badge badge--warning" style={{ marginLeft: 8 }}>
               !
@@ -364,20 +575,14 @@ export function BankWorkspace() {
 
       {/* ─── Main content ─── */}
       <div className="bank-workspace__content flex-col gap-md">
-        {showSenders ? (
-          <SendersEditor bankPath={bankPath} />
-        ) : selectedFile ? (
-          <FormatEditor
-            allFormatFiles={allFormatFiles}
-            filePath={selectedFile}
-            key={selectedFile}
-            onRenameFile={handleRenameFile}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-muted">
-            {t("bank.formats")}: {t("bank.noResults")}
-          </div>
-        )}
+        {renderWorkspaceContent({
+          showSenders,
+          bankPath,
+          selectedFile,
+          allFormatFiles,
+          handleRenameFile,
+          t,
+        })}
       </div>
 
       {/* Modals */}

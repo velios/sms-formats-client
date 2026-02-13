@@ -11,6 +11,10 @@ export function AppHeader() {
   const setLocale = useUIStore((s) => s.setLocale);
   const locale = useUIStore((s) => s.locale);
   const isHome = location.pathname === "/";
+  const repository = useSourceStore((s) => s.repository);
+  const isDeveloperMode =
+    location.pathname.startsWith("/workspace") ||
+    location.pathname.startsWith("/bank/");
 
   const toggleLocale = () => {
     const next = locale === "ru" ? "en" : "ru";
@@ -28,9 +32,10 @@ export function AppHeader() {
         {t("app.title")}
       </div>
 
-      {!isHome && sourceRef && (
+      {!isHome && sourceRef && isDeveloperMode && (
         <div className="flex items-center gap-sm">
           <span className="badge badge--info text-sm">
+            {repository.owner}/{repository.repo} ·{" "}
             {sourceRef.type === "pr" ? `PR #${sourceRef.prNumber}` : ""}{" "}
             {sourceRef.name}
           </span>
@@ -39,7 +44,7 @@ export function AppHeader() {
 
       <div className="app-header__spacer" />
 
-      {!isHome && <SourceSelector />}
+      {isDeveloperMode && <SourceSelector allowRepoSwitch />}
 
       <button className="btn btn--ghost btn--sm" onClick={toggleLocale}>
         {locale === "ru" ? "EN" : "RU"}

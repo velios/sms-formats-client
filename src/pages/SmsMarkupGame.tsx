@@ -379,8 +379,8 @@ function resolveIssuePublishErrorMessage(
   const status = readGitHubErrorStatus(error);
   if (status === 404) {
     return t("smsGame.issueErrorNotFound", {
-      owner: config.owner,
-      repo: config.repo,
+      owner: config.defaultSourceOwner,
+      repo: config.defaultSourceRepo,
     });
   }
   if (status === 403) {
@@ -2282,8 +2282,8 @@ function SmsGameIssuePublishPanel({
     <>
       <div className="text-muted text-sm">
         {t("smsGame.issueRepo", {
-          owner: config.owner,
-          repo: config.repo,
+          owner: config.defaultSourceOwner,
+          repo: config.defaultSourceRepo,
         })}
       </div>
       <div className="text-muted text-sm">{t("smsGame.issueTokenEnvHint")}</div>

@@ -10,7 +10,7 @@ import {
   fetchBranchSha,
   validateToken,
 } from "@/domain/github";
-import type { BankInfo } from "@/domain/types";
+import type { BankInfo, RepoRef } from "@/domain/types";
 import { validateBankLevel } from "@/domain/validation";
 import type { PublishStep } from "@/store";
 import { useDraftStore, usePublishStore, useSourceStore } from "@/store";
@@ -115,17 +115,25 @@ async function publishBankChanges(params: {
   bankName: string;
   prTitle: string;
   changedFiles: ChangedFile[];
+  repository: RepoRef;
 }): Promise<string> {
-  const { publishStore, token, bankName, prTitle, changedFiles } = params;
+  const { publishStore, token, bankName, prTitle, changedFiles, repository } =
+    params;
   const octokit = createAuthenticatedOctokit(token);
 
   publishStore.setStep("forking");
-  const fork = await ensureFork(octokit);
+  const fork = await ensureFork(octokit, repository);
 
   publishStore.setStep("branching");
-  const baseSha = await fetchBranchSha(config.defaultBranch);
+  const baseSha = await fetchBranchSha(config.defaultBranch, repository);
   const branchName = `sms-formats-editor/${bankName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}`;
-  await createOrUpdateBranch(octokit, fork.owner, branchName, baseSha);
+  await createOrUpdateBranch(
+    octokit,
+    fork.owner,
+    branchName,
+    baseSha,
+    repository
+  );
 
   publishStore.setStep("committing");
   await createCommit(
@@ -137,7 +145,8 @@ async function publishBankChanges(params: {
       path: file.filePath,
       content: file.content,
     })),
-    prTitle
+    prTitle,
+    repository
   );
 
   publishStore.setStep("opening-pr");
@@ -151,7 +160,8 @@ async function publishBankChanges(params: {
     fork.owner,
     branchName,
     prTitle,
-    body
+    body,
+    repository
   );
   return pr.url;
 }
@@ -162,6 +172,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   const publishStore = usePublishStore();
   const _sourceRef = useSourceStore((s) => s.sourceRef);
   const banks = useSourceStore((s) => s.banks);
+  const repository = useSourceStore((s) => s.repository);
 
   const [token, setToken] = useState(publishStore.token ?? "");
   const [storeInSession, setStoreInSession] = useState(false);
@@ -235,6 +246,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
         bankName,
         prTitle,
         changedFiles,
+        repository,
       });
       publishStore.setPrUrl(prUrl);
       publishStore.setStep("done");
@@ -252,6 +264,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
     isMultiBank,
     draftStore,
     publishStore,
+    repository,
     t,
   ]);
 

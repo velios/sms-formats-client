@@ -1,14 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { config } from "@/config";
 import {
+  useAvailableSourceRepos,
   useBranches,
   useOpenPRs,
   useStartableIssues,
+  useSwitchRepository,
   useSwitchSource,
 } from "@/hooks/useGitHub";
+import { useSourceStore } from "@/store";
 
 type Mode = "branch" | "pr" | "issue";
+
+interface Props {
+  allowRepoSwitch?: boolean;
+}
+
+function repoSlug(owner: string, repo: string): string {
+  return `${owner}/${repo}`;
+}
 
 function filterBranches(
   branches: Array<{ name: string }> | undefined,
@@ -21,7 +33,16 @@ function filterBranches(
 }
 
 function filterPullRequests(
-  prs: Array<{ number: number; title: string; headRef: string }> | undefined,
+  prs:
+    | Array<{
+        number: number;
+        title: string;
+        headRef: string;
+        headSha: string;
+        headOwner: string;
+        headRepo: string;
+      }>
+    | undefined,
   query: string
 ) {
   const normalized = query.toLowerCase();
@@ -49,7 +70,13 @@ function filterIssues(
 function resolveModeItems(
   mode: Mode,
   filteredBranches: Array<{ name: string }>,
-  filteredPRs: Array<{ number: number; title: string; headRef: string }>,
+  filteredPRs: Array<{
+    number: number;
+    title: string;
+    headRef: string;
+    headOwner: string;
+    headRepo: string;
+  }>,
   filteredIssues: Array<{
     number: number;
     title: string;
@@ -122,7 +149,13 @@ function renderItemsList(params: {
   mode: Mode;
   activeIndex: number;
   filteredBranches: Array<{ name: string }>;
-  filteredPRs: Array<{ number: number; title: string }>;
+  filteredPRs: Array<{
+    number: number;
+    title: string;
+    headRef: string;
+    headOwner: string;
+    headRepo: string;
+  }>;
   filteredIssues: Array<{
     number: number;
     title: string;
@@ -165,7 +198,12 @@ function renderItemsList(params: {
         onMouseEnter={() => onHover(index)}
       >
         <span className="text-muted text-sm">#{pr.number}</span>
-        <span className="truncate text-sm">{pr.title}</span>
+        <div className="flex-col" style={{ minWidth: 0 }}>
+          <span className="truncate text-sm">{pr.title}</span>
+          <span className="text-dim text-xs">
+            {repoSlug(pr.headOwner, pr.headRepo)}:{pr.headRef}
+          </span>
+        </div>
       </div>
     ));
   }
@@ -188,7 +226,7 @@ function renderItemsList(params: {
   ));
 }
 
-export function SourceSelector() {
+export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -197,6 +235,8 @@ export function SourceSelector() {
   const [activeIndex, setActiveIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const switchSource = useSwitchSource();
+  const switchRepository = useSwitchRepository();
+  const repository = useSourceStore((s) => s.repository);
 
   const {
     data: branches,
@@ -213,6 +253,8 @@ export function SourceSelector() {
     refetch: refetchIssues,
     isFetching: isIssuesFetching,
   } = useStartableIssues(open && mode === "issue");
+  const { data: availableRepos, isFetching: isReposFetching } =
+    useAvailableSourceRepos(open && allowRepoSwitch);
 
   // Close on click outside
   useEffect(() => {
@@ -253,7 +295,7 @@ export function SourceSelector() {
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter" && itemCount > 0) {
       e.preventDefault();
-      handleSelect(activeIndex);
+      void handleSelect(activeIndex);
     } else if (e.key === "Escape") {
       setOpen(false);
     }
@@ -261,37 +303,51 @@ export function SourceSelector() {
 
   const handleSelect = async (index: number) => {
     if (mode === "branch") {
-      const b = filteredBranches[index];
-      if (b) {
-        await switchSource("branch", b.name);
+      const branch = filteredBranches[index];
+      if (branch) {
+        await switchSource("branch", branch.name);
         setOpen(false);
         setQuery("");
       }
-    } else if (mode === "pr") {
+      return;
+    }
+
+    if (mode === "pr") {
       const pr = filteredPRs[index];
       if (pr) {
-        await switchSource("pr", pr.headRef, pr.number);
+        await switchSource("pr", pr.headRef, pr.number, pr.headSha);
         setOpen(false);
         setQuery("");
       }
-    } else {
-      const issue = filteredIssues[index];
-      if (issue) {
-        try {
-          sessionStorage.setItem(
-            "sms-game-selected-issue",
-            JSON.stringify(issue)
-          );
-        } catch {
-          // ignore storage errors, fallback to network fetch on next screen
-        }
-        navigate(
-          `/share-your-sms?stage=issue&issue=${issue.number}&autostart=1`
-        );
-        setOpen(false);
-        setQuery("");
-      }
+      return;
     }
+
+    const issue = filteredIssues[index];
+    if (issue) {
+      try {
+        sessionStorage.setItem(
+          "sms-game-selected-issue",
+          JSON.stringify(issue)
+        );
+      } catch {
+        // ignore storage errors, fallback to network fetch on next screen
+      }
+      navigate(`/share-your-sms?stage=issue&issue=${issue.number}&autostart=1`);
+      setOpen(false);
+      setQuery("");
+    }
+  };
+
+  const handleRepositoryChange = async (nextRepoSlug: string) => {
+    const [owner, repo] = nextRepoSlug.split("/");
+    if (!(owner && repo)) {
+      return;
+    }
+
+    await switchRepository({ owner, repo });
+    setMode("branch");
+    setQuery("");
+    setActiveIndex(0);
   };
 
   const switchMode = (nextMode: Mode) => {
@@ -319,6 +375,10 @@ export function SourceSelector() {
 
   const noItemsText = resolveNoItemsText(mode, t);
 
+  const repositoryOptions = availableRepos ?? [repository];
+  const currentRepoSlug = repoSlug(repository.owner, repository.repo);
+  const sourceRepoSlug = repoSlug(config.sourceOwner, config.sourceRepo);
+
   return (
     <div className="autocomplete" ref={ref}>
       <button className="btn btn--sm" onClick={() => setOpen(!open)}>
@@ -328,7 +388,7 @@ export function SourceSelector() {
       {open && (
         <div
           className="autocomplete__dropdown"
-          style={{ width: "420px", right: 0, left: "auto" }}
+          style={{ width: "460px", right: 0, left: "auto" }}
         >
           <div
             className="flex items-center justify-between gap-sm"
@@ -368,6 +428,46 @@ export function SourceSelector() {
             </button>
           </div>
 
+          {allowRepoSwitch && (
+            <div
+              style={{
+                padding: "8px",
+                borderBottom: "1px solid var(--c-border)",
+              }}
+            >
+              <div className="text-muted text-sm" style={{ marginBottom: 6 }}>
+                {t("source.repository")}
+              </div>
+              <select
+                className="input"
+                disabled={isReposFetching}
+                onChange={(e) => {
+                  void handleRepositoryChange(e.target.value);
+                }}
+                value={currentRepoSlug}
+              >
+                {repositoryOptions.map((item) => {
+                  const slug = repoSlug(item.owner, item.repo);
+                  const labels: string[] = [];
+                  if (slug === sourceRepoSlug) {
+                    labels.push(t("source.repoSource"));
+                  }
+                  if (slug === currentRepoSlug) {
+                    labels.push(t("source.repoSelected"));
+                  }
+                  const suffix =
+                    labels.length > 0 ? ` (${labels.join(", ")})` : "";
+                  return (
+                    <option key={slug} value={slug}>
+                      {slug}
+                      {suffix}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
           <div style={{ padding: "8px" }}>
             <input
               autoFocus
@@ -389,7 +489,9 @@ export function SourceSelector() {
               filteredBranches,
               filteredPRs,
               filteredIssues,
-              onSelect: handleSelect,
+              onSelect: (index) => {
+                void handleSelect(index);
+              },
               onHover: setActiveIndex,
               t,
             })}

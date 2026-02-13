@@ -17,6 +17,9 @@
     "branch": "Ветка",
     "pullRequest": "PR (Pull Request)",
     "startIssue": "Старт из issue",
+    "repository": "Репозиторий",
+    "repoSource": "исходный",
+    "repoSelected": "выбран",
     "searchBranch": "Название ветки…",
     "searchPR": "Поиск PR по заголовку…",
     "searchIssue": "Поиск issue для старта…",
@@ -32,6 +35,7 @@
   "bank": {
     "search": "Поиск банка…",
     "searchFormat": "Поиск формата…",
+    "changedFormats": "Измененные",
     "noResults": "Банки не найдены",
     "banks": "Банки",
     "workspace": "Рабочая область банка",

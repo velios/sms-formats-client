@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import {
   fetchBranchSha,
   fetchFileContent,
+  fetchPullRequestFiles,
+  fetchPullRequestHead,
   fetchRepoTree,
   indexBanksFromTree,
 } from "@/domain/github";
@@ -21,6 +23,8 @@ export function RefreshButton({ bankPath }: Props) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [mergeResults, setMergeResults] = useState<MergeResult[]>([]);
   const sourceRef = useSourceStore((s) => s.sourceRef);
+  const repository = useSourceStore((s) => s.repository);
+  const setSourceChangedFiles = useSourceStore((s) => s.setSourceChangedFiles);
   const draftStore = useDraftStore();
   const queryClient = useQueryClient();
 
@@ -45,8 +49,26 @@ export function RefreshButton({ bankPath }: Props) {
 
     try {
       // Fetch fresh SHA
-      const newSha = await fetchBranchSha(sourceRef.name);
-      const newTree = await fetchRepoTree(newSha);
+      let newRefName = sourceRef.name;
+      let newSha = sourceRef.sha;
+      let newChangedFiles: string[] = [];
+
+      if (sourceRef.type === "pr" && sourceRef.prNumber) {
+        const prHead = await fetchPullRequestHead(
+          sourceRef.prNumber,
+          repository
+        );
+        newRefName = prHead.headRef;
+        newSha = prHead.headSha;
+        newChangedFiles = await fetchPullRequestFiles(
+          sourceRef.prNumber,
+          repository
+        );
+      } else {
+        newSha = await fetchBranchSha(sourceRef.name, repository);
+      }
+
+      const newTree = await fetchRepoTree(newSha, repository);
       const newBanks = indexBanksFromTree(newTree);
 
       // Get changed files
@@ -59,7 +81,8 @@ export function RefreshButton({ bankPath }: Props) {
           try {
             const newRemote = await fetchFileContent(
               draft.filePath,
-              sourceRef.name
+              newSha,
+              repository
             );
             const result = threeWayMerge(
               draft.remoteContent,
@@ -99,7 +122,12 @@ export function RefreshButton({ bankPath }: Props) {
       }
 
       // Update stores
-      useSourceStore.getState().setSource({ ...sourceRef, sha: newSha });
+      useSourceStore.getState().setSource({
+        ...sourceRef,
+        name: newRefName,
+        sha: newSha,
+      });
+      setSourceChangedFiles(newChangedFiles);
       useSourceStore.getState().setTree(newTree);
       useSourceStore.getState().setBanks(newBanks);
 
