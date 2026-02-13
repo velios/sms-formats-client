@@ -40,32 +40,16 @@ function collectRegex(
   return regexLines.join("\n").trim();
 }
 
-function collectColumns(
-  lines: string[],
-  columnsIdx: number,
-  filePath: string,
-  issues: ValidationIssue[]
-): string[] {
+function collectColumns(lines: string[], columnsIdx: number): string[] {
   if (columnsIdx === -1) {
     return [];
   }
 
   const colLine = lines[columnsIdx + 1]?.trim() ?? "";
-  const columns = colLine
+  return colLine
     .split(";")
     .map((column) => column.trim())
     .filter(Boolean);
-
-  if (columns.length === 0) {
-    issues.push({
-      code: "EMPTY_COLUMNS",
-      level: "error",
-      filePath,
-      message: "Columns line is empty",
-    });
-  }
-
-  return columns;
 }
 
 function trimBlankLines(lines: string[]): string[] {
@@ -143,7 +127,7 @@ export function parseFormatFile(raw: string, filePath = ""): ParsedFormat {
     });
   }
 
-  const columns = collectColumns(lines, columnsIdx, filePath, issues);
+  const columns = collectColumns(lines, columnsIdx);
   const examples = collectExamples(lines, exampleIndices, filePath, issues);
 
   return { regex, columns, examples, raw, parseIssues: issues };

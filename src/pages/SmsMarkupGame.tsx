@@ -18,7 +18,7 @@ import {
   parseSmsGameIssueBody,
 } from "@/domain/sms-game/issue-import";
 import type { BankInfo } from "@/domain/types";
-import { ALLOWED_COLUMNS } from "@/domain/types";
+import { ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { useDraftStore, useSourceStore } from "@/store";
 
 type GameStage = "paste" | "markup" | "bank" | "issue";
@@ -2476,10 +2476,10 @@ function ColumnPickerModal({
 
   const filteredColumns = useMemo(() => {
     if (!search.trim()) {
-      return ALLOWED_COLUMNS;
+      return ALLOWED_COLUMNS_SORTED;
     }
     const query = search.toLowerCase();
-    return ALLOWED_COLUMNS.filter((column) => {
+    return ALLOWED_COLUMNS_SORTED.filter((column) => {
       const description =
         column.description[lang]?.toLowerCase() ??
         column.description.en.toLowerCase();

@@ -77,12 +77,39 @@ export const ALLOWED_COLUMNS: ColumnDef[] = [
     name: "payee",
     description: { ru: "Получатель платежа", en: "Payee / merchant" },
   },
-  { name: "comment", description: { ru: "Комментарий", en: "Comment" } },
   { name: "income", description: { ru: "Сумма прихода", en: "Income amount" } },
   {
     name: "outcome",
     description: { ru: "Сумма расхода", en: "Outcome amount" },
   },
+  {
+    name: "fee",
+    description: { ru: "Комиссия", en: "Fee amount" },
+  },
+  {
+    name: "cashback",
+    description: { ru: "Кешбэк", en: "Cashback amount" },
+  },
+  {
+    name: "op_income",
+    description: {
+      ru: "Доход в исходной сумме",
+      en: "Income in original amount",
+    },
+  },
+  {
+    name: "op_outcome",
+    description: {
+      ru: "Расход в исходной сумме",
+      en: "Outcome in original amount",
+    },
+  },
+  { name: "balance", description: { ru: "Баланс", en: "Balance" } },
+  {
+    name: "av_balance",
+    description: { ru: "Доступный баланс", en: "Available balance" },
+  },
+  { name: "comment", description: { ru: "Комментарий", en: "Comment" } },
   {
     name: "instrument",
     description: {
@@ -90,10 +117,9 @@ export const ALLOWED_COLUMNS: ColumnDef[] = [
       en: "Transaction instrument/currency",
     },
   },
-  { name: "balance", description: { ru: "Баланс", en: "Balance" } },
   {
-    name: "av_balance",
-    description: { ru: "Доступный баланс", en: "Available balance" },
+    name: "op_instrument",
+    description: { ru: "Исходная валюта", en: "Original instrument/currency" },
   },
   {
     name: "acc_instrument",
@@ -114,20 +140,11 @@ export const ALLOWED_COLUMNS: ColumnDef[] = [
     parameterized: true,
     paramHint: "ccard / checking / deposit",
   },
-  {
-    name: "time",
-    description: { ru: "Время операции", en: "Transaction time" },
-  },
-  {
-    name: "incomeAccountNumber",
-    description: { ru: "Номер счёта прихода", en: "Income account number" },
-  },
-  {
-    name: "outcomeAccountNumber",
-    description: { ru: "Номер счёта расхода", en: "Outcome account number" },
-  },
   { name: "mcc", description: { ru: "MCC-код", en: "MCC code" } },
-  { name: "cardNumber", description: { ru: "Номер карты", en: "Card number" } },
 ];
+
+export const ALLOWED_COLUMNS_SORTED = [...ALLOWED_COLUMNS].sort((a, b) =>
+  a.name.localeCompare(b.name)
+);
 
 export const ALLOWED_COLUMN_NAMES = new Set(ALLOWED_COLUMNS.map((c) => c.name));

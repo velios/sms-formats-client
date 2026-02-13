@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ColumnDef } from "@/domain/types";
-import { ALLOWED_COLUMNS } from "@/domain/types";
+import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 
 interface Props {
   columns: string[];
@@ -19,10 +19,10 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
 
   const filteredColumns = useMemo(() => {
     if (!searchQuery) {
-      return ALLOWED_COLUMNS;
+      return ALLOWED_COLUMNS_SORTED;
     }
     const q = searchQuery.toLowerCase();
-    return ALLOWED_COLUMNS.filter(
+    return ALLOWED_COLUMNS_SORTED.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.description[lang]?.toLowerCase().includes(q)

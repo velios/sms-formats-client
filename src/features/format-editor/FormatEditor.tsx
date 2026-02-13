@@ -91,10 +91,7 @@ export function FormatEditor({
       }
       setParseErrors(issues);
 
-      const canSync =
-        !!parsed.regex &&
-        parsed.columns.length > 0 &&
-        parsed.examples.length > 0;
+      const canSync = !!parsed.regex && parsed.examples.length > 0;
 
       if (!canSync) {
         return false;

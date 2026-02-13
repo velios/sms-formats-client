@@ -83,6 +83,22 @@ describe("parseFormatFile", () => {
     const result = parseFormatFile(raw, "test.txt");
     expect(result.examples).toEqual(["Line 1\nLine 2"]);
   });
+
+  it("accepts empty columns line", () => {
+    const raw = [
+      "^(.*)$",
+      "",
+      "-----COLUMNS-----",
+      "",
+      "",
+      "-----EXAMPLE-----",
+      "Informational SMS",
+    ].join("\n");
+
+    const result = parseFormatFile(raw, "test.txt");
+    expect(result.columns).toEqual([]);
+    expect(result.parseIssues).toEqual([]);
+  });
 });
 
 describe("serializeFormat", () => {

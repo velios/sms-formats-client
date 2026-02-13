@@ -81,6 +81,12 @@ describe("validateFormat", () => {
     const colIssues = issues.filter((i) => i.code === "INVALID_COLUMN");
     expect(colIssues).toHaveLength(0);
   });
+
+  it("accepts formats with empty columns", () => {
+    const parsed = makeParsed("^(.*)$", [], ["Informational SMS"]);
+    const issues = validateFormat(parsed, "test.txt");
+    expect(issues.filter((i) => i.level === "error")).toHaveLength(0);
+  });
 });
 
 describe("checkCrossFormatCollisions", () => {
