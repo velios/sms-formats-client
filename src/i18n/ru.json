@@ -222,7 +222,7 @@
     "runValidation": "Запустить валидацию"
   },
   "quickCheck": {
-    "open": "SMS по regex",
+    "open": "Поиск шаблона по СМС",
     "title": "Проверка SMS: {{bank}}",
     "smsLabel": "Текст SMS",
     "smsPlaceholder": "Вставьте SMS для проверки по regex банка",
