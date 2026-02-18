@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
 import { parseFormatFile } from "@/domain/format";
-import { fetchFileContent } from "@/domain/github";
+import { fetchFileContent, fetchPullRequestFiles } from "@/domain/github";
 import { type FormatSearchDoc, searchFormatPaths } from "@/domain/search";
 import type { BankInfo } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
@@ -22,48 +22,43 @@ import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
 import { useDraftStore, useSourceStore } from "@/store";
 
-// ─── Recent formats persistence ───
-const RECENT_FORMATS_KEY = "sms-formats-recent-formats";
-const MAX_RECENT_FORMATS = 10;
+const RECENT_FILES_KEY = "sms-formats-recent-formats";
+const MAX_RECENT_FILES = 10;
 const SEARCH_EXAMPLE_MIN_QUERY_LENGTH = 2;
 const SEARCH_INDEX_PARALLELISM = 4;
 
-function getRecentFormats(bankPath: string): string[] {
+function getRecentFiles(bankPath: string): string[] {
   try {
-    const data = JSON.parse(localStorage.getItem(RECENT_FORMATS_KEY) ?? "{}");
+    const data = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? "{}");
     return (data[bankPath] ?? []) as string[];
   } catch {
     return [];
   }
 }
 
-function addRecentFormat(bankPath: string, filePath: string) {
+function addRecentFile(bankPath: string, filePath: string) {
   try {
-    const data = JSON.parse(localStorage.getItem(RECENT_FORMATS_KEY) ?? "{}");
+    const data = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? "{}");
     const list: string[] = data[bankPath] ?? [];
     const filtered = list.filter((f: string) => f !== filePath);
     filtered.unshift(filePath);
-    data[bankPath] = filtered.slice(0, MAX_RECENT_FORMATS);
-    localStorage.setItem(RECENT_FORMATS_KEY, JSON.stringify(data));
+    data[bankPath] = filtered.slice(0, MAX_RECENT_FILES);
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(data));
   } catch {
     /* ignore */
   }
 }
 
-function replaceRecentFormat(
-  bankPath: string,
-  oldPath: string,
-  newPath: string
-) {
+function replaceRecentFile(bankPath: string, oldPath: string, newPath: string) {
   try {
-    const data = JSON.parse(localStorage.getItem(RECENT_FORMATS_KEY) ?? "{}");
+    const data = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? "{}");
     const list: string[] = data[bankPath] ?? [];
     const replaced = list.map((path: string) =>
       path === oldPath ? newPath : path
     );
     const deduped = Array.from(new Set(replaced));
-    data[bankPath] = deduped.slice(0, MAX_RECENT_FORMATS);
-    localStorage.setItem(RECENT_FORMATS_KEY, JSON.stringify(data));
+    data[bankPath] = deduped.slice(0, MAX_RECENT_FILES);
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(data));
   } catch {
     /* ignore */
   }
@@ -85,12 +80,10 @@ function decodeRequestedFileValue(
 
 function collectChangedFilesInBank(
   bankPath: string,
-  sourceChangedFiles: string[],
-  localChangedFiles: string[]
+  changedFiles: string[]
 ): Set<string> {
-  const files = [...sourceChangedFiles, ...localChangedFiles];
   const result = new Set<string>();
-  for (const filePath of files) {
+  for (const filePath of changedFiles) {
     if (filePath.startsWith(`${bankPath}/`)) {
       result.add(filePath);
     }
@@ -416,6 +409,9 @@ function useBankFormatSearch(params: {
 function useAutoSelectFormat(params: {
   requestedFile: string | null;
   allFormatFiles: string[];
+  sendersPath: string;
+  preferredFormatFile: string | null;
+  selectionReady: boolean;
   selectedFile: string | null;
   showSenders: boolean;
   setSelectedFile: (filePath: string | null) => void;
@@ -424,6 +420,9 @@ function useAutoSelectFormat(params: {
   const {
     requestedFile,
     allFormatFiles,
+    sendersPath,
+    preferredFormatFile,
+    selectionReady,
     selectedFile,
     showSenders,
     setSelectedFile,
@@ -436,6 +435,15 @@ function useAutoSelectFormat(params: {
       appliedRequestedFileRef.current = null;
       return;
     }
+    if (requestedFile === sendersPath) {
+      if (appliedRequestedFileRef.current === requestedFile) {
+        return;
+      }
+      setShowSenders(true);
+      setSelectedFile(null);
+      appliedRequestedFileRef.current = requestedFile;
+      return;
+    }
     if (!allFormatFiles.includes(requestedFile)) {
       return;
     }
@@ -446,25 +454,101 @@ function useAutoSelectFormat(params: {
     setSelectedFile(requestedFile);
     setShowSenders(false);
     appliedRequestedFileRef.current = requestedFile;
-  }, [requestedFile, allFormatFiles, setSelectedFile, setShowSenders]);
+  }, [
+    requestedFile,
+    allFormatFiles,
+    sendersPath,
+    setSelectedFile,
+    setShowSenders,
+  ]);
 
   useEffect(() => {
-    if (!(showSenders || selectedFile || allFormatFiles.length === 0)) {
-      setSelectedFile(allFormatFiles[0]!);
+    if (!selectedFile) {
+      return;
     }
-  }, [allFormatFiles, selectedFile, setSelectedFile, showSenders]);
+    if (allFormatFiles.includes(selectedFile)) {
+      return;
+    }
+    setSelectedFile(null);
+  }, [allFormatFiles, selectedFile, setSelectedFile]);
+
+  useEffect(() => {
+    if (!selectionReady) {
+      return;
+    }
+    if (showSenders || selectedFile) {
+      return;
+    }
+    if (preferredFormatFile) {
+      setSelectedFile(preferredFormatFile);
+    }
+  }, [
+    preferredFormatFile,
+    selectionReady,
+    selectedFile,
+    setSelectedFile,
+    setShowSenders,
+    showSenders,
+  ]);
 }
 
-function resolveVisibleFormats(params: {
-  formatTab: "all" | "recent";
-  recentFormats: string[];
-  filteredFormatFiles: string[];
-}): string[] {
-  const { formatTab, recentFormats, filteredFormatFiles } = params;
-  if (formatTab === "recent") {
-    return recentFormats;
-  }
-  return filteredFormatFiles;
+function useResetSelectionOnSourceChange(params: {
+  requestedFile: string | null;
+  sourceSelectionKey: string;
+  setSelectedFile: (filePath: string | null) => void;
+  setShowSenders: (value: boolean) => void;
+}) {
+  const { requestedFile, sourceSelectionKey, setSelectedFile, setShowSenders } =
+    params;
+  const previousSourceKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (requestedFile || previousSourceKeyRef.current === sourceSelectionKey) {
+      return;
+    }
+    previousSourceKeyRef.current = sourceSelectionKey;
+    setSelectedFile(null);
+    setShowSenders(false);
+  }, [requestedFile, setSelectedFile, setShowSenders, sourceSelectionKey]);
+}
+
+function buildSearchIndexingMeta(params: {
+  shouldIndexExamples: boolean;
+  indexedScopeSummary: { loadedCount: number; total: number };
+  indexingInFlight: number;
+  indexingErrors: number;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): { showSearchIndexStatus: boolean; searchIndexingLabel: string } {
+  const {
+    shouldIndexExamples,
+    indexedScopeSummary,
+    indexingInFlight,
+    indexingErrors,
+    t,
+  } = params;
+  const showSearchIndexStatus =
+    shouldIndexExamples &&
+    indexedScopeSummary.total > 0 &&
+    (indexingInFlight > 0 ||
+      indexedScopeSummary.loadedCount < indexedScopeSummary.total ||
+      indexingErrors > 0);
+
+  const searchIndexingLabel =
+    indexingErrors > 0
+      ? t("bank.searchIndexingWithErrors", {
+          loaded: indexedScopeSummary.loadedCount,
+          total: indexedScopeSummary.total,
+          errors: indexingErrors,
+        })
+      : t("bank.searchIndexing", {
+          loaded: indexedScopeSummary.loadedCount,
+          total: indexedScopeSummary.total,
+        });
+
+  return {
+    showSearchIndexStatus,
+    searchIndexingLabel,
+  };
 }
 
 function renderWorkspaceContent(params: {
@@ -501,52 +585,91 @@ function renderWorkspaceContent(params: {
   }
   return (
     <div className="flex h-full items-center justify-center text-muted">
-      {t("bank.formats")}: {t("bank.noResults")}
+      {t("bank.files")}: {t("bank.noResults")}
     </div>
   );
 }
 
 function FormatsPanel(params: {
   t: (key: string) => string;
-  totalFormatsCount: number;
+  totalFilesCount: number;
   formatTab: "all" | "recent";
   setFormatTab: (value: "all" | "recent") => void;
+  recentFiles: string[];
   setShowCreateFormat: (value: boolean) => void;
   formatSearch: string;
   setFormatSearch: (value: string) => void;
   showSearchIndexStatus: boolean;
   searchIndexingLabel: string;
   visibleFormats: string[];
-  changedFormatFiles: Set<string>;
+  localChangedFormatFiles: Set<string>;
+  sourceChangedFormatFiles: Set<string>;
   selectedFile: string | null;
+  showSenders: boolean;
+  handleSelectSenders: () => void;
   handleSelectFile: (path: string) => void;
   repository: { owner: string; repo: string };
   refName: string;
+  sendersPath: string;
+  sendersMissing: boolean;
+  localSendersChanged: boolean;
+  sourceSendersChanged: boolean;
 }): ReactNode {
   const {
     t,
-    totalFormatsCount,
+    totalFilesCount,
     formatTab,
     setFormatTab,
+    recentFiles,
     setShowCreateFormat,
     formatSearch,
     setFormatSearch,
     showSearchIndexStatus,
     searchIndexingLabel,
     visibleFormats,
-    changedFormatFiles,
+    localChangedFormatFiles,
+    sourceChangedFormatFiles,
     selectedFile,
+    showSenders,
+    handleSelectSenders,
     handleSelectFile,
     repository,
     refName,
+    sendersPath,
+    sendersMissing,
+    localSendersChanged,
+    sourceSendersChanged,
   } = params;
+  const normalizedSearch = formatSearch.trim().toLowerCase();
+  const visibleFormatSet = new Set(visibleFormats);
+  const sendersMatchesSearch =
+    normalizedSearch.length === 0 ||
+    "senders.txt".includes(normalizedSearch) ||
+    t("bank.senders").toLowerCase().includes(normalizedSearch);
+  const allFiles = sendersMatchesSearch
+    ? [sendersPath, ...visibleFormats]
+    : visibleFormats;
+  const recentFilesVisible = recentFiles.filter((path) => {
+    if (path === sendersPath) {
+      return sendersMatchesSearch;
+    }
+    if (normalizedSearch.length === 0) {
+      return true;
+    }
+    if (visibleFormatSet.has(path)) {
+      return true;
+    }
+    return extractFormatFileName(path).toLowerCase().includes(normalizedSearch);
+  });
+  const filesForRender = formatTab === "recent" ? recentFilesVisible : allFiles;
+  const showNoResults = filesForRender.length === 0;
 
   return (
     <div className="panel formats-panel">
       <div className="panel__header">
         <span>
-          {t("bank.formats")}{" "}
-          <span className="text-muted text-sm">({totalFormatsCount})</span>
+          {t("bank.files")}{" "}
+          <span className="text-muted text-sm">({totalFilesCount})</span>
         </span>
         <button
           aria-label={t("bank.createFormat")}
@@ -561,64 +684,86 @@ function FormatsPanel(params: {
           className={`tab ${formatTab === "all" ? "tab--active" : ""}`}
           onClick={() => setFormatTab("all")}
         >
-          {t("bank.allFormats")}
+          {t("bank.allFiles")}
         </button>
         <button
           className={`tab ${formatTab === "recent" ? "tab--active" : ""}`}
           onClick={() => setFormatTab("recent")}
         >
-          {t("bank.recentFormats")}
+          {t("bank.recentFiles")}
         </button>
       </div>
-      {formatTab === "all" && (
-        <div
-          style={{
-            padding: "8px",
-            borderBottom: "1px solid var(--c-border)",
-          }}
-        >
-          <input
-            aria-label={t("bank.searchFormat")}
-            className="input"
-            onChange={(e) => setFormatSearch(e.target.value)}
-            placeholder={t("bank.searchFormat")}
-            style={{ fontSize: 12, padding: "4px 8px" }}
-            value={formatSearch}
-          />
-          {showSearchIndexStatus && (
-            <div className="text-muted text-sm" style={{ marginTop: 6 }}>
-              {searchIndexingLabel}
-            </div>
-          )}
-        </div>
-      )}
+      <div
+        style={{
+          padding: "8px",
+          borderBottom: "1px solid var(--c-border)",
+        }}
+      >
+        <input
+          aria-label={t("bank.searchFile")}
+          className="input"
+          onChange={(e) => setFormatSearch(e.target.value)}
+          placeholder={t("bank.searchFile")}
+          style={{ fontSize: 12, padding: "4px 8px" }}
+          value={formatSearch}
+        />
+        {showSearchIndexStatus && (
+          <div className="text-muted text-sm" style={{ marginTop: 6 }}>
+            {searchIndexingLabel}
+          </div>
+        )}
+      </div>
       <div className="formats-panel__list">
-        {visibleFormats.map((f) => {
-          const name = extractFormatFileName(f);
-          const isModified = changedFormatFiles.has(f);
-          const isSelected = selectedFile === f;
-          const encodedPath = f.split("/").map(encodeURIComponent).join("/");
+        {filesForRender.map((path) => {
+          const isSenders = path === sendersPath;
+          const displayName = isSenders
+            ? "senders.txt"
+            : extractFormatFileName(path);
+          const isSelected = isSenders ? showSenders : selectedFile === path;
+          const isLocalChanged = isSenders
+            ? localSendersChanged
+            : localChangedFormatFiles.has(path);
+          const isSourceChanged = isSenders
+            ? !localSendersChanged && sourceSendersChanged
+            : !isLocalChanged && sourceChangedFormatFiles.has(path);
+          const encodedPath = path.split("/").map(encodeURIComponent).join("/");
           const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
           return (
             <div
               className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""}`}
-              key={f}
-              onClick={() => handleSelectFile(f)}
+              key={path}
+              onClick={() => {
+                if (isSenders) {
+                  handleSelectSenders();
+                  return;
+                }
+                handleSelectFile(path);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  handleSelectFile(f);
+                  if (isSenders) {
+                    handleSelectSenders();
+                    return;
+                  }
+                  handleSelectFile(path);
                 }
               }}
               role="button"
               tabIndex={0}
             >
-              <span className="truncate text-mono text-sm">{name}</span>
-              {isModified && (
+              <span className="truncate text-mono text-sm">{displayName}</span>
+              {isLocalChanged && (
                 <span className="badge badge--modified text-sm">●</span>
               )}
+              {isSourceChanged && (
+                <span className="badge badge--warning text-sm">●</span>
+              )}
+              {isSenders && sendersMissing && (
+                <span className="badge badge--warning">!</span>
+              )}
               <a
-                aria-label={`${t("bank.openFormatInRepo")}: ${name}`}
+                aria-label={`${t("bank.openFormatInRepo")}: ${displayName}`}
                 className="format-row-link"
                 href={repoUrl}
                 onClick={(e) => e.stopPropagation()}
@@ -631,7 +776,7 @@ function FormatsPanel(params: {
             </div>
           );
         })}
-        {visibleFormats.length === 0 && (
+        {showNoResults && (
           <div className="p-md text-muted text-sm">{t("bank.noResults")}</div>
         )}
       </div>
@@ -680,7 +825,7 @@ function renameDraftFormat(params: {
   }
 
   draftStore.renameDraft(fromPath, toPath);
-  replaceRecentFormat(bankPath, fromPath, toPath);
+  replaceRecentFile(bankPath, fromPath, toPath);
 
   const currentBanks = useSourceStore.getState().banks;
   const nextBanks = currentBanks.map((item) => {
@@ -735,6 +880,40 @@ export function BankWorkspace() {
   const [showQuickCheck, setShowQuickCheck] = useState(false);
   const [formatSearch, setFormatSearch] = useState("");
   const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
+  const [prChangedFiles, setPrChangedFiles] = useState<string[]>([]);
+  const [isPrChangedFilesReady, setIsPrChangedFilesReady] = useState(false);
+  const sendersPath = `${bankPath}/senders.txt`;
+
+  useEffect(() => {
+    if (!(sourceRef?.type === "pr" && sourceRef.prNumber)) {
+      setPrChangedFiles([]);
+      setIsPrChangedFilesReady(true);
+      return;
+    }
+
+    setIsPrChangedFilesReady(false);
+    let cancelled = false;
+    void fetchPullRequestFiles(sourceRef.prNumber, repository)
+      .then((files) => {
+        if (!cancelled) {
+          setPrChangedFiles(files);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrChangedFiles([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsPrChangedFilesReady(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [repository, sourceRef?.prNumber, sourceRef?.type]);
 
   // Get all format files including draft-only (new) files
   const draftStore = useDraftStore();
@@ -742,18 +921,42 @@ export function BankWorkspace() {
     () => draftStore.getChangedFiles().map((item) => item.filePath),
     [draftStore, draftStore.drafts]
   );
-  const changedFilesInBank = useMemo(
-    () =>
-      collectChangedFilesInBank(
-        bankPath,
-        sourceChangedFiles,
-        localChangedFiles
-      ),
-    [bankPath, localChangedFiles, sourceChangedFiles]
+  const effectiveSourceChangedFiles = useMemo(
+    () => Array.from(new Set([...sourceChangedFiles, ...prChangedFiles])),
+    [prChangedFiles, sourceChangedFiles]
+  );
+  const localChangedFilesInBank = useMemo(
+    () => collectChangedFilesInBank(bankPath, localChangedFiles),
+    [bankPath, localChangedFiles]
+  );
+  const sourceChangedFilesInBank = useMemo(
+    () => collectChangedFilesInBank(bankPath, effectiveSourceChangedFiles),
+    [bankPath, effectiveSourceChangedFiles]
+  );
+  const isSelectionReady = useMemo(() => {
+    if (sourceRef?.type !== "pr") {
+      return true;
+    }
+    if (sourceChangedFiles.length > 0) {
+      return true;
+    }
+    return isPrChangedFilesReady;
+  }, [isPrChangedFilesReady, sourceChangedFiles.length, sourceRef?.type]);
+  const localChangedFormatFiles = useMemo(
+    () => collectChangedFormatFiles(bankPath, localChangedFilesInBank),
+    [bankPath, localChangedFilesInBank]
+  );
+  const sourceChangedFormatFiles = useMemo(
+    () => collectChangedFormatFiles(bankPath, sourceChangedFilesInBank),
+    [bankPath, sourceChangedFilesInBank]
   );
   const changedFormatFiles = useMemo(
-    () => collectChangedFormatFiles(bankPath, changedFilesInBank),
-    [bankPath, changedFilesInBank]
+    () =>
+      new Set<string>([
+        ...Array.from(localChangedFormatFiles),
+        ...Array.from(sourceChangedFormatFiles),
+      ]),
+    [localChangedFormatFiles, sourceChangedFormatFiles]
   );
 
   const allFormatFiles = useMemo(() => {
@@ -766,6 +969,15 @@ export function BankWorkspace() {
   }, [bank, bankPath, changedFormatFiles, draftStore.drafts]);
 
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
+  const sourceSelectionKey = `${repository.owner}/${repository.repo}:${sourceRef?.type ?? "none"}:${sourceRef?.name ?? ""}:${sourceRef?.sha ?? ""}:${sourceRef?.prNumber ?? ""}:${bankPath}`;
+
+  useResetSelectionOnSourceChange({
+    requestedFile,
+    sourceSelectionKey,
+    setSelectedFile,
+    setShowSenders,
+  });
+
   const {
     filteredFormatFiles,
     shouldIndexExamples,
@@ -783,29 +995,27 @@ export function BankWorkspace() {
     sourceRefNameForContent,
   });
 
-  // Recent formats
-  const recentFormats = useMemo(() => {
-    const recent = getRecentFormats(bankPath);
-    return recent.filter((f) => allFormatFiles.includes(f));
-  }, [bankPath, allFormatFiles]);
-
-  useAutoSelectFormat({
-    requestedFile,
-    allFormatFiles,
-    selectedFile,
-    showSenders,
-    setSelectedFile,
-    setShowSenders,
-  });
+  const recentFiles = useMemo(() => {
+    const recent = getRecentFiles(bankPath);
+    return recent.filter(
+      (path) => path === sendersPath || allFormatFiles.includes(path)
+    );
+  }, [allFormatFiles, bankPath, sendersPath]);
 
   const handleSelectFile = useCallback(
     (f: string) => {
       setSelectedFile(f);
       setShowSenders(false);
-      addRecentFormat(bankPath, f);
+      addRecentFile(bankPath, f);
     },
     [bankPath]
   );
+
+  const handleSelectSenders = useCallback(() => {
+    setShowSenders(true);
+    setSelectedFile(null);
+    addRecentFile(bankPath, sendersPath);
+  }, [bankPath, sendersPath]);
 
   const handleRenameFile = useCallback(
     (fromPath: string, toPath: string): boolean => {
@@ -823,6 +1033,24 @@ export function BankWorkspace() {
     [allFormatFiles, bankPath, draftStore, selectedFile, setBanks]
   );
 
+  const localSendersChanged = localChangedFilesInBank.has(sendersPath);
+  const sourceSendersChanged =
+    !localSendersChanged && sourceChangedFilesInBank.has(sendersPath);
+  const sendersMissing =
+    !!bank && !bank.hasSenders && !draftStore.getDraft(sendersPath);
+
+  useAutoSelectFormat({
+    requestedFile,
+    allFormatFiles,
+    sendersPath,
+    preferredFormatFile: allFormatFiles[0] ?? null,
+    selectionReady: isSelectionReady,
+    selectedFile,
+    showSenders,
+    setSelectedFile,
+    setShowSenders,
+  });
+
   if (!bank && allFormatFiles.length === 0) {
     return (
       <div className="flex-col gap-md">
@@ -833,7 +1061,6 @@ export function BankWorkspace() {
     );
   }
 
-  const sendersPath = `${bankPath}/senders.txt`;
   const displayName = bank?.displayName ?? bankPath.replace("src/", "");
   const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
   const encodedBankPathSegments = bankPath
@@ -841,29 +1068,14 @@ export function BankWorkspace() {
     .map(encodeURIComponent)
     .join("/");
   const bankRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/tree/${encodeURIComponent(refName)}/${encodedBankPathSegments}`;
-  const visibleFormats = resolveVisibleFormats({
-    formatTab,
-    recentFormats,
-    filteredFormatFiles,
-  });
-  const sendersChanged = changedFilesInBank.has(sendersPath);
-  const showSearchIndexStatus =
-    shouldIndexExamples &&
-    indexedScopeSummary.total > 0 &&
-    (indexingInFlight > 0 ||
-      indexedScopeSummary.loadedCount < indexedScopeSummary.total ||
-      indexingErrors > 0);
-  const searchIndexingLabel =
-    indexingErrors > 0
-      ? t("bank.searchIndexingWithErrors", {
-          loaded: indexedScopeSummary.loadedCount,
-          total: indexedScopeSummary.total,
-          errors: indexingErrors,
-        })
-      : t("bank.searchIndexing", {
-          loaded: indexedScopeSummary.loadedCount,
-          total: indexedScopeSummary.total,
-        });
+  const { showSearchIndexStatus, searchIndexingLabel } =
+    buildSearchIndexingMeta({
+      shouldIndexExamples,
+      indexedScopeSummary,
+      indexingInFlight,
+      indexingErrors,
+      t,
+    });
 
   return (
     <div className="grid-sidebar">
@@ -900,43 +1112,32 @@ export function BankWorkspace() {
             {t("quickCheck.open")}
           </button>
           <RefreshButton bankPath={bankPath} />
-          <button
-            className={`btn bank-actions__btn w-full ${showSenders ? "btn--primary" : ""}`}
-            onClick={() => {
-              setShowSenders(true);
-              setSelectedFile(null);
-            }}
-          >
-            {t("bank.senders")}
-            {sendersChanged && (
-              <span className="badge badge--modified" style={{ marginLeft: 8 }}>
-                ●
-              </span>
-            )}
-            {bank && !bank.hasSenders && !draftStore.getDraft(sendersPath) && (
-              <span className="badge badge--warning" style={{ marginLeft: 8 }}>
-                !
-              </span>
-            )}
-          </button>
         </div>
 
         <FormatsPanel
-          changedFormatFiles={changedFormatFiles}
           formatSearch={formatSearch}
           formatTab={formatTab}
           handleSelectFile={handleSelectFile}
+          handleSelectSenders={handleSelectSenders}
+          localChangedFormatFiles={localChangedFormatFiles}
+          localSendersChanged={localSendersChanged}
+          recentFiles={recentFiles}
           refName={refName}
           repository={repository}
           searchIndexingLabel={searchIndexingLabel}
           selectedFile={selectedFile}
+          sendersMissing={sendersMissing}
+          sendersPath={sendersPath}
           setFormatSearch={setFormatSearch}
           setFormatTab={setFormatTab}
           setShowCreateFormat={setShowCreateFormat}
           showSearchIndexStatus={showSearchIndexStatus}
+          showSenders={showSenders}
+          sourceChangedFormatFiles={sourceChangedFormatFiles}
+          sourceSendersChanged={sourceSendersChanged}
           t={t}
-          totalFormatsCount={allFormatFiles.length}
-          visibleFormats={visibleFormats}
+          totalFilesCount={allFormatFiles.length + 1}
+          visibleFormats={filteredFormatFiles}
         />
       </div>
 
