@@ -67,6 +67,22 @@ function filterIssues(
   );
 }
 
+function collectChangedBankPaths(paths: string[]): string[] {
+  const banks = new Set<string>();
+  for (const path of paths) {
+    if (!path.startsWith("src/")) {
+      continue;
+    }
+    const bankFolder = path.split("/")[1];
+    if (bankFolder) {
+      banks.add(`src/${bankFolder}`);
+    }
+  }
+  return Array.from(banks).sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" })
+  );
+}
+
 function resolveModeItems(
   mode: Mode,
   filteredBranches: Array<{ name: string }>,
@@ -311,41 +327,67 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
     }
   };
 
+  const closeSelector = () => {
+    setOpen(false);
+    setQuery("");
+  };
+
+  const handleBranchSelect = async (index: number) => {
+    const branch = filteredBranches[index];
+    if (!branch) {
+      return;
+    }
+    await switchSource("branch", branch.name);
+    closeSelector();
+  };
+
+  const handlePRSelect = async (index: number) => {
+    const pr = filteredPRs[index];
+    if (!pr) {
+      return;
+    }
+
+    await switchSource("pr", pr.headRef, pr.number, pr.headSha);
+    const changedBankPaths = collectChangedBankPaths(
+      useSourceStore.getState().sourceChangedFiles
+    );
+    if (changedBankPaths.length === 1) {
+      const [bankPath] = changedBankPaths;
+      if (bankPath) {
+        navigate(`/bank/${encodeURIComponent(bankPath)}`);
+      }
+    } else {
+      navigate("/workspace");
+    }
+    closeSelector();
+  };
+
+  const handleIssueSelect = (index: number) => {
+    const issue = filteredIssues[index];
+    if (!issue) {
+      return;
+    }
+    try {
+      sessionStorage.setItem("sms-game-selected-issue", JSON.stringify(issue));
+    } catch {
+      // ignore storage errors, fallback to network fetch on next screen
+    }
+    navigate(`/share-your-sms?stage=issue&issue=${issue.number}&autostart=1`);
+    closeSelector();
+  };
+
   const handleSelect = async (index: number) => {
     if (mode === "branch") {
-      const branch = filteredBranches[index];
-      if (branch) {
-        await switchSource("branch", branch.name);
-        setOpen(false);
-        setQuery("");
-      }
+      await handleBranchSelect(index);
       return;
     }
 
     if (mode === "pr") {
-      const pr = filteredPRs[index];
-      if (pr) {
-        await switchSource("pr", pr.headRef, pr.number, pr.headSha);
-        setOpen(false);
-        setQuery("");
-      }
+      await handlePRSelect(index);
       return;
     }
 
-    const issue = filteredIssues[index];
-    if (issue) {
-      try {
-        sessionStorage.setItem(
-          "sms-game-selected-issue",
-          JSON.stringify(issue)
-        );
-      } catch {
-        // ignore storage errors, fallback to network fetch on next screen
-      }
-      navigate(`/share-your-sms?stage=issue&issue=${issue.number}&autostart=1`);
-      setOpen(false);
-      setQuery("");
-    }
+    handleIssueSelect(index);
   };
 
   const handleRepositoryChange = async (nextRepoSlug: string) => {

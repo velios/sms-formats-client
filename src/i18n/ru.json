@@ -33,16 +33,32 @@
       "closed": "closed"
     }
   },
+  "githubAuth": {
+    "openSettings": "Настройки GitHub токена",
+    "title": "GitHub токен для API запросов",
+    "tokenLabel": "GitHub Personal Access Token",
+    "tokenHint": "Токен будет сохранён локально в браузере и использован для GitHub API запросов.",
+    "tokenSaved": "Пользовательский токен сохранён",
+    "tokenConfigured": "GitHub токен настроен",
+    "resetToken": "Сбросить токен",
+    "emptyToken": "Введите GitHub токен",
+    "invalidToken": "Не удалось проверить токен",
+    "saving": "Проверка…"
+  },
   "bank": {
     "search": "Поиск банка…",
+    "searchFile": "Поиск файла…",
     "searchFormat": "Поиск формата…",
     "searchIndexing": "Индексируем примеры: {{loaded}} / {{total}}",
     "searchIndexingWithErrors": "Индексируем примеры: {{loaded}} / {{total}} (ошибок: {{errors}})",
     "changedFormats": "Измененные",
     "noResults": "Банки не найдены",
     "banks": "Банки",
+    "files": "Файлы",
     "workspace": "Рабочая область банка",
     "formats": "Форматы",
+    "allFiles": "Все файлы",
+    "recentFiles": "Недавние файлы",
     "allFormats": "Все",
     "senders": "Отправители",
     "createBank": "Создать банк",

@@ -52,6 +52,11 @@
 - `docs` — human docs and deploy notes
 - `openspec` — spec history and current capability specs
 
+## Temporary i18n Rule
+- During active development, update only `src/i18n/ru.json`.
+- Do not update `src/i18n/en.json` unless the user explicitly asks for it.
+- This rule is temporary and remains in force until explicitly canceled by the user.
+
 ## Path Conventions (Docs & Examples)
 - Do not use developer-specific absolute local paths in docs/examples (for example `/Users/...`).
 - Always use project-root-relative paths (for example `docs/...`, `src/...`, `openspec/...`).

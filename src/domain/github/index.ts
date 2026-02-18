@@ -16,7 +16,9 @@ export {
   fetchSourceRepoForks,
   fetchStartableIssues,
   getDefaultRepo,
+  getGitHubUserToken,
   getSourceRepo,
   indexBanksFromTree,
+  setGitHubUserToken,
   validateToken,
 } from "./client";

@@ -14,6 +14,8 @@ const sourceRepoRef: RepoRef = {
   repo: config.sourceRepo,
 };
 
+const GITHUB_USER_TOKEN_STORAGE_KEY = "sms-formats-github-user-token";
+
 function resolveRepo(repoRef?: RepoRef): RepoRef {
   return repoRef ?? defaultRepoRef;
 }
@@ -29,12 +31,52 @@ export function getSourceRepo(): RepoRef {
 // ─── Default API client (uses shared env token when provided) ───
 
 const sharedToken = config.issueToken.trim();
-const publicOctokit = sharedToken
-  ? new Octokit({ auth: sharedToken })
-  : new Octokit();
+
+function createPublicOctokit(token: string): Octokit {
+  return token ? new Octokit({ auth: token }) : new Octokit();
+}
+
+function readStoredGitHubUserToken(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  try {
+    return localStorage.getItem(GITHUB_USER_TOKEN_STORAGE_KEY)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function persistGitHubUserToken(token: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (token) {
+      localStorage.setItem(GITHUB_USER_TOKEN_STORAGE_KEY, token);
+      return;
+    }
+    localStorage.removeItem(GITHUB_USER_TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore localStorage errors (e.g. disabled storage in browser profile).
+  }
+}
+
+let userToken = readStoredGitHubUserToken();
+let publicOctokit = createPublicOctokit(userToken || sharedToken);
 
 export function createAuthenticatedOctokit(token: string): Octokit {
   return new Octokit({ auth: token });
+}
+
+export function getGitHubUserToken(): string | null {
+  return userToken || null;
+}
+
+export function setGitHubUserToken(token: string | null): void {
+  userToken = token?.trim() ?? "";
+  persistGitHubUserToken(userToken);
+  publicOctokit = createPublicOctokit(userToken || sharedToken);
 }
 
 // ─── Source loading ───
