@@ -15,6 +15,19 @@ const sourceRepoRef: RepoRef = {
 };
 
 const GITHUB_USER_TOKEN_STORAGE_KEY = "sms-formats-github-user-token";
+const PR_APPROVAL_PERMISSION_STORAGE_KEY =
+  "sms-formats-pr-approval-permissions";
+const PR_APPROVAL_SIGNATURE = "From Zenmoney SMS Formats Client";
+
+interface PullRequestApprovalPermissionEntry {
+  canApprove: boolean;
+  checkedAt: number;
+}
+
+type PullRequestApprovalPermissionCache = Record<
+  string,
+  PullRequestApprovalPermissionEntry
+>;
 
 function resolveRepo(repoRef?: RepoRef): RepoRef {
   return repoRef ?? defaultRepoRef;
@@ -56,10 +69,84 @@ function persistGitHubUserToken(token: string): void {
       localStorage.setItem(GITHUB_USER_TOKEN_STORAGE_KEY, token);
       return;
     }
-    localStorage.removeItem(GITHUB_USER_TOKEN_STORAGE_KEY);
+    if (typeof localStorage.removeItem === "function") {
+      localStorage.removeItem(GITHUB_USER_TOKEN_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(GITHUB_USER_TOKEN_STORAGE_KEY, "");
   } catch {
     // Ignore localStorage errors (e.g. disabled storage in browser profile).
   }
+}
+
+function getRepoSlug(repoRef?: RepoRef): string {
+  const repo = resolveRepo(repoRef);
+  return `${repo.owner}/${repo.repo}`;
+}
+
+function readPullRequestApprovalPermissionCache(): PullRequestApprovalPermissionCache {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const raw = localStorage.getItem(PR_APPROVAL_PERMISSION_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as PullRequestApprovalPermissionCache;
+    if (typeof parsed !== "object" || parsed === null) {
+      return {};
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function writePullRequestApprovalPermissionCache(
+  value: PullRequestApprovalPermissionCache
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(
+      PR_APPROVAL_PERMISSION_STORAGE_KEY,
+      JSON.stringify(value)
+    );
+  } catch {
+    // Ignore localStorage errors (e.g. disabled storage in browser profile).
+  }
+}
+
+function clearPullRequestApprovalPermissionCache(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (typeof localStorage.removeItem === "function") {
+      localStorage.removeItem(PR_APPROVAL_PERMISSION_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(PR_APPROVAL_PERMISSION_STORAGE_KEY, "{}");
+  } catch {
+    // Ignore localStorage errors (e.g. disabled storage in browser profile).
+  }
+}
+
+function canApproveByRepositoryPermission(
+  permissions:
+    | {
+        admin?: boolean;
+        maintain?: boolean;
+        push?: boolean;
+      }
+    | undefined
+): boolean {
+  if (!permissions) {
+    return false;
+  }
+  return Boolean(permissions.admin || permissions.maintain || permissions.push);
 }
 
 let userToken = readStoredGitHubUserToken();
@@ -74,9 +161,85 @@ export function getGitHubUserToken(): string | null {
 }
 
 export function setGitHubUserToken(token: string | null): void {
-  userToken = token?.trim() ?? "";
+  const nextToken = token?.trim() ?? "";
+  const tokenChanged = nextToken !== userToken;
+  userToken = nextToken;
   persistGitHubUserToken(userToken);
   publicOctokit = createPublicOctokit(userToken || sharedToken);
+  if (tokenChanged) {
+    clearPullRequestApprovalPermissionCache();
+  }
+}
+
+export function setCachedPullRequestApprovalPermission(
+  canApprove: boolean,
+  repoRef?: RepoRef
+): void {
+  const slug = getRepoSlug(repoRef);
+  const cache = readPullRequestApprovalPermissionCache();
+  cache[slug] = {
+    canApprove,
+    checkedAt: Date.now(),
+  };
+  writePullRequestApprovalPermissionCache(cache);
+}
+
+export function getCachedPullRequestApprovalPermission(
+  repoRef?: RepoRef
+): boolean {
+  const slug = getRepoSlug(repoRef);
+  const cache = readPullRequestApprovalPermissionCache();
+  return cache[slug]?.canApprove === true;
+}
+
+export async function refreshPullRequestApprovalPermission(
+  repoRef?: RepoRef
+): Promise<boolean> {
+  const slug = getRepoSlug(repoRef);
+  const cache = readPullRequestApprovalPermissionCache();
+  const cached = cache[slug];
+  if (cached) {
+    return cached.canApprove;
+  }
+
+  if (!userToken) {
+    return false;
+  }
+
+  const repo = resolveRepo(repoRef);
+  const octokit = createAuthenticatedOctokit(userToken);
+  try {
+    const response = await octokit.repos.get({
+      owner: repo.owner,
+      repo: repo.repo,
+    });
+    const canApprove = canApproveByRepositoryPermission(
+      response.data.permissions
+    );
+    setCachedPullRequestApprovalPermission(canApprove, repoRef);
+    return canApprove;
+  } catch {
+    setCachedPullRequestApprovalPermission(false, repoRef);
+    return false;
+  }
+}
+
+export async function approvePullRequest(
+  prNumber: number,
+  repoRef?: RepoRef
+): Promise<void> {
+  if (!userToken) {
+    throw new Error("GitHub user token is not configured.");
+  }
+  const repo = resolveRepo(repoRef);
+  const octokit = createAuthenticatedOctokit(userToken);
+  await octokit.pulls.createReview({
+    owner: repo.owner,
+    repo: repo.repo,
+    pull_number: prNumber,
+    event: "APPROVE",
+    body: PR_APPROVAL_SIGNATURE,
+  });
 }
 
 // ─── Source loading ───

@@ -235,6 +235,17 @@
     border-color: var(--c-accent-hover);
   }
 
+  .btn--success {
+    background: var(--c-success);
+    border-color: var(--c-success);
+    color: #fff;
+  }
+
+  .btn--success:hover {
+    background: #18572a;
+    border-color: #18572a;
+  }
+
   .btn--danger {
     color: var(--c-error);
     border-color: var(--c-error);

@@ -10,7 +10,12 @@ import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
 import { parseFormatFile } from "@/domain/format";
-import { fetchFileContent, fetchPullRequestFiles } from "@/domain/github";
+import {
+  approvePullRequest,
+  fetchFileContent,
+  fetchPullRequestFiles,
+  getCachedPullRequestApprovalPermission,
+} from "@/domain/github";
 import { type FormatSearchDoc, searchFormatPaths } from "@/domain/search";
 import type { BankInfo } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
@@ -590,6 +595,62 @@ function renderWorkspaceContent(params: {
   );
 }
 
+function BankActionsPanel(params: {
+  bankPath: string;
+  onApprovePullRequest: () => void;
+  onOpenPublish: () => void;
+  onOpenQuickCheck: () => void;
+  approvePullRequestError: string | null;
+  approvePullRequestLabel: string;
+  isApprovingPullRequest: boolean;
+  isPullRequestApproved: boolean;
+  showApprovePullRequestButton: boolean;
+  t: (key: string) => string;
+}): ReactNode {
+  const {
+    bankPath,
+    onApprovePullRequest,
+    onOpenPublish,
+    onOpenQuickCheck,
+    approvePullRequestError,
+    approvePullRequestLabel,
+    isApprovingPullRequest,
+    isPullRequestApproved,
+    showApprovePullRequestButton,
+    t,
+  } = params;
+
+  return (
+    <div className="bank-actions flex-col">
+      <button
+        className="btn btn--primary bank-actions__btn w-full"
+        onClick={onOpenPublish}
+      >
+        {t("publish.createPR")}
+      </button>
+      {showApprovePullRequestButton && (
+        <button
+          className={`btn bank-actions__btn w-full ${isPullRequestApproved ? "btn--success" : ""}`}
+          disabled={isApprovingPullRequest || isPullRequestApproved}
+          onClick={onApprovePullRequest}
+        >
+          {approvePullRequestLabel}
+        </button>
+      )}
+      {approvePullRequestError && (
+        <div className="badge badge--error">{approvePullRequestError}</div>
+      )}
+      <button
+        className="btn bank-actions__btn w-full"
+        onClick={onOpenQuickCheck}
+      >
+        {t("quickCheck.open")}
+      </button>
+      <RefreshButton bankPath={bankPath} />
+    </div>
+  );
+}
+
 function FormatsPanel(params: {
   t: (key: string) => string;
   totalFilesCount: number;
@@ -851,38 +912,13 @@ function renameDraftFormat(params: {
   return true;
 }
 
-export function BankWorkspace() {
-  const { t } = useTranslation();
-  const { bankPath: encodedBankPath } = useParams();
-  const [searchParams] = useSearchParams();
-  const bankPath = decodeURIComponent(encodedBankPath ?? "");
-  const requestedFile = useMemo(
-    () => decodeRequestedFileValue(searchParams),
-    [searchParams]
-  );
-
-  const banks = useSourceStore((s) => s.banks);
-  const setBanks = useSourceStore((s) => s.setBanks);
-  const sourceRef = useSourceStore((s) => s.sourceRef);
-  const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
-  const repository = useSourceStore((s) => s.repository);
-
-  const bank = useMemo(
-    () => banks.find((b) => b.folderPath === bankPath),
-    [banks, bankPath]
-  );
-
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [showSenders, setShowSenders] = useState(false);
-  const [showCreateFormat, setShowCreateFormat] = useState(false);
-  const [showPublish, setShowPublish] = useState(false);
-  const [showValidation, setShowValidation] = useState(false);
-  const [showQuickCheck, setShowQuickCheck] = useState(false);
-  const [formatSearch, setFormatSearch] = useState("");
-  const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
+function usePullRequestChangedFiles(params: {
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
+}) {
+  const { repository, sourceRef } = params;
   const [prChangedFiles, setPrChangedFiles] = useState<string[]>([]);
   const [isPrChangedFilesReady, setIsPrChangedFilesReady] = useState(false);
-  const sendersPath = `${bankPath}/senders.txt`;
 
   useEffect(() => {
     if (!(sourceRef?.type === "pr" && sourceRef.prNumber)) {
@@ -914,6 +950,106 @@ export function BankWorkspace() {
       cancelled = true;
     };
   }, [repository, sourceRef?.prNumber, sourceRef?.type]);
+
+  return {
+    isPrChangedFilesReady,
+    prChangedFiles,
+  };
+}
+
+function usePullRequestApproval(params: {
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
+  t: (key: string) => string;
+}) {
+  const { repository, sourceRef, t } = params;
+  const [isApprovingPullRequest, setIsApprovingPullRequest] = useState(false);
+  const [isPullRequestApproved, setIsPullRequestApproved] = useState(false);
+  const [approvePullRequestError, setApprovePullRequestError] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    setIsApprovingPullRequest(false);
+    setIsPullRequestApproved(false);
+    setApprovePullRequestError(null);
+  }, [repository.owner, repository.repo, sourceRef?.prNumber, sourceRef?.type]);
+
+  const handleApprovePullRequest = useCallback(async () => {
+    if (!(sourceRef?.type === "pr" && sourceRef.prNumber)) {
+      return;
+    }
+
+    setIsApprovingPullRequest(true);
+    setApprovePullRequestError(null);
+    try {
+      await approvePullRequest(sourceRef.prNumber, repository);
+      setIsPullRequestApproved(true);
+    } catch (error) {
+      setIsPullRequestApproved(false);
+      setApprovePullRequestError(
+        error instanceof Error ? error.message : t("source.approvePrError")
+      );
+    } finally {
+      setIsApprovingPullRequest(false);
+    }
+  }, [repository, sourceRef?.prNumber, sourceRef?.type, t]);
+
+  const showApprovePullRequestButton = Boolean(
+    sourceRef?.type === "pr" &&
+      sourceRef.prNumber &&
+      getCachedPullRequestApprovalPermission(repository)
+  );
+  const approvePullRequestLabel = isApprovingPullRequest
+    ? t("source.approvingPr")
+    : isPullRequestApproved
+      ? t("source.approvePrDone")
+      : t("source.approvePr");
+
+  return {
+    approvePullRequestError,
+    approvePullRequestLabel,
+    handleApprovePullRequest,
+    isApprovingPullRequest,
+    isPullRequestApproved,
+    showApprovePullRequestButton,
+  };
+}
+
+export function BankWorkspace() {
+  const { t } = useTranslation();
+  const { bankPath: encodedBankPath } = useParams();
+  const [searchParams] = useSearchParams();
+  const bankPath = decodeURIComponent(encodedBankPath ?? "");
+  const requestedFile = useMemo(
+    () => decodeRequestedFileValue(searchParams),
+    [searchParams]
+  );
+
+  const banks = useSourceStore((s) => s.banks);
+  const setBanks = useSourceStore((s) => s.setBanks);
+  const sourceRef = useSourceStore((s) => s.sourceRef);
+  const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
+  const repository = useSourceStore((s) => s.repository);
+
+  const bank = useMemo(
+    () => banks.find((b) => b.folderPath === bankPath),
+    [banks, bankPath]
+  );
+
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [showSenders, setShowSenders] = useState(false);
+  const [showCreateFormat, setShowCreateFormat] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
+  const [showQuickCheck, setShowQuickCheck] = useState(false);
+  const [formatSearch, setFormatSearch] = useState("");
+  const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
+  const sendersPath = `${bankPath}/senders.txt`;
+  const { prChangedFiles, isPrChangedFilesReady } = usePullRequestChangedFiles({
+    repository,
+    sourceRef,
+  });
 
   // Get all format files including draft-only (new) files
   const draftStore = useDraftStore();
@@ -1038,6 +1174,18 @@ export function BankWorkspace() {
     !localSendersChanged && sourceChangedFilesInBank.has(sendersPath);
   const sendersMissing =
     !!bank && !bank.hasSenders && !draftStore.getDraft(sendersPath);
+  const {
+    showApprovePullRequestButton,
+    isApprovingPullRequest,
+    isPullRequestApproved,
+    approvePullRequestError,
+    handleApprovePullRequest,
+    approvePullRequestLabel,
+  } = usePullRequestApproval({
+    repository,
+    sourceRef,
+    t,
+  });
 
   useAutoSelectFormat({
     requestedFile,
@@ -1098,21 +1246,20 @@ export function BankWorkspace() {
         </div>
 
         {/* Action bar */}
-        <div className="bank-actions flex-col">
-          <button
-            className="btn btn--primary bank-actions__btn w-full"
-            onClick={() => setShowPublish(true)}
-          >
-            {t("publish.createPR")}
-          </button>
-          <button
-            className="btn bank-actions__btn w-full"
-            onClick={() => setShowQuickCheck(true)}
-          >
-            {t("quickCheck.open")}
-          </button>
-          <RefreshButton bankPath={bankPath} />
-        </div>
+        <BankActionsPanel
+          approvePullRequestError={approvePullRequestError}
+          approvePullRequestLabel={approvePullRequestLabel}
+          bankPath={bankPath}
+          isApprovingPullRequest={isApprovingPullRequest}
+          isPullRequestApproved={isPullRequestApproved}
+          onApprovePullRequest={() => {
+            void handleApprovePullRequest();
+          }}
+          onOpenPublish={() => setShowPublish(true)}
+          onOpenQuickCheck={() => setShowQuickCheck(true)}
+          showApprovePullRequestButton={showApprovePullRequestButton}
+          t={t}
+        />
 
         <FormatsPanel
           formatSearch={formatSearch}

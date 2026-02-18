@@ -1,4 +1,5 @@
 export {
+  approvePullRequest,
   createAuthenticatedOctokit,
   createCommit,
   createIssue,
@@ -15,10 +16,13 @@ export {
   fetchRepoTree,
   fetchSourceRepoForks,
   fetchStartableIssues,
+  getCachedPullRequestApprovalPermission,
   getDefaultRepo,
   getGitHubUserToken,
   getSourceRepo,
   indexBanksFromTree,
+  refreshPullRequestApprovalPermission,
+  setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
   validateToken,
 } from "./client";
