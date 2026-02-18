@@ -7,8 +7,30 @@ import {
   setGitHubUserToken,
   validateToken,
 } from "@/domain/github";
+import type { RepoRef, SourceRef } from "@/domain/types";
 import { SourceSelector } from "@/features/source-selector/SourceSelector";
 import { useSourceStore, useUIStore } from "@/store";
+
+function resolveSourceBadgeLink(params: {
+  repository: RepoRef;
+  sourceRef: SourceRef | null;
+}): { label: string; url: string } | null {
+  const { repository, sourceRef } = params;
+  if (!sourceRef) {
+    return null;
+  }
+
+  const scope =
+    sourceRef.type === "pr" && sourceRef.prNumber
+      ? `PR #${sourceRef.prNumber} ${sourceRef.name}`
+      : sourceRef.name;
+  const label = `${repository.owner}/${repository.repo} · ${scope}`;
+  const url =
+    sourceRef.type === "pr" && sourceRef.prNumber
+      ? `https://github.com/${repository.owner}/${repository.repo}/pull/${sourceRef.prNumber}`
+      : `https://github.com/${repository.owner}/${repository.repo}/tree/${encodeURIComponent(sourceRef.name)}`;
+  return { label, url };
+}
 
 export function AppHeader() {
   const { t, i18n } = useTranslation();
@@ -35,6 +57,7 @@ export function AppHeader() {
     location.pathname.startsWith("/workspace") ||
     location.pathname.startsWith("/bank/");
   const hasSavedGitHubToken = savedGitHubToken.trim().length > 0;
+  const sourceBadgeLink = resolveSourceBadgeLink({ repository, sourceRef });
 
   const toggleLocale = () => {
     const next = locale === "ru" ? "en" : "ru";
@@ -91,13 +114,17 @@ export function AppHeader() {
           {t("app.title")}
         </div>
 
-        {!isHome && sourceRef && isDeveloperMode && (
+        {!isHome && sourceBadgeLink && isDeveloperMode && (
           <div className="flex items-center gap-sm">
-            <span className="badge badge--info text-sm">
-              {repository.owner}/{repository.repo} ·{" "}
-              {sourceRef.type === "pr" ? `PR #${sourceRef.prNumber}` : ""}{" "}
-              {sourceRef.name}
-            </span>
+            <a
+              className="badge badge--info text-sm"
+              href={sourceBadgeLink.url}
+              rel="noreferrer"
+              target="_blank"
+              title={sourceBadgeLink.label}
+            >
+              {sourceBadgeLink.label}
+            </a>
           </div>
         )}
 

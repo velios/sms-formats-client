@@ -11,6 +11,7 @@ export {
   fetchFileContent,
   fetchIssue,
   fetchOpenPRs,
+  fetchPullRequestDetails,
   fetchPullRequestFiles,
   fetchPullRequestHead,
   fetchRepoTree,
@@ -24,5 +25,6 @@ export {
   refreshPullRequestApprovalPermission,
   setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
+  updatePullRequestHead,
   validateToken,
 } from "./client";

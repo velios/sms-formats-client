@@ -300,6 +300,36 @@ export async function fetchPullRequestHead(
   };
 }
 
+export async function fetchPullRequestDetails(
+  prNumber: number,
+  repoRef?: RepoRef
+): Promise<{
+  number: number;
+  title: string;
+  url: string;
+  headRef: string;
+  headSha: string;
+  headOwner: string;
+  headRepo: string;
+}> {
+  const repo = resolveRepo(repoRef);
+  const pr = await publicOctokit.pulls.get({
+    owner: repo.owner,
+    repo: repo.repo,
+    pull_number: prNumber,
+  });
+
+  return {
+    number: pr.data.number,
+    title: pr.data.title,
+    url: pr.data.html_url,
+    headRef: pr.data.head.ref,
+    headSha: pr.data.head.sha,
+    headOwner: pr.data.head.repo?.owner?.login ?? repo.owner,
+    headRepo: pr.data.head.repo?.name ?? repo.repo,
+  };
+}
+
 export async function fetchPullRequestFiles(
   prNumber: number,
   repoRef?: RepoRef
@@ -633,6 +663,37 @@ export async function createCommit(
   });
 
   return commit.data.sha;
+}
+
+export async function updatePullRequestHead(
+  token: string,
+  prNumber: number,
+  files: { path: string; content: string }[],
+  repoRef?: RepoRef
+): Promise<{ url: string; title: string }> {
+  const repo = resolveRepo(repoRef);
+  const octokit = createAuthenticatedOctokit(token);
+  const pr = await octokit.pulls.get({
+    owner: repo.owner,
+    repo: repo.repo,
+    pull_number: prNumber,
+  });
+
+  const headOwner = pr.data.head.repo?.owner?.login ?? repo.owner;
+  const headRepo = pr.data.head.repo?.name ?? repo.repo;
+  const headRef = pr.data.head.ref;
+  const headSha = pr.data.head.sha;
+  const title = pr.data.title;
+
+  await createCommit(octokit, headOwner, headRef, headSha, files, title, {
+    owner: headOwner,
+    repo: headRepo,
+  });
+
+  return {
+    url: pr.data.html_url,
+    title,
+  };
 }
 
 export async function createPullRequest(

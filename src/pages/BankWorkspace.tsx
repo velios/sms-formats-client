@@ -15,6 +15,8 @@ import {
   fetchFileContent,
   fetchPullRequestFiles,
   getCachedPullRequestApprovalPermission,
+  getGitHubUserToken,
+  updatePullRequestHead,
 } from "@/domain/github";
 import { type FormatSearchDoc, searchFormatPaths } from "@/domain/search";
 import type { BankInfo } from "@/domain/types";
@@ -598,10 +600,13 @@ function renderWorkspaceContent(params: {
 function BankActionsPanel(params: {
   bankPath: string;
   onApprovePullRequest: () => void;
-  onOpenPublish: () => void;
+  onPublish: () => void;
   onOpenQuickCheck: () => void;
   approvePullRequestError: string | null;
   approvePullRequestLabel: string;
+  publishError: string | null;
+  publishActionLabel: string;
+  isPublishing: boolean;
   isApprovingPullRequest: boolean;
   isPullRequestApproved: boolean;
   showApprovePullRequestButton: boolean;
@@ -610,10 +615,13 @@ function BankActionsPanel(params: {
   const {
     bankPath,
     onApprovePullRequest,
-    onOpenPublish,
+    onPublish,
     onOpenQuickCheck,
     approvePullRequestError,
     approvePullRequestLabel,
+    publishError,
+    publishActionLabel,
+    isPublishing,
     isApprovingPullRequest,
     isPullRequestApproved,
     showApprovePullRequestButton,
@@ -624,10 +632,13 @@ function BankActionsPanel(params: {
     <div className="bank-actions flex-col">
       <button
         className="btn btn--primary bank-actions__btn w-full"
-        onClick={onOpenPublish}
+        disabled={isPublishing}
+        onClick={onPublish}
       >
-        {t("publish.createPR")}
+        {isPublishing ? <span className="spinner" /> : null}
+        {publishActionLabel}
       </button>
+      {publishError && <div className="badge badge--error">{publishError}</div>}
       {showApprovePullRequestButton && (
         <button
           className={`btn bank-actions__btn w-full ${isPullRequestApproved ? "btn--success" : ""}`}
@@ -1016,6 +1027,135 @@ function usePullRequestApproval(params: {
   };
 }
 
+function useQuickPullRequestUpdate(params: {
+  canUpdateCurrentPullRequest: boolean;
+  changedFiles: Array<{ filePath: string; content: string }>;
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
+  t: (key: string) => string;
+}) {
+  const {
+    canUpdateCurrentPullRequest,
+    changedFiles,
+    repository,
+    sourceRef,
+    t,
+  } = params;
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsPublishing(false);
+    setPublishError(null);
+  }, [repository.owner, repository.repo, sourceRef?.prNumber, sourceRef?.type]);
+
+  const run = useCallback(async () => {
+    if (
+      !(
+        canUpdateCurrentPullRequest &&
+        sourceRef?.type === "pr" &&
+        sourceRef.prNumber
+      )
+    ) {
+      return;
+    }
+
+    const token = getGitHubUserToken()?.trim() ?? "";
+    if (!token) {
+      setPublishError(t("githubAuth.emptyToken"));
+      return;
+    }
+    if (changedFiles.length === 0) {
+      setPublishError(t("publish.noChanges"));
+      return;
+    }
+
+    setIsPublishing(true);
+    setPublishError(null);
+    try {
+      await updatePullRequestHead(
+        token,
+        sourceRef.prNumber,
+        changedFiles.map((file) => ({
+          path: file.filePath,
+          content: file.content,
+        })),
+        repository
+      );
+    } catch (error) {
+      setPublishError(
+        error instanceof Error ? error.message : t("publish.updateError")
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [
+    canUpdateCurrentPullRequest,
+    changedFiles,
+    repository,
+    sourceRef?.prNumber,
+    sourceRef?.type,
+    t,
+  ]);
+
+  return {
+    isPublishing,
+    publishError,
+    run,
+  };
+}
+
+function useBankPublishAction(params: {
+  changedFiles: Array<{ filePath: string; content: string }>;
+  onOpenCreatePublish: () => void;
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; name: string; prNumber?: number } | null;
+  t: (key: string) => string;
+}) {
+  const { changedFiles, onOpenCreatePublish, repository, sourceRef, t } =
+    params;
+  const canUpdateCurrentPullRequest = Boolean(
+    sourceRef?.type === "pr" &&
+      sourceRef.prNumber &&
+      getCachedPullRequestApprovalPermission(repository)
+  );
+  const {
+    isPublishing,
+    publishError,
+    run: runQuickPullRequestUpdate,
+  } = useQuickPullRequestUpdate({
+    canUpdateCurrentPullRequest,
+    changedFiles,
+    repository,
+    sourceRef,
+    t,
+  });
+  const publishActionLabel = canUpdateCurrentPullRequest
+    ? isPublishing
+      ? t("publish.publishing")
+      : t("publish.updatePR")
+    : t("publish.createPR");
+  const onPublish = useCallback(() => {
+    if (canUpdateCurrentPullRequest) {
+      void runQuickPullRequestUpdate();
+      return;
+    }
+    onOpenCreatePublish();
+  }, [
+    canUpdateCurrentPullRequest,
+    onOpenCreatePublish,
+    runQuickPullRequestUpdate,
+  ]);
+
+  return {
+    canUpdateCurrentPullRequest,
+    isPublishing,
+    onPublish,
+    publishActionLabel,
+    publishError,
+  };
+}
+
 export function BankWorkspace() {
   const { t } = useTranslation();
   const { bankPath: encodedBankPath } = useParams();
@@ -1053,6 +1193,17 @@ export function BankWorkspace() {
 
   // Get all format files including draft-only (new) files
   const draftStore = useDraftStore();
+  const changedFilesForPublish = useMemo(
+    () =>
+      draftStore
+        .getChangedFiles()
+        .filter((entry) => entry.filePath.startsWith(bankPath))
+        .map((entry) => ({
+          filePath: entry.filePath,
+          content: entry.content,
+        })),
+    [bankPath, draftStore, draftStore.drafts]
+  );
   const localChangedFiles = useMemo(
     () => draftStore.getChangedFiles().map((item) => item.filePath),
     [draftStore, draftStore.drafts]
@@ -1186,6 +1337,19 @@ export function BankWorkspace() {
     sourceRef,
     t,
   });
+  const {
+    isPublishing: isPublishingQuickUpdate,
+    publishError,
+    onPublish: handlePublishAction,
+    canUpdateCurrentPullRequest,
+    publishActionLabel,
+  } = useBankPublishAction({
+    changedFiles: changedFilesForPublish,
+    onOpenCreatePublish: () => setShowPublish(true),
+    repository,
+    sourceRef,
+    t,
+  });
 
   useAutoSelectFormat({
     requestedFile,
@@ -1251,12 +1415,15 @@ export function BankWorkspace() {
           approvePullRequestLabel={approvePullRequestLabel}
           bankPath={bankPath}
           isApprovingPullRequest={isApprovingPullRequest}
+          isPublishing={isPublishingQuickUpdate}
           isPullRequestApproved={isPullRequestApproved}
           onApprovePullRequest={() => {
             void handleApprovePullRequest();
           }}
-          onOpenPublish={() => setShowPublish(true)}
           onOpenQuickCheck={() => setShowQuickCheck(true)}
+          onPublish={handlePublishAction}
+          publishActionLabel={publishActionLabel}
+          publishError={publishError}
           showApprovePullRequestButton={showApprovePullRequestButton}
           t={t}
         />
@@ -1312,7 +1479,7 @@ export function BankWorkspace() {
           }}
         />
       )}
-      {showPublish && (
+      {showPublish && !canUpdateCurrentPullRequest && (
         <PublishPanel
           bankName={displayName}
           bankPath={bankPath}

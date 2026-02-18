@@ -8,6 +8,8 @@ import {
   createPullRequest,
   ensureFork,
   fetchBranchSha,
+  getCachedPullRequestApprovalPermission,
+  updatePullRequestHead,
   validateToken,
 } from "@/domain/github";
 import type { BankInfo, RepoRef } from "@/domain/types";
@@ -40,6 +42,8 @@ interface PublishStoreLike {
 interface DraftStoreLike {
   getDraft: (filePath: string) => { content: string } | undefined;
 }
+
+type PublishMode = "create" | "update-pr";
 
 function buildFormatContents(changedFiles: ChangedFile[]): Map<string, string> {
   const formatContents = new Map<string, string>();
@@ -166,6 +170,30 @@ async function publishBankChanges(params: {
   return pr.url;
 }
 
+async function updateExistingPullRequestChanges(params: {
+  publishStore: PublishStoreLike;
+  token: string;
+  changedFiles: ChangedFile[];
+  repository: RepoRef;
+  prNumber: number;
+}): Promise<string> {
+  const { publishStore, token, changedFiles, repository, prNumber } = params;
+
+  publishStore.setStep("committing");
+  const result = await updatePullRequestHead(
+    token,
+    prNumber,
+    changedFiles.map((file) => ({
+      path: file.filePath,
+      content: file.content,
+    })),
+    repository
+  );
+
+  publishStore.setStep("opening-pr");
+  return result.url;
+}
+
 export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   const { t } = useTranslation();
   const dialogTitleId = useId();
@@ -173,7 +201,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   const prTitleInputId = useId();
   const draftStore = useDraftStore();
   const publishStore = usePublishStore();
-  const _sourceRef = useSourceStore((s) => s.sourceRef);
+  const sourceRef = useSourceStore((s) => s.sourceRef);
   const banks = useSourceStore((s) => s.banks);
   const repository = useSourceStore((s) => s.repository);
 
@@ -200,6 +228,20 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   }
 
   const isMultiBank = changedBanks.size > 1;
+  const canUpdateCurrentPullRequest = Boolean(
+    sourceRef?.type === "pr" &&
+      sourceRef.prNumber &&
+      getCachedPullRequestApprovalPermission(repository)
+  );
+  const publishMode: PublishMode = canUpdateCurrentPullRequest
+    ? "update-pr"
+    : "create";
+  const publishActionLabel =
+    publishMode === "update-pr" ? t("publish.updatePR") : t("publish.createPR");
+  const publishSuccessLabel =
+    publishMode === "update-pr"
+      ? t("publish.successUpdate")
+      : t("publish.success");
 
   const handlePublish = useCallback(async () => {
     const trimmedToken = token.trim();
@@ -243,14 +285,25 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
         return;
       }
 
-      const prUrl = await publishBankChanges({
-        publishStore,
-        token: trimmedToken,
-        bankName,
-        prTitle,
-        changedFiles,
-        repository,
-      });
+      const prUrl =
+        publishMode === "update-pr" &&
+        sourceRef?.type === "pr" &&
+        sourceRef.prNumber
+          ? await updateExistingPullRequestChanges({
+              publishStore,
+              token: trimmedToken,
+              changedFiles,
+              repository,
+              prNumber: sourceRef.prNumber,
+            })
+          : await publishBankChanges({
+              publishStore,
+              token: trimmedToken,
+              bankName,
+              prTitle,
+              changedFiles,
+              repository,
+            });
       publishStore.setPrUrl(prUrl);
       publishStore.setStep("done");
     } catch (e) {
@@ -266,8 +319,11 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
     banks,
     isMultiBank,
     draftStore,
+    publishMode,
     publishStore,
     repository,
+    sourceRef?.prNumber,
+    sourceRef?.type,
     t,
   ]);
 
@@ -390,7 +446,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
             className="mb-md flex-col gap-sm"
             role="status"
           >
-            <div className="badge badge--success">{t("publish.success")}</div>
+            <div className="badge badge--success">{publishSuccessLabel}</div>
             <a
               href={publishStore.prUrl}
               rel="noopener noreferrer"
@@ -448,7 +504,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
               onClick={handlePublish}
             >
               {isPublishing ? <span className="spinner" /> : null}
-              {t("publish.createPR")}
+              {publishActionLabel}
             </button>
           )}
         </div>
