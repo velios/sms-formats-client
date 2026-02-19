@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { config } from "@/config";
 import { buildBankWorkspacePath } from "@/domain/bank-route";
+import { fetchPullRequestValidationDetails } from "@/domain/github";
 import type { BankInfo } from "@/domain/types";
 import { useOpenPRs, useRepoTree, useSwitchSource } from "@/hooks/useGitHub";
 import { useDraftStore, useSourceStore } from "@/store";
@@ -12,6 +20,24 @@ const RECENT_BANKS_KEY = "sms-formats-recent-banks";
 const MAX_RECENT_BANKS = 10;
 const RECENT_PRS_KEY = "sms-formats-recent-prs";
 const MAX_RECENT_PRS = 20;
+
+interface OpenPullRequestItem {
+  number: number;
+  title: string;
+  headRef: string;
+  headSha: string;
+  approvedCount: number;
+  failedValidationCount: number;
+  validationErrors: string[];
+  validationUrl: string | null;
+}
+
+interface ValidationDetailsModalState {
+  prNumber: number;
+  prTitle: string;
+  checksUrl: string;
+  validationErrors: string[];
+}
 
 function getRecentBanks(): string[] {
   try {
@@ -83,18 +109,13 @@ function collectChangedBankPaths(paths: string[]): string[] {
   );
 }
 
-function sortPRs(
-  prs:
-    | Array<{
-        number: number;
-        title: string;
-        headRef: string;
-        headSha: string;
-        approvedCount: number;
-      }>
-    | undefined
-) {
+function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => {
+    const aHasValidationErrors = a.failedValidationCount > 0 ? 1 : 0;
+    const bHasValidationErrors = b.failedValidationCount > 0 ? 1 : 0;
+    if (aHasValidationErrors !== bHasValidationErrors) {
+      return aHasValidationErrors - bHasValidationErrors;
+    }
     if (a.approvedCount !== b.approvedCount) {
       return b.approvedCount - a.approvedCount;
     }
@@ -116,6 +137,14 @@ export function Dashboard() {
   const [prTab, setPrTab] = useState<"all" | "recent">("all");
   const [banksTab, setBanksTab] = useState<"all" | "recent">("all");
   const [reloadAttemptKey, setReloadAttemptKey] = useState<string | null>(null);
+  const [validationDetailsModal, setValidationDetailsModal] =
+    useState<ValidationDetailsModalState | null>(null);
+  const [isValidationDetailsLoading, setIsValidationDetailsLoading] =
+    useState(false);
+  const [validationDetailsError, setValidationDetailsError] = useState<
+    string | null
+  >(null);
+  const validationDetailsTitleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const { data: openPRs = [], isLoading: isPRsLoading } = useOpenPRs();
   const sortedPRs = useMemo(() => sortPRs(openPRs), [openPRs]);
@@ -181,17 +210,7 @@ export function Dashboard() {
     const numbers = getRecentPRs(repoSlug);
     return numbers
       .map((number) => sortedPRs.find((pr) => pr.number === number))
-      .filter(
-        (
-          pr
-        ): pr is {
-          number: number;
-          title: string;
-          headRef: string;
-          headSha: string;
-          approvedCount: number;
-        } => pr != null
-      );
+      .filter((pr): pr is OpenPullRequestItem => pr != null);
   }, [repoSlug, sortedPRs]);
   const visiblePRs = prTab === "recent" ? recentPRs : sortedPRs;
   const visibleBanks = banksTab === "recent" ? recentBanks : filtered;
@@ -284,6 +303,77 @@ export function Dashboard() {
     [navigate, repoSlug, repository, switchSource]
   );
 
+  const loadValidationDetails = useCallback(
+    async (prNumber: number) => {
+      setIsValidationDetailsLoading(true);
+      setValidationDetailsError(null);
+      try {
+        const details = await fetchPullRequestValidationDetails(
+          prNumber,
+          repository
+        );
+        setValidationDetailsModal((current) => {
+          if (!(current && current.prNumber === prNumber)) {
+            return current;
+          }
+          const nextErrors =
+            details.validationErrors.length > 0
+              ? details.validationErrors
+              : current.validationErrors;
+          return {
+            ...current,
+            checksUrl: details.validationUrl ?? current.checksUrl,
+            validationErrors: nextErrors,
+          };
+        });
+        if (details.validationErrors.length === 0) {
+          setValidationDetailsError(
+            t("source.validatorLoadFailed", {
+              defaultValue:
+                "Не удалось загрузить подробности валидации. Откройте checks в GitHub.",
+            })
+          );
+        }
+      } catch (error) {
+        setValidationDetailsError(
+          error instanceof Error
+            ? error.message
+            : t("source.validatorLoadFailed", {
+                defaultValue:
+                  "Не удалось загрузить подробности валидации. Откройте checks в GitHub.",
+              })
+        );
+      } finally {
+        setIsValidationDetailsLoading(false);
+      }
+    },
+    [repository, t]
+  );
+
+  const openValidationDetails = useCallback(
+    (pr: OpenPullRequestItem) => {
+      const defaultChecksUrl = `https://github.com/${repository.owner}/${repository.repo}/pull/${pr.number}/checks`;
+      const checksUrl = pr.validationUrl?.trim() || defaultChecksUrl;
+      setValidationDetailsError(null);
+      setIsValidationDetailsLoading(false);
+      setValidationDetailsModal({
+        prNumber: pr.number,
+        prTitle: pr.title,
+        checksUrl,
+        validationErrors: pr.validationErrors,
+      });
+      void loadValidationDetails(pr.number);
+    },
+    [loadValidationDetails, repository.owner, repository.repo]
+  );
+
+  const handleRetryValidationDetails = useCallback(() => {
+    if (!validationDetailsModal) {
+      return;
+    }
+    void loadValidationDetails(validationDetailsModal.prNumber);
+  }, [loadValidationDetails, validationDetailsModal]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (banksTab !== "all") {
       return;
@@ -358,6 +448,13 @@ export function Dashboard() {
                 const isActive =
                   sourceRef?.type === "pr" && sourceRef.prNumber === pr.number;
                 const prUrl = `https://github.com/${repository.owner}/${repository.repo}/pull/${pr.number}`;
+                const validationErrorsTitle = t(
+                  "source.validatorErrorsClickable",
+                  {
+                    defaultValue:
+                      "Нажмите, чтобы открыть детали ошибок валидатора",
+                  }
+                );
                 return (
                   <div
                     className={`autocomplete__item ${isActive ? "autocomplete__item--active" : ""}`}
@@ -385,6 +482,27 @@ export function Dashboard() {
                     <span className="badge badge--info">
                       ✓ {pr.approvedCount}
                     </span>
+                    {pr.failedValidationCount > 0 && (
+                      <span
+                        className="badge badge--error badge--interactive"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openValidationDetails(pr);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            openValidationDetails(pr);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        title={validationErrorsTitle}
+                      >
+                        ✗ {pr.failedValidationCount}
+                      </span>
+                    )}
                     <a
                       aria-label={`PR #${pr.number}`}
                       className="format-row-link"
@@ -473,6 +591,85 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {validationDetailsModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setValidationDetailsModal(null);
+            setValidationDetailsError(null);
+          }}
+        >
+          <div
+            aria-labelledby={validationDetailsTitleId}
+            aria-modal="true"
+            className="modal validation-details-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="modal__title" id={validationDetailsTitleId}>
+              {t("source.validatorErrorsTitle", {
+                defaultValue: "Ошибки валидатора",
+              })}
+            </div>
+            <div className="text-muted text-sm">
+              PR #{validationDetailsModal.prNumber} ·{" "}
+              {validationDetailsModal.prTitle}
+            </div>
+            <pre className="validation-details-modal__content">
+              {isValidationDetailsLoading
+                ? t("source.loadingValidationResult", {
+                    defaultValue: "Загружаем результат валидации...",
+                  })
+                : validationDetailsModal.validationErrors.length > 0
+                  ? validationDetailsModal.validationErrors.join("\n")
+                  : t("source.validatorErrorsUnavailable", {
+                      defaultValue:
+                        "Проверка валидатора не пройдена. Откройте checks в PR для деталей.",
+                    })}
+            </pre>
+            {validationDetailsError && (
+              <div className="badge badge--error">{validationDetailsError}</div>
+            )}
+            <div className="modal__actions">
+              <button
+                className="btn btn--primary"
+                disabled={isValidationDetailsLoading}
+                onClick={handleRetryValidationDetails}
+                type="button"
+              >
+                {isValidationDetailsLoading
+                  ? t("source.loadingValidationResult", {
+                      defaultValue: "Загружаем...",
+                    })
+                  : t("source.loadValidationResult", {
+                      defaultValue: "Попробовать снова",
+                    })}
+              </button>
+              <a
+                className="btn"
+                href={validationDetailsModal.checksUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {t("source.openValidatorChecks", {
+                  defaultValue: "Открыть checks",
+                })}
+              </a>
+              <button
+                className="btn"
+                onClick={() => {
+                  setValidationDetailsModal(null);
+                  setValidationDetailsError(null);
+                }}
+                type="button"
+              >
+                {t("app.close")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

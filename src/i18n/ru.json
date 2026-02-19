@@ -34,6 +34,13 @@
     "switchTo": "Переключиться",
     "currentSource": "Текущий источник: {{source}}",
     "noStartableIssues": "Нет issue для старта",
+    "validatorErrorsClickable": "Нажмите, чтобы открыть детали ошибок валидатора",
+    "loadValidationResult": "Попробовать снова",
+    "loadingValidationResult": "Загружаем результат валидации...",
+    "validatorLoadFailed": "Не удалось загрузить подробности валидации. Откройте checks в GitHub.",
+    "validatorErrorsTitle": "Ошибки валидатора",
+    "openValidatorChecks": "Открыть на GitHub",
+    "validatorErrorsUnavailable": "Проверка валидатора не пройдена. Откройте checks в PR для деталей.",
     "issueState": {
       "open": "open",
       "closed": "closed"

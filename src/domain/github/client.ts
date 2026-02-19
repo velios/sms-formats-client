@@ -24,12 +24,37 @@ interface PullRequestApprovalPermissionEntry {
   checkedAt: number;
 }
 
+interface ValidatorCheckOutput {
+  title?: string | null;
+  summary?: string | null;
+  text?: string | null;
+}
+
+interface ValidatorCheckRun {
+  id?: number;
+  name?: string | null;
+  conclusion?: string | null;
+  output?: ValidatorCheckOutput | null;
+  html_url?: string | null;
+  details_url?: string | null;
+}
+
 type PullRequestApprovalPermissionCache = Record<
   string,
   PullRequestApprovalPermissionEntry
 >;
 
 type GitHubAuthChangeListener = () => void;
+
+const VALIDATOR_CHECK_NAME_FRAGMENT = "validate";
+const MAX_VALIDATOR_ERROR_LINES = 6;
+const VALIDATE_FORMATS_STEP_NAME = "validate formats";
+
+interface ValidatorFailureResult {
+  failedValidationCount: number;
+  validationErrors: string[];
+  validationUrl: string | null;
+}
 
 function resolveRepo(repoRef?: RepoRef): RepoRef {
   return repoRef ?? defaultRepoRef;
@@ -41,6 +66,507 @@ export function getDefaultRepo(): RepoRef {
 
 export function getSourceRepo(): RepoRef {
   return { ...sourceRepoRef };
+}
+
+function countApprovedReviews(
+  reviews: Array<{
+    user?: { login?: string } | null;
+    state?: string | null;
+  }>
+): number {
+  const latestStateByReviewer = new Map<string, string>();
+  for (const review of reviews) {
+    const login = review.user?.login;
+    if (!login) {
+      continue;
+    }
+    latestStateByReviewer.set(login, review.state ?? "");
+  }
+
+  let approvedCount = 0;
+  for (const state of latestStateByReviewer.values()) {
+    if (state === "APPROVED") {
+      approvedCount += 1;
+    }
+  }
+  return approvedCount;
+}
+
+function stripAnsiCodes(value: string): string {
+  let output = "";
+  let skippingAnsiSequence = false;
+
+  for (const char of value) {
+    if (char === "\u001b") {
+      skippingAnsiSequence = true;
+      continue;
+    }
+    if (skippingAnsiSequence) {
+      if (char === "m") {
+        skippingAnsiSequence = false;
+      }
+      continue;
+    }
+    output += char;
+  }
+
+  return output;
+}
+
+function normalizeValidatorLine(line: string): string {
+  return line
+    .split("\n")
+    .map((part) => stripAnsiCodes(part))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripActionsLogPrefix(line: string): string {
+  return line
+    .replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s+/, "")
+    .replace(/^\d+\s+/, "")
+    .trim();
+}
+
+function canonicalizeValidatorMessage(line: string): string {
+  return normalizeValidatorLine(stripActionsLogPrefix(line)).toLowerCase();
+}
+
+function uniqueValidatorMessages(lines: string[]): string[] {
+  const unique = new Map<string, string>();
+  for (const rawLine of lines) {
+    const line = normalizeValidatorLine(stripActionsLogPrefix(rawLine));
+    if (!line) {
+      continue;
+    }
+    const canonical = canonicalizeValidatorMessage(line);
+    if (!unique.has(canonical)) {
+      unique.set(canonical, line);
+    }
+  }
+  return Array.from(unique.values());
+}
+
+function isLikelyValidatorLine(line: string): boolean {
+  const normalized = line.toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (
+    normalized.startsWith("run ") ||
+    normalized.startsWith("process completed") ||
+    normalized.startsWith("set up job") ||
+    normalized.startsWith("post ")
+  ) {
+    return false;
+  }
+  return (
+    normalized.includes("validation failed") ||
+    normalized.includes("error") ||
+    normalized.includes(".txt:") ||
+    normalized.includes("example ") ||
+    normalized.includes("matches ")
+  );
+}
+
+function isGenericValidatorFailureLine(line: string): boolean {
+  const normalized = line.toLowerCase();
+  return (
+    normalized.includes("process completed with exit code") ||
+    normalized.includes(".github/workflows/")
+  );
+}
+
+function extractValidatorErrorMessages(
+  output: ValidatorCheckOutput | null | undefined
+): string[] {
+  const combined = [output?.title, output?.summary, output?.text]
+    .filter((item): item is string => Boolean(item))
+    .join("\n");
+
+  if (!combined.trim()) {
+    return [];
+  }
+
+  const lines = combined
+    .split("\n")
+    .map((line) => normalizeValidatorLine(line))
+    .filter(Boolean);
+  const likelyErrors = lines.filter((line) => isLikelyValidatorLine(line));
+  const selected = likelyErrors.length > 0 ? likelyErrors : lines;
+  return uniqueValidatorMessages(selected)
+    .filter((line) => !isGenericValidatorFailureLine(line))
+    .slice(0, MAX_VALIDATOR_ERROR_LINES);
+}
+
+function isFailedValidatorRun(checkRun: ValidatorCheckRun): boolean {
+  const name = checkRun.name?.toLowerCase() ?? "";
+  return (
+    checkRun.conclusion === "failure" &&
+    name.includes(VALIDATOR_CHECK_NAME_FRAGMENT)
+  );
+}
+
+function formatValidatorErrorLines(
+  failedRuns: ValidatorCheckRun[],
+  perRunErrors: string[][]
+): string[] {
+  const lines = failedRuns.flatMap((_, index) => perRunErrors[index] ?? []);
+  return uniqueValidatorMessages(lines).slice(0, MAX_VALIDATOR_ERROR_LINES);
+}
+
+function extractValidatorAnnotationMessages(
+  annotations: Array<{
+    path?: string | null;
+    start_line?: number | null;
+    title?: string | null;
+    message?: string | null;
+  }>
+): string[] {
+  return annotations
+    .map((annotation) => {
+      const path = annotation.path?.trim() || "";
+      const line = annotation.start_line ? `:${annotation.start_line}` : "";
+      const title = annotation.title?.trim() || "";
+      const message = annotation.message?.trim() || "";
+      const combined = [title, message].filter(Boolean).join(" — ");
+      if (!combined) {
+        return "";
+      }
+      const location = path ? `${path}${line}: ` : "";
+      return normalizeValidatorLine(`${location}${combined}`);
+    })
+    .filter((line) => line && !isGenericValidatorFailureLine(line))
+    .map((line) => stripActionsLogPrefix(line))
+    .filter(Boolean)
+    .filter((line) => !isGenericValidatorFailureLine(line))
+    .filter((line) => line.toLowerCase() !== "validate")
+    .filter((line) => !isValidationDelimiterLine(line))
+    .filter((line) => !line.toLowerCase().includes(VALIDATE_FORMATS_STEP_NAME))
+    .filter((line) => !line.toLowerCase().includes("validation failed"))
+    .filter((line) => !line.toLowerCase().includes("error(s) in"))
+    .filter((line) => !line.toLowerCase().startsWith("run "))
+    .filter((line) => !line.toLowerCase().includes("example "))
+    .filter((line) => !line.toLowerCase().includes("matches "))
+    .slice(0, MAX_VALIDATOR_ERROR_LINES);
+}
+
+function extractActionsJobId(
+  detailsUrl: string | null | undefined
+): number | null {
+  if (!detailsUrl) {
+    return null;
+  }
+  const match = detailsUrl.match(/\/job\/(\d+)(?:[/?#]|$)/);
+  if (!match?.[1]) {
+    return null;
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function extractActionsRunId(
+  detailsUrl: string | null | undefined
+): number | null {
+  if (!detailsUrl) {
+    return null;
+  }
+  const match = detailsUrl.match(/\/runs\/(\d+)(?:[/?#]|$)/);
+  if (!match?.[1]) {
+    return null;
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function isValidationDelimiterLine(line: string): boolean {
+  return /={10,}/.test(line);
+}
+
+function extractLinesBetweenValidationDelimiters(lines: string[]): string[] {
+  const extracted: string[] = [];
+  let insideBlock = false;
+
+  for (const line of lines) {
+    if (isValidationDelimiterLine(line)) {
+      insideBlock = !insideBlock;
+      continue;
+    }
+    if (!insideBlock) {
+      continue;
+    }
+    extracted.push(line);
+  }
+
+  return extracted
+    .map((line) => normalizeValidatorLine(stripActionsLogPrefix(line)))
+    .filter(Boolean)
+    .filter((line) => !isGenericValidatorFailureLine(line));
+}
+
+function extractValidatorMessagesFromActionsLog(logText: string): string[] {
+  if (!logText.trim()) {
+    return [];
+  }
+  const lines = logText
+    .split("\n")
+    .map((line) => normalizeValidatorLine(stripActionsLogPrefix(line)))
+    .filter(Boolean)
+    .filter((line) => !isGenericValidatorFailureLine(line))
+    .filter((line) => line.toLowerCase() !== "validate");
+
+  const validateStepStartIndex = lines.findIndex((line) =>
+    line.toLowerCase().includes(VALIDATE_FORMATS_STEP_NAME)
+  );
+
+  const validationFailedIndex = lines.findIndex((line) =>
+    line.toLowerCase().includes("validation failed")
+  );
+
+  const focusedLines = (() => {
+    if (validateStepStartIndex >= 0) {
+      return lines.slice(validateStepStartIndex);
+    }
+    if (validationFailedIndex >= 0) {
+      const start = Math.max(0, validationFailedIndex - 4);
+      const end = Math.min(lines.length, validationFailedIndex + 18);
+      return lines.slice(start, end);
+    }
+    return lines;
+  })();
+
+  const delimitedLines = extractLinesBetweenValidationDelimiters(focusedLines);
+  if (delimitedLines.length > 0) {
+    return uniqueValidatorMessages(delimitedLines).slice(
+      0,
+      MAX_VALIDATOR_ERROR_LINES
+    );
+  }
+
+  const likelyErrors = focusedLines.filter((line) =>
+    isLikelyValidatorLine(line)
+  );
+  const structuredErrors = likelyErrors.filter((line) => {
+    const normalized = line.toLowerCase();
+    return (
+      normalized.includes(".txt:") ||
+      normalized.includes("validation failed") ||
+      normalized.includes("error(s) in") ||
+      normalized.includes("matches ")
+    );
+  });
+
+  const selected =
+    structuredErrors.length > 0 ? structuredErrors : likelyErrors;
+  return uniqueValidatorMessages(selected).slice(0, MAX_VALIDATOR_ERROR_LINES);
+}
+
+async function readUnknownResponseAsText(data: unknown): Promise<string> {
+  if (typeof data === "string") {
+    return data;
+  }
+  if (data instanceof ArrayBuffer) {
+    return new TextDecoder().decode(data);
+  }
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    return data.text();
+  }
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "text" in data &&
+    typeof (data as { text?: unknown }).text === "function"
+  ) {
+    try {
+      return await (data as { text: () => Promise<string> }).text();
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+async function fetchActionsJobLogText(
+  jobId: number,
+  repo: RepoRef
+): Promise<string> {
+  try {
+    const response = await publicOctokit.request(
+      "GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs",
+      {
+        owner: repo.owner,
+        repo: repo.repo,
+        job_id: jobId,
+      }
+    );
+    const direct = await readUnknownResponseAsText(response.data);
+    if (direct.trim()) {
+      return direct;
+    }
+    const location =
+      (response.headers as Record<string, string | undefined>).location ?? "";
+    if (!location) {
+      return "";
+    }
+    const redirectedResponse = await fetch(location);
+    if (!redirectedResponse.ok) {
+      return "";
+    }
+    return redirectedResponse.text();
+  } catch {
+    return "";
+  }
+}
+
+async function resolveFailedActionsJobId(
+  checkRun: ValidatorCheckRun,
+  repo: RepoRef
+): Promise<number | null> {
+  const fromDetails = extractActionsJobId(checkRun.details_url);
+  if (fromDetails) {
+    return fromDetails;
+  }
+
+  const runId = extractActionsRunId(checkRun.details_url);
+  if (!runId) {
+    return null;
+  }
+  try {
+    const jobsResponse = await publicOctokit.actions.listJobsForWorkflowRun({
+      owner: repo.owner,
+      repo: repo.repo,
+      run_id: runId,
+      per_page: 100,
+    });
+    const failedValidateJob = jobsResponse.data.jobs.find((job) => {
+      const name = job.name?.toLowerCase() ?? "";
+      return job.conclusion === "failure" && name.includes("validate");
+    });
+    if (failedValidateJob?.id) {
+      return failedValidateJob.id;
+    }
+    const firstFailedJob = jobsResponse.data.jobs.find(
+      (job) => job.conclusion === "failure"
+    );
+    return firstFailedJob?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchValidatorErrorsFromActionsLog(
+  checkRun: ValidatorCheckRun,
+  repo: RepoRef
+): Promise<string[]> {
+  const jobId = await resolveFailedActionsJobId(checkRun, repo);
+  if (!jobId) {
+    return [];
+  }
+  const logText = await fetchActionsJobLogText(jobId, repo);
+  return extractValidatorMessagesFromActionsLog(logText);
+}
+
+async function fetchDetailedValidatorRunErrors(
+  checkRun: ValidatorCheckRun,
+  repo: RepoRef
+): Promise<string[]> {
+  const checkRunId = checkRun.id;
+  if (!checkRunId) {
+    return [];
+  }
+
+  try {
+    const checkRunResponse = await publicOctokit.checks.get({
+      owner: repo.owner,
+      repo: repo.repo,
+      check_run_id: checkRunId,
+    });
+    const detailedOutputErrors = extractValidatorErrorMessages(
+      checkRunResponse.data.output
+    );
+    if (detailedOutputErrors.length > 0) {
+      return detailedOutputErrors;
+    }
+  } catch {
+    // Ignore and fallback to annotations.
+  }
+
+  try {
+    const annotations = await publicOctokit.paginate(
+      publicOctokit.checks.listAnnotations,
+      {
+        owner: repo.owner,
+        repo: repo.repo,
+        check_run_id: checkRunId,
+        per_page: 100,
+      }
+    );
+    const annotationErrors = extractValidatorAnnotationMessages(annotations);
+    if (annotationErrors.length > 0) {
+      return annotationErrors;
+    }
+  } catch {
+    // Ignore annotation fetching errors and return empty list.
+  }
+
+  const actionLogErrors = await fetchValidatorErrorsFromActionsLog(
+    checkRun,
+    repo
+  );
+  if (actionLogErrors.length > 0) {
+    return actionLogErrors;
+  }
+
+  return [];
+}
+
+async function fetchValidatorFailuresByHeadSha(
+  headSha: string,
+  repo: RepoRef,
+  loadDetailedErrors = false
+): Promise<ValidatorFailureResult> {
+  try {
+    const checks = await publicOctokit.checks.listForRef({
+      owner: repo.owner,
+      repo: repo.repo,
+      ref: headSha,
+      per_page: 100,
+    });
+    const failedRuns = checks.data.check_runs.filter((checkRun) =>
+      isFailedValidatorRun(checkRun)
+    );
+    if (failedRuns.length === 0) {
+      return {
+        failedValidationCount: 0,
+        validationErrors: [],
+        validationUrl: null,
+      };
+    }
+
+    const perRunErrors = await Promise.all(
+      failedRuns.map(async (checkRun) => {
+        const extractedErrors = extractValidatorErrorMessages(checkRun.output);
+        if (extractedErrors.length > 0 || !loadDetailedErrors) {
+          return extractedErrors;
+        }
+        return fetchDetailedValidatorRunErrors(checkRun, repo);
+      })
+    );
+
+    return {
+      failedValidationCount: failedRuns.length,
+      validationErrors: formatValidatorErrorLines(failedRuns, perRunErrors),
+      validationUrl:
+        failedRuns.find((run) => run.html_url)?.html_url?.trim() || null,
+    };
+  } catch {
+    return {
+      failedValidationCount: 0,
+      validationErrors: [],
+      validationUrl: null,
+    };
+  }
 }
 
 // ─── Default API client (uses shared env token when provided) ───
@@ -290,32 +816,11 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
     headOwner: string;
     headRepo: string;
     approvedCount: number;
+    failedValidationCount: number;
+    validationErrors: string[];
+    validationUrl: string | null;
   }[]
 > {
-  function countApprovedReviews(
-    reviews: Array<{
-      user?: { login?: string } | null;
-      state?: string | null;
-    }>
-  ): number {
-    const latestStateByReviewer = new Map<string, string>();
-    for (const review of reviews) {
-      const login = review.user?.login;
-      if (!login) {
-        continue;
-      }
-      latestStateByReviewer.set(login, review.state ?? "");
-    }
-
-    let approvedCount = 0;
-    for (const state of latestStateByReviewer.values()) {
-      if (state === "APPROVED") {
-        approvedCount += 1;
-      }
-    }
-    return approvedCount;
-  }
-
   async function fetchApprovedCount(prNumber: number, repo: RepoRef) {
     try {
       const reviews = await publicOctokit.paginate(
@@ -341,19 +846,50 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
     per_page: 100,
   });
   const openPrs = res.data;
-  const approvedCounts = await Promise.all(
-    openPrs.map((pr) => fetchApprovedCount(pr.number, repo))
-  );
+  return Promise.all(
+    openPrs.map(async (pr) => {
+      const [approvedCount, validation] = await Promise.all([
+        fetchApprovedCount(pr.number, repo),
+        fetchValidatorFailuresByHeadSha(pr.head.sha, repo),
+      ]);
 
-  return openPrs.map((pr, index) => ({
-    number: pr.number,
-    title: pr.title,
-    headRef: pr.head.ref,
-    headSha: pr.head.sha,
-    headOwner: pr.head.repo?.owner?.login ?? repo.owner,
-    headRepo: pr.head.repo?.name ?? repo.repo,
-    approvedCount: approvedCounts[index] ?? 0,
-  }));
+      return {
+        number: pr.number,
+        title: pr.title,
+        headRef: pr.head.ref,
+        headSha: pr.head.sha,
+        headOwner: pr.head.repo?.owner?.login ?? repo.owner,
+        headRepo: pr.head.repo?.name ?? repo.repo,
+        approvedCount,
+        failedValidationCount: validation.failedValidationCount,
+        validationErrors: validation.validationErrors,
+        validationUrl: validation.validationUrl,
+      };
+    })
+  );
+}
+
+export async function fetchPullRequestValidationDetails(
+  prNumber: number,
+  repoRef?: RepoRef
+): Promise<ValidatorFailureResult> {
+  const repo = resolveRepo(repoRef);
+  const pullRequest = await publicOctokit.pulls.get({
+    owner: repo.owner,
+    repo: repo.repo,
+    pull_number: prNumber,
+  });
+  const details = await fetchValidatorFailuresByHeadSha(
+    pullRequest.data.head.sha,
+    repo,
+    true
+  );
+  return {
+    ...details,
+    validationUrl:
+      details.validationUrl?.trim() ||
+      `https://github.com/${repo.owner}/${repo.repo}/pull/${prNumber}/checks`,
+  };
 }
 
 export async function fetchPullRequestHead(

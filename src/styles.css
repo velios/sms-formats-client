@@ -492,6 +492,25 @@
     color: var(--c-accent);
   }
 
+  .badge--interactive {
+    cursor: pointer;
+    border: 1px solid transparent;
+    user-select: none;
+    transition:
+      transform 120ms ease,
+      border-color 120ms ease;
+  }
+
+  .badge--interactive:hover {
+    transform: translateY(-1px);
+    border-color: currentColor;
+  }
+
+  .badge--interactive:focus-visible {
+    outline: 2px solid var(--c-border-focus);
+    outline-offset: 1px;
+  }
+
   /* ─── Autocomplete / Dropdown ─── */
   .autocomplete {
     @apply relative;
@@ -1116,6 +1135,25 @@
   gap: var(--space-sm);
   justify-content: flex-end;
   margin-top: var(--space-lg);
+}
+
+.validation-details-modal {
+  max-width: min(840px, 92vw);
+}
+
+.validation-details-modal__content {
+  margin-top: var(--space-md);
+  max-height: min(52vh, 420px);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg-elevated);
+  padding: var(--space-sm);
 }
 
 .quick-check-modal {

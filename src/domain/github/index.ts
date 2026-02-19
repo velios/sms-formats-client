@@ -14,6 +14,7 @@ export {
   fetchPullRequestDetails,
   fetchPullRequestFiles,
   fetchPullRequestHead,
+  fetchPullRequestValidationDetails,
   fetchRepoTree,
   fetchSourceRepoForks,
   fetchStartableIssues,
