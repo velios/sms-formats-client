@@ -1046,6 +1046,11 @@
   filter: brightness(1.5);
 }
 
+.match-highlight--group-active {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -1px;
+}
+
 /* Generic fallback for groups > 5 */
 .match-highlight--group {
   background: var(--c-group-1);
@@ -1454,6 +1459,19 @@
   user-select: none;
 }
 
+/* ─── Unified CodeMirror regex editor ─── */
+.unified-regex-cm {
+  width: 100%;
+}
+
+.unified-regex-cm .cm-editor {
+  background: transparent;
+}
+
+.unified-regex-cm .cm-focused {
+  outline: none;
+}
+
 /* ─── Overlay editors ─── */
 .overlay-textarea {
   position: relative;
@@ -1654,6 +1672,11 @@
 
 .group-row--hovered {
   background: var(--c-bg-hover);
+}
+
+.group-row--active {
+  background: var(--c-accent-soft);
+  box-shadow: inset 3px 0 0 var(--c-accent);
 }
 
 .group-color-dot {

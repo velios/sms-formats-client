@@ -12,3 +12,7 @@ export {
   convertTemplateToRegex,
   extractTemplatePlaceholders,
 } from "./template-to-regex";
+export {
+  buildTokenToCaptureGroupMap,
+  resolveTokenCaptureGroup,
+} from "./token-capture-map";

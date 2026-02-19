@@ -1,4 +1,3 @@
-import type { RefObject } from "react";
 import {
   useCallback,
   useEffect,
@@ -15,6 +14,7 @@ import type {
 } from "@/domain/format";
 import {
   buildRegex101Url,
+  buildTokenToCaptureGroupMap,
   convertTemplateToRegex,
   countCaptureGroups,
   explainRegex,
@@ -22,6 +22,7 @@ import {
 } from "@/domain/format";
 import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { QuickReference } from "@/features/quick-reference/QuickReference";
+import { UnifiedRegexEditor } from "./UnifiedRegexEditor";
 
 interface Props {
   regex: string;
@@ -67,11 +68,13 @@ export function RegexLab({
   const [hoveredPatternTokenIndex, setHoveredPatternTokenIndex] = useState<
     number | null
   >(null);
+  const [activeCaptureGroup, setActiveCaptureGroup] = useState<number | null>(
+    null
+  );
   const [columnPickerGroupIndex, setColumnPickerGroupIndex] = useState<
     number | null
   >(null);
   const columnPickerTitleId = useId();
-  const editableRegexInputRef = useRef<HTMLInputElement>(null);
 
   const matchResult = useMemo(
     () => testRegex(regex, activeExample),
@@ -87,6 +90,10 @@ export function RegexLab({
   const explanation = useMemo(
     () => explainRegex(regex, explanationLocale),
     [regex, explanationLocale]
+  );
+  const tokenCaptureGroupMap = useMemo(
+    () => buildTokenToCaptureGroupMap(explanation.patternTokens),
+    [explanation.patternTokens]
   );
   const regex101Url = useMemo(
     () => buildRegex101Url(regex, activeExample),
@@ -135,6 +142,11 @@ export function RegexLab({
       setSelectedPatternTokenIndex(null);
     }
   }, [explanation.patternTokens.length, selectedPatternTokenIndex]);
+
+  // Clear token-driven capture highlight when regex or example changes
+  useEffect(() => {
+    setActiveCaptureGroup(null);
+  }, [regex, activeExampleIndex]);
 
   const handleGroupHover = useCallback((groupIndex: number | null) => {
     setHoveredGroup(groupIndex);
@@ -202,13 +214,11 @@ export function RegexLab({
       }
       setSelectedPatternTokenIndex(tokenIndex);
       setPatternSelection({ start: token.start, end: token.end });
-      const input = editableRegexInputRef.current;
-      if (input) {
-        input.focus();
-        input.setSelectionRange(token.start, token.end);
-      }
+      // Resolve the capture group for this token from precomputed map
+      const group = tokenCaptureGroupMap[tokenIndex] ?? null;
+      setActiveCaptureGroup(group);
     },
-    [explanation.patternTokens]
+    [explanation.patternTokens, tokenCaptureGroupMap]
   );
 
   const handleConvertTemplate = useCallback(
@@ -224,52 +234,39 @@ export function RegexLab({
 
   return (
     <div className="regex-lab">
-      {/* REGULAR EXPRESSION — regex101-style input */}
+      {/* REGULAR EXPRESSION — unified regex editor */}
       <div className="panel">
-        <div className="panel__header">{t("editor.regex")}</div>
-        <div className="panel__body regex-input-stack">
-          <div className="regex-input-stack__section">
-            <div className="regex-input-stack__label-row">
-              <div className="regex-input-stack__label">
-                {t("editor.regexEditable")}
-              </div>
-              <div className="regex-input-stack__actions">
-                <button
-                  className="btn btn--ghost btn--sm"
-                  onClick={() => handleConvertTemplate("rough")}
-                  title={t("editor.convertTemplateRough")}
-                  type="button"
-                >
-                  {t("editor.convertTemplateRough")}
-                </button>
-                <button
-                  className="btn btn--ghost btn--sm"
-                  onClick={() => handleConvertTemplate("accurate")}
-                  title={t("editor.convertTemplateAccurate")}
-                  type="button"
-                >
-                  {t("editor.convertTemplateAccurate")}
-                </button>
-              </div>
-            </div>
-            <PlainRegexPatternInput
-              inputRef={editableRegexInputRef}
-              onRegexChange={onRegexChange}
-              onSelectionChange={handlePatternSelectionChange}
-              regex={regex}
-            />
+        <div className="panel__header">
+          <span>{t("editor.regex")}</span>
+          <div className="regex-input-stack__actions">
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => handleConvertTemplate("rough")}
+              title={t("editor.convertTemplateRough")}
+              type="button"
+            >
+              {t("editor.convertTemplateRough")}
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => handleConvertTemplate("accurate")}
+              title={t("editor.convertTemplateAccurate")}
+              type="button"
+            >
+              {t("editor.convertTemplateAccurate")}
+            </button>
           </div>
-          <div className="regex-input-stack__section">
-            <div className="regex-input-stack__label">
-              {t("editor.regexHighlight")}
-            </div>
-            <RegexPatternInput
-              activeTokenIndex={activePatternTokenIndex}
-              canHighlightPattern={explanation.canHighlightPattern}
-              regex={regex}
-              tokens={explanation.patternTokens}
-            />
-          </div>
+        </div>
+        <div className="panel__body">
+          <UnifiedRegexEditor
+            activeTokenIndex={activePatternTokenIndex}
+            canHighlight={explanation.canHighlightPattern}
+            onRegexChange={onRegexChange}
+            onSelectionChange={handlePatternSelectionChange}
+            onTokenClick={handlePatternTokenActivate}
+            regex={regex}
+            tokens={explanation.patternTokens}
+          />
           {matchResult.error && (
             <div
               className="issue-item issue-item--error"
@@ -350,6 +347,7 @@ export function RegexLab({
 
           <div className="panel__body">
             <MatchOverlayTextarea
+              activeCaptureGroup={activeCaptureGroup}
               hoveredGroup={hoveredGroup}
               onTextChange={(value) =>
                 onExampleChange(activeExampleIndex, value)
@@ -366,6 +364,7 @@ export function RegexLab({
               {t("editor.matchInfo").toUpperCase()}
             </div>
             <MatchInfoPanel
+              activeCaptureGroup={activeCaptureGroup}
               captureGroups={captureGroups}
               columns={columns}
               hasMissingColumnMappings={hasMissingColumnMappings}
@@ -434,117 +433,23 @@ interface HighlightSegment {
   title?: string;
 }
 
-function PlainRegexPatternInput({
-  regex,
-  onRegexChange,
-  onSelectionChange,
-  inputRef,
-}: {
-  regex: string;
-  onRegexChange: (value: string) => void;
-  onSelectionChange: (selection: PatternSelection | null) => void;
-  inputRef: RefObject<HTMLInputElement | null>;
-}) {
-  return (
-    <div className="regex-input-wrap">
-      <span className="regex-input-wrap__slash">/</span>
-      <div className="regex-input-wrap__editor">
-        <input
-          className="regex-input-wrap__input regex-input-wrap__input--plain"
-          onChange={(e) => onRegexChange(e.target.value)}
-          onSelect={(e) => {
-            const input = e.currentTarget;
-            if (input.selectionStart == null || input.selectionEnd == null) {
-              onSelectionChange(null);
-              return;
-            }
-            onSelectionChange({
-              start: input.selectionStart,
-              end: input.selectionEnd,
-            });
-          }}
-          placeholder="^(.*)$"
-          ref={inputRef}
-          spellCheck={false}
-          value={regex}
-        />
-      </div>
-      <span className="regex-input-wrap__flags">/</span>
-    </div>
-  );
-}
-
-function RegexPatternInput({
-  regex,
-  canHighlightPattern,
-  tokens,
-  activeTokenIndex,
-}: {
-  regex: string;
-  canHighlightPattern: boolean;
-  tokens: RegexPatternToken[];
-  activeTokenIndex: number | null;
-}) {
-  const highlightsRef = useRef<HTMLDivElement>(null);
-  const segments = useMemo(
-    () => buildRegexSegments(regex, tokens, activeTokenIndex),
-    [regex, tokens, activeTokenIndex]
-  );
-
-  const handleScroll = useCallback((left: number) => {
-    if (highlightsRef.current) {
-      highlightsRef.current.scrollLeft = left;
-    }
-  }, []);
-
-  return (
-    <div className="regex-input-wrap">
-      <span className="regex-input-wrap__slash">/</span>
-      <div className="regex-input-wrap__editor">
-        {canHighlightPattern && (
-          <div
-            aria-hidden="true"
-            className="regex-input-wrap__highlights"
-            ref={highlightsRef}
-          >
-            {renderHighlightedText(segments)}
-          </div>
-        )}
-        <input
-          className={`regex-input-wrap__input regex-input-wrap__input--locked ${canHighlightPattern ? "" : "regex-input-wrap__input--plain"}`.trim()}
-          onMouseDown={(e) => e.preventDefault()}
-          onScroll={
-            canHighlightPattern
-              ? (e) => handleScroll(e.currentTarget.scrollLeft)
-              : undefined
-          }
-          placeholder="^(.*)$"
-          readOnly
-          spellCheck={false}
-          tabIndex={-1}
-          value={regex}
-        />
-      </div>
-      <span className="regex-input-wrap__flags">/</span>
-    </div>
-  );
-}
-
 function MatchOverlayTextarea({
   text,
   result,
   hoveredGroup,
+  activeCaptureGroup,
   onTextChange,
 }: {
   text: string;
   result: RegexMatchResult;
   hoveredGroup: number | null;
+  activeCaptureGroup: number | null;
   onTextChange: (value: string) => void;
 }) {
   const highlightsRef = useRef<HTMLDivElement>(null);
   const segments = useMemo(
-    () => buildMatchSegments(text, result, hoveredGroup),
-    [text, result, hoveredGroup]
+    () => buildMatchSegments(text, result, hoveredGroup, activeCaptureGroup),
+    [text, result, hoveredGroup, activeCaptureGroup]
   );
 
   const handleScroll = useCallback((top: number, left: number) => {
@@ -575,26 +480,6 @@ function MatchOverlayTextarea({
       />
     </div>
   );
-}
-
-function buildRegexSegments(
-  regex: string,
-  tokens: RegexPatternToken[],
-  activeTokenIndex: number | null
-): HighlightSegment[] {
-  if (!regex) {
-    return [{ text: "\u200b" }];
-  }
-  if (tokens.length === 0) {
-    return [{ text: regex }];
-  }
-
-  return tokens.map((token, index) => ({
-    text: token.raw,
-    title: token.description,
-    className:
-      `${getRegexTokenClass(token.type)} ${index === activeTokenIndex ? "regex-token--active" : ""}`.trim(),
-  }));
 }
 
 function resolveActivePatternTokenIndex(
@@ -666,7 +551,8 @@ function normalizeGroupsForBounds(
 function buildMatchSegments(
   text: string,
   result: RegexMatchResult,
-  hoveredGroup: number | null
+  hoveredGroup: number | null,
+  activeCaptureGroup: number | null
 ): HighlightSegment[] {
   if (!text) {
     return [{ text: "\u200b" }];
@@ -710,7 +596,7 @@ function buildMatchSegments(
     segments.push({
       text: text.slice(groupStart, groupEnd),
       className:
-        `${getGroupClass(group.index)} ${hoveredGroup === group.index ? "match-highlight--group-hovered" : ""}`.trim(),
+        `${getGroupClass(group.index)} ${hoveredGroup === group.index ? "match-highlight--group-hovered" : ""} ${activeCaptureGroup === group.index ? "match-highlight--group-active" : ""}`.trim(),
       title: `Group ${group.index}`,
     });
     cursor = groupEnd;
@@ -757,6 +643,7 @@ function getGroupClass(groupIndex: number): string {
 function MatchInfoPanel({
   result,
   hoveredGroup,
+  activeCaptureGroup,
   onGroupHover,
   captureGroups,
   columns,
@@ -767,6 +654,7 @@ function MatchInfoPanel({
 }: {
   result: RegexMatchResult;
   hoveredGroup: number | null;
+  activeCaptureGroup: number | null;
   onGroupHover: (groupIndex: number | null) => void;
   captureGroups: Array<{
     index: number;
@@ -858,7 +746,7 @@ function MatchInfoPanel({
 
                     return (
                       <tr
-                        className={`group-row ${hoveredGroup === g.index ? "group-row--hovered" : ""}`}
+                        className={`group-row ${hoveredGroup === g.index ? "group-row--hovered" : ""} ${activeCaptureGroup === g.index ? "group-row--active" : ""}`}
                         key={g.index}
                         onMouseEnter={() => onGroupHover(g.index)}
                         onMouseLeave={() => onGroupHover(null)}
