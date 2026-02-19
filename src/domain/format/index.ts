@@ -15,4 +15,5 @@ export {
 export {
   buildTokenToCaptureGroupMap,
   resolveTokenCaptureGroup,
+  resolveTokenMatchRange,
 } from "./token-capture-map";

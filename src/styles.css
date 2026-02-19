@@ -1051,6 +1051,11 @@
   outline-offset: -1px;
 }
 
+.match-highlight--range-active {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -1px;
+}
+
 /* Generic fallback for groups > 5 */
 .match-highlight--group {
   background: var(--c-group-1);

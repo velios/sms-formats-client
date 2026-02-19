@@ -1,12 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { explainRegex } from "./regex";
+import type { RegexMatchResult } from "./regex";
+import { explainRegex, testRegex } from "./regex";
 import {
   buildTokenToCaptureGroupMap,
   resolveTokenCaptureGroup,
+  resolveTokenMatchRange,
 } from "./token-capture-map";
 
 function tokensFor(pattern: string) {
   return explainRegex(pattern, "en").patternTokens;
+}
+
+/** Helper to build captureGroupMap + matchResult for a pattern/test pair */
+function setup(pattern: string, testStr: string) {
+  const tokens = tokensFor(pattern);
+  const captureGroupMap = buildTokenToCaptureGroupMap(tokens);
+  const matchResult = testRegex(pattern, testStr);
+  return { tokens, captureGroupMap, matchResult };
 }
 
 describe("buildTokenToCaptureGroupMap", () => {
@@ -130,5 +140,149 @@ describe("resolveTokenCaptureGroup", () => {
     // The capturing group should be group 1
     const capOpen = tokens.findIndex((t) => t.raw === "(");
     expect(map[capOpen]).toBe(1);
+  });
+});
+
+describe("resolveTokenMatchRange", () => {
+  it("returns the capture group match range for a token inside a group", () => {
+    // Pattern: ^(\d+) руб\.$   Test: "1000 руб."
+    const { tokens, captureGroupMap, matchResult } = setup(
+      "^(\\d+) руб\\.$",
+      "1000 руб."
+    );
+    // Find \d token (inside group 1)
+    const digitIdx = tokens.findIndex((t) => t.raw === "\\d");
+    const range = resolveTokenMatchRange(
+      digitIdx,
+      captureGroupMap,
+      matchResult
+    );
+    // Group 1 captures "1000" at positions 0..4
+    expect(range).toEqual({ start: 0, end: 4 });
+  });
+
+  it("returns the gap range before the first group", () => {
+    // Pattern: hello (\d+)$   Test: "hello 42"
+    const { tokens, captureGroupMap, matchResult } = setup(
+      "hello (\\d+)$",
+      "hello 42"
+    );
+    // Tokenizer combines "hello " into a single literal token at index 0
+    const literalIdx = tokens.findIndex((t) => t.raw === "hello ");
+    expect(literalIdx).toBe(0);
+    const range = resolveTokenMatchRange(
+      literalIdx,
+      captureGroupMap,
+      matchResult
+    );
+    // Gap before group 1: "hello " → [0, 6)
+    expect(range).toEqual({ start: 0, end: 6 });
+  });
+
+  it("returns the gap range after the last group", () => {
+    // Pattern: ^(\d+) руб\.   Test: "1000 руб."
+    const { tokens, captureGroupMap, matchResult } = setup(
+      "^(\\d+) руб\\.",
+      "1000 руб."
+    );
+    // Tokenizer combines " руб" into a single literal token
+    const rubIdx = tokens.findIndex((t) => t.raw === " руб");
+    expect(rubIdx).toBeGreaterThan(0);
+    const range = resolveTokenMatchRange(rubIdx, captureGroupMap, matchResult);
+    // Gap after group 1: " руб." → [4, 9)
+    expect(range).toEqual({ start: 4, end: 9 });
+  });
+
+  it("returns the gap range between two groups", () => {
+    // Pattern: ^(\d+) - (\w+)$   Test: "100 - abc"
+    const { tokens, captureGroupMap, matchResult } = setup(
+      "^(\\d+) - (\\w+)$",
+      "100 - abc"
+    );
+    // Tokenizer combines " - " into a single literal token between groups
+    const gapIdx = tokens.findIndex((t) => t.raw === " - ");
+    expect(gapIdx).toBeGreaterThan(0);
+    const range = resolveTokenMatchRange(gapIdx, captureGroupMap, matchResult);
+    // Gap between groups: " - " → [3, 6)
+    expect(range).toEqual({ start: 3, end: 6 });
+  });
+
+  it("returns null when there is no match", () => {
+    const tokens = tokensFor("^(\\d+)$");
+    const captureGroupMap = buildTokenToCaptureGroupMap(tokens);
+    const noMatch: RegexMatchResult = {
+      matched: false,
+      fullMatch: null,
+      matchStart: null,
+      matchEnd: null,
+      groups: [],
+      error: null,
+    };
+    const range = resolveTokenMatchRange(2, captureGroupMap, noMatch);
+    expect(range).toBeNull();
+  });
+
+  it("returns null for out-of-bounds token index", () => {
+    const { captureGroupMap, matchResult } = setup("^(\\d+)$", "42");
+    expect(resolveTokenMatchRange(-1, captureGroupMap, matchResult)).toBeNull();
+    expect(
+      resolveTokenMatchRange(999, captureGroupMap, matchResult)
+    ).toBeNull();
+  });
+
+  it("returns null for an optional group that did not capture", () => {
+    // Pattern: ^(\d+)?(\w+)$   Test: "abc"
+    // Group 1 is optional and won't match; group 2 captures "abc"
+    const { tokens, captureGroupMap, matchResult } = setup(
+      "^(\\d+)?(\\w+)$",
+      "abc"
+    );
+    // Token inside group 1 (e.g. \d)
+    const digitIdx = tokens.findIndex((t) => t.raw === "\\d");
+    const range = resolveTokenMatchRange(
+      digitIdx,
+      captureGroupMap,
+      matchResult
+    );
+    expect(range).toBeNull();
+  });
+
+  it("handles nested groups — returns innermost group's range", () => {
+    // Pattern: ^((\d+)-(\w+))$   Test: "123-abc"
+    const { tokens, captureGroupMap, matchResult } = setup(
+      "^((\\d+)-(\\w+))$",
+      "123-abc"
+    );
+    // \d token is inside group 2 (innermost)
+    const digitIdx = tokens.findIndex((t) => t.raw === "\\d");
+    const range = resolveTokenMatchRange(
+      digitIdx,
+      captureGroupMap,
+      matchResult
+    );
+    // Group 2 captures "123" → [0, 3)
+    expect(range).toEqual({ start: 0, end: 3 });
+  });
+
+  it("handles nested groups — literal between inner groups maps to outer group", () => {
+    // Pattern: ^((\d+)-(\w+))$   Test: "123-abc"
+    const { tokens, captureGroupMap, matchResult } = setup(
+      "^((\\d+)-(\\w+))$",
+      "123-abc"
+    );
+    // "-" literal belongs to outer group 1
+    const dashIdx = tokens.findIndex((t) => t.raw === "-");
+    expect(captureGroupMap[dashIdx]).toBe(1);
+    const range = resolveTokenMatchRange(dashIdx, captureGroupMap, matchResult);
+    // Group 1 captures "123-abc" → [0, 7)
+    expect(range).toEqual({ start: 0, end: 7 });
+  });
+
+  it("returns gap when all tokens are outside groups (no groups)", () => {
+    // Pattern: hello   Test: "hello"
+    const { captureGroupMap, matchResult } = setup("hello", "hello");
+    const range = resolveTokenMatchRange(0, captureGroupMap, matchResult);
+    // Entire match is a "gap" → [0, 5)
+    expect(range).toEqual({ start: 0, end: 5 });
   });
 });

@@ -18,6 +18,7 @@ import {
   convertTemplateToRegex,
   countCaptureGroups,
   explainRegex,
+  resolveTokenMatchRange,
   testRegex,
 } from "@/domain/format";
 import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
@@ -71,6 +72,10 @@ export function RegexLab({
   const [activeCaptureGroup, setActiveCaptureGroup] = useState<number | null>(
     null
   );
+  const [activeMatchRange, setActiveMatchRange] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
   const [columnPickerGroupIndex, setColumnPickerGroupIndex] = useState<
     number | null
   >(null);
@@ -146,6 +151,7 @@ export function RegexLab({
   // Clear token-driven capture highlight when regex or example changes
   useEffect(() => {
     setActiveCaptureGroup(null);
+    setActiveMatchRange(null);
   }, [regex, activeExampleIndex]);
 
   const handleGroupHover = useCallback((groupIndex: number | null) => {
@@ -217,8 +223,15 @@ export function RegexLab({
       // Resolve the capture group for this token from precomputed map
       const group = tokenCaptureGroupMap[tokenIndex] ?? null;
       setActiveCaptureGroup(group);
+      // Resolve the match-text range (works for both groups and gaps)
+      const range = resolveTokenMatchRange(
+        tokenIndex,
+        tokenCaptureGroupMap,
+        matchResult
+      );
+      setActiveMatchRange(range);
     },
-    [explanation.patternTokens, tokenCaptureGroupMap]
+    [explanation.patternTokens, tokenCaptureGroupMap, matchResult]
   );
 
   const handleConvertTemplate = useCallback(
@@ -347,7 +360,7 @@ export function RegexLab({
 
           <div className="panel__body">
             <MatchOverlayTextarea
-              activeCaptureGroup={activeCaptureGroup}
+              activeMatchRange={activeMatchRange}
               hoveredGroup={hoveredGroup}
               onTextChange={(value) =>
                 onExampleChange(activeExampleIndex, value)
@@ -437,19 +450,19 @@ function MatchOverlayTextarea({
   text,
   result,
   hoveredGroup,
-  activeCaptureGroup,
+  activeMatchRange,
   onTextChange,
 }: {
   text: string;
   result: RegexMatchResult;
   hoveredGroup: number | null;
-  activeCaptureGroup: number | null;
+  activeMatchRange: { start: number; end: number } | null;
   onTextChange: (value: string) => void;
 }) {
   const highlightsRef = useRef<HTMLDivElement>(null);
   const segments = useMemo(
-    () => buildMatchSegments(text, result, hoveredGroup, activeCaptureGroup),
-    [text, result, hoveredGroup, activeCaptureGroup]
+    () => buildMatchSegments(text, result, hoveredGroup, activeMatchRange),
+    [text, result, hoveredGroup, activeMatchRange]
   );
 
   const handleScroll = useCallback((top: number, left: number) => {
@@ -510,6 +523,17 @@ function buildMatchClass(hoveredGroup: number | null): string {
     : "match-highlight";
 }
 
+function isSegmentInActiveRange(
+  segStart: number,
+  segEnd: number,
+  activeRange: { start: number; end: number } | null
+): boolean {
+  if (!activeRange) {
+    return false;
+  }
+  return segStart < activeRange.end && segEnd > activeRange.start;
+}
+
 function resolveMatchBounds(
   text: string,
   result: RegexMatchResult
@@ -552,7 +576,7 @@ function buildMatchSegments(
   text: string,
   result: RegexMatchResult,
   hoveredGroup: number | null,
-  activeCaptureGroup: number | null
+  activeMatchRange: { start: number; end: number } | null
 ): HighlightSegment[] {
   if (!text) {
     return [{ text: "\u200b" }];
@@ -587,25 +611,42 @@ function buildMatchSegments(
     }
 
     if (groupStart > cursor) {
+      const gapActive = isSegmentInActiveRange(
+        cursor,
+        groupStart,
+        activeMatchRange
+      );
       segments.push({
         text: text.slice(cursor, groupStart),
-        className: buildMatchClass(hoveredGroup),
+        className:
+          `${buildMatchClass(hoveredGroup)} ${gapActive ? "match-highlight--range-active" : ""}`.trim(),
       });
     }
 
+    const groupActive = isSegmentInActiveRange(
+      groupStart,
+      groupEnd,
+      activeMatchRange
+    );
     segments.push({
       text: text.slice(groupStart, groupEnd),
       className:
-        `${getGroupClass(group.index)} ${hoveredGroup === group.index ? "match-highlight--group-hovered" : ""} ${activeCaptureGroup === group.index ? "match-highlight--group-active" : ""}`.trim(),
+        `${getGroupClass(group.index)} ${hoveredGroup === group.index ? "match-highlight--group-hovered" : ""} ${groupActive ? "match-highlight--range-active" : ""}`.trim(),
       title: `Group ${group.index}`,
     });
     cursor = groupEnd;
   }
 
   if (cursor < boundedFullMatchEnd) {
+    const tailActive = isSegmentInActiveRange(
+      cursor,
+      boundedFullMatchEnd,
+      activeMatchRange
+    );
     segments.push({
       text: text.slice(cursor, boundedFullMatchEnd),
-      className: buildMatchClass(hoveredGroup),
+      className:
+        `${buildMatchClass(hoveredGroup)} ${tailActive ? "match-highlight--range-active" : ""}`.trim(),
     });
   }
 
