@@ -15,7 +15,6 @@ import type {
 import {
   buildRegex101Url,
   buildTokenToCaptureGroupMap,
-  convertTemplateToRegex,
   countCaptureGroups,
   explainRegex,
   resolveTokenMatchRange,
@@ -69,13 +68,6 @@ export function RegexLab({
   const [hoveredPatternTokenIndex, setHoveredPatternTokenIndex] = useState<
     number | null
   >(null);
-  const [activeCaptureGroup, setActiveCaptureGroup] = useState<number | null>(
-    null
-  );
-  const [activeMatchRange, setActiveMatchRange] = useState<{
-    start: number;
-    end: number;
-  } | null>(null);
   const [columnPickerGroupIndex, setColumnPickerGroupIndex] = useState<
     number | null
   >(null);
@@ -116,6 +108,25 @@ export function RegexLab({
     hoveredPatternTokenIndex ??
     resolvedPatternTokenIndexFromSelection ??
     selectedPatternTokenIndex;
+
+  // Derived reactively from activePatternTokenIndex so hover also syncs
+  const activeCaptureGroup = useMemo(() => {
+    if (activePatternTokenIndex == null) {
+      return null;
+    }
+    return tokenCaptureGroupMap[activePatternTokenIndex] ?? null;
+  }, [activePatternTokenIndex, tokenCaptureGroupMap]);
+  const activeMatchRange = useMemo(() => {
+    if (activePatternTokenIndex == null) {
+      return null;
+    }
+    return resolveTokenMatchRange(
+      activePatternTokenIndex,
+      tokenCaptureGroupMap,
+      matchResult
+    );
+  }, [activePatternTokenIndex, tokenCaptureGroupMap, matchResult]);
+
   const captureGroupCount = useMemo(
     () => countCaptureGroups(regex) ?? 0,
     [regex]
@@ -148,10 +159,9 @@ export function RegexLab({
     }
   }, [explanation.patternTokens.length, selectedPatternTokenIndex]);
 
-  // Clear token-driven capture highlight when regex or example changes
+  // Clear selected token when regex or example changes
   useEffect(() => {
-    setActiveCaptureGroup(null);
-    setActiveMatchRange(null);
+    setSelectedPatternTokenIndex(null);
   }, [regex, activeExampleIndex]);
 
   const handleGroupHover = useCallback((groupIndex: number | null) => {
@@ -220,29 +230,8 @@ export function RegexLab({
       }
       setSelectedPatternTokenIndex(tokenIndex);
       setPatternSelection({ start: token.start, end: token.end });
-      // Resolve the capture group for this token from precomputed map
-      const group = tokenCaptureGroupMap[tokenIndex] ?? null;
-      setActiveCaptureGroup(group);
-      // Resolve the match-text range (works for both groups and gaps)
-      const range = resolveTokenMatchRange(
-        tokenIndex,
-        tokenCaptureGroupMap,
-        matchResult
-      );
-      setActiveMatchRange(range);
     },
-    [explanation.patternTokens, tokenCaptureGroupMap, matchResult]
-  );
-
-  const handleConvertTemplate = useCallback(
-    (precision: "rough" | "accurate") => {
-      if (!regex.trim()) {
-        return;
-      }
-      const converted = convertTemplateToRegex(regex, precision);
-      onRegexChange(converted);
-    },
-    [onRegexChange, regex]
+    [explanation.patternTokens]
   );
 
   return (
@@ -251,24 +240,6 @@ export function RegexLab({
       <div className="panel">
         <div className="panel__header">
           <span>{t("editor.regex")}</span>
-          <div className="regex-input-stack__actions">
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={() => handleConvertTemplate("rough")}
-              title={t("editor.convertTemplateRough")}
-              type="button"
-            >
-              {t("editor.convertTemplateRough")}
-            </button>
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={() => handleConvertTemplate("accurate")}
-              title={t("editor.convertTemplateAccurate")}
-              type="button"
-            >
-              {t("editor.convertTemplateAccurate")}
-            </button>
-          </div>
         </div>
         <div className="panel__body">
           <UnifiedRegexEditor
@@ -277,6 +248,7 @@ export function RegexLab({
             onRegexChange={onRegexChange}
             onSelectionChange={handlePatternSelectionChange}
             onTokenClick={handlePatternTokenActivate}
+            onTokenHover={setHoveredPatternTokenIndex}
             regex={regex}
             tokens={explanation.patternTokens}
           />
@@ -870,6 +842,18 @@ function ExplanationPanel({
   onPatternTokenHover: (tokenIndex: number | null) => void;
 }) {
   const { t } = useTranslation();
+  const tokenRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  // Auto-scroll the active token into view within the explanation panel
+  useEffect(() => {
+    if (activePatternTokenIndex == null) {
+      return;
+    }
+    const el = tokenRefs.current.get(activePatternTokenIndex);
+    if (el) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [activePatternTokenIndex]);
 
   return (
     <div className="panel__body">
@@ -900,6 +884,13 @@ function ExplanationPanel({
               onMouseEnter={() => onPatternTokenHover(index)}
               onMouseLeave={() => onPatternTokenHover(null)}
               onMouseUp={() => onPatternTokenActivate(index)}
+              ref={(el) => {
+                if (el) {
+                  tokenRefs.current.set(index, el);
+                } else {
+                  tokenRefs.current.delete(index);
+                }
+              }}
               role="button"
               tabIndex={0}
             >

@@ -5,7 +5,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { RegexPatternToken } from "@/domain/format";
 
 /* ─── Token decoration state effect ─── */
@@ -92,6 +92,7 @@ const baseTheme = EditorView.theme({
   },
   ".cm-line": {
     padding: "0",
+    marginBottom: "2px",
   },
   "&.cm-focused": {
     outline: "none",
@@ -130,6 +131,7 @@ interface UnifiedRegexEditorProps {
   canHighlight: boolean;
   activeTokenIndex: number | null;
   onTokenClick?: (tokenIndex: number) => void;
+  onTokenHover?: (tokenIndex: number | null) => void;
   onSelectionChange?: (
     selection: {
       start: number;
@@ -145,6 +147,7 @@ export function UnifiedRegexEditor({
   canHighlight,
   activeTokenIndex,
   onTokenClick,
+  onTokenHover,
   onSelectionChange,
 }: UnifiedRegexEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -153,8 +156,14 @@ export function UnifiedRegexEditor({
     onRegexChange,
     onSelectionChange,
     onTokenClick,
+    onTokenHover,
   });
-  callbacksRef.current = { onRegexChange, onSelectionChange, onTokenClick };
+  callbacksRef.current = {
+    onRegexChange,
+    onSelectionChange,
+    onTokenClick,
+    onTokenHover,
+  };
 
   // Create editor once on mount
   useEffect(() => {
@@ -242,11 +251,36 @@ export function UnifiedRegexEditor({
     });
   }, [tokens, canHighlight, activeTokenIndex]);
 
+  // Resolve token under mouse pointer on hover
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+    const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+    if (pos == null) {
+      callbacksRef.current.onTokenHover?.(null);
+      return;
+    }
+    const currentTokens = view.state.field(tokensForClickField);
+    const idx = currentTokens.findIndex((t) => pos >= t.start && pos < t.end);
+    callbacksRef.current.onTokenHover?.(idx >= 0 ? idx : null);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    callbacksRef.current.onTokenHover?.(null);
+  }, []);
+
   return (
     <div className="regex-input-wrap">
       <span className="regex-input-wrap__slash">/</span>
       <div className="regex-input-wrap__editor">
-        <div className="unified-regex-cm" ref={containerRef} />
+        <div
+          className="unified-regex-cm"
+          onMouseLeave={handleMouseLeave}
+          onMouseMove={handleMouseMove}
+          ref={containerRef}
+        />
       </div>
       <span className="regex-input-wrap__flags">/</span>
     </div>

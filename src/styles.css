@@ -627,6 +627,28 @@
     overflow: hidden;
   }
 
+  .format-editor__toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    height: 52px;
+    min-height: 52px;
+    flex-shrink: 0;
+  }
+
+  .format-editor__file-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex: 1;
+    min-width: 0;
+    margin-left: var(--space-sm);
+  }
+
+  .mode-tabs--inline {
+    flex-shrink: 0;
+  }
+
   .regex-lab {
     @apply flex flex-1 flex-col;
     gap: var(--space-md);

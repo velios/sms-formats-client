@@ -308,16 +308,30 @@ export function FormatEditor({
 
   return (
     <div className="format-editor">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-sm">
+      {/* Compact header: mode tabs + file name + actions */}
+      <div className="format-editor__toolbar">
+        <div className="mode-tabs mode-tabs--inline">
+          <button
+            className={`mode-tab ${mode === "structured" ? "mode-tab--active" : ""}`}
+            onClick={() => setMode("structured")}
+          >
+            {t("editor.structured")}
+          </button>
+          <button
+            className={`mode-tab ${mode === "raw" ? "mode-tab--active" : ""}`}
+            onClick={() => setMode("raw")}
+          >
+            {t("editor.raw")}
+          </button>
+        </div>
+        <div className="format-editor__file-info">
           <span className="font-medium text-mono">{fileName}</span>
           <button className="btn btn--ghost btn--sm" onClick={handleRename}>
             {t("editor.renameFormat")}
           </button>
           <a
             aria-label={t("bank.openFormatInRepo")}
-            className="format-row-link"
+            className="btn btn--ghost btn--sm"
             href={formatRepoUrl}
             onClick={(e) => e.stopPropagation()}
             rel="noreferrer"
@@ -348,22 +362,6 @@ export function FormatEditor({
             {saveLabel}
           </button>
         </div>
-      </div>
-
-      {/* 3-block mode tabs */}
-      <div className="mode-tabs">
-        <button
-          className={`mode-tab ${mode === "structured" ? "mode-tab--active" : ""}`}
-          onClick={() => setMode("structured")}
-        >
-          {t("editor.structured")}
-        </button>
-        <button
-          className={`mode-tab ${mode === "raw" ? "mode-tab--active" : ""}`}
-          onClick={() => setMode("raw")}
-        >
-          {t("editor.raw")}
-        </button>
       </div>
 
       {/* Parse errors */}
