@@ -12,7 +12,6 @@ interface Props {
   filePath: string;
   allFormatFiles: string[];
   onRenameFile: (fromPath: string, toPath: string) => boolean;
-  onOpenValidation: () => void;
 }
 
 function computeSaveDisabled(params: {
@@ -71,7 +70,6 @@ export function FormatEditor({
   filePath,
   allFormatFiles,
   onRenameFile,
-  onOpenValidation,
 }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
@@ -341,9 +339,6 @@ export function FormatEditor({
             onClick={handleReset}
           >
             {resetLabel}
-          </button>
-          <button className="btn bank-actions__btn" onClick={onOpenValidation}>
-            {t("editor.validation")}
           </button>
           <button
             className="btn btn--primary bank-actions__btn"

@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { parseFormatFile } from "@/domain/format";
 import { fetchFileContent } from "@/domain/github";
 import type { BankInfo, RepoRef, ValidationIssue } from "@/domain/types";
-import { validateBankLevel } from "@/domain/validation";
+import {
+  checkCrossFormatCollisions,
+  validateFormat,
+} from "@/domain/validation";
 import { useDraftStore, useSourceStore } from "@/store";
 
 interface Props {
   bankPath: string;
   bank: BankInfo | null;
+  changedFormatPaths: string[];
   onClose: () => void;
 }
 
@@ -18,99 +23,81 @@ interface ValidationDraftStore {
   ) => { content: string; remoteContent: string } | undefined;
 }
 
-function isBankFormatPath(bankPath: string, path: string): boolean {
-  return path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt");
-}
-
-function collectAllFormatPaths(
-  bankPath: string,
-  bank: BankInfo,
-  draftStore: ValidationDraftStore
-): string[] {
-  const allPaths = new Set(bank.formatFiles);
-  for (const [path] of draftStore.drafts) {
-    if (isBankFormatPath(bankPath, path)) {
-      allPaths.add(path);
-    }
-  }
-  return Array.from(allPaths);
-}
-
-function splitDraftAndRemotePaths(
-  paths: string[],
-  draftStore: ValidationDraftStore
-): { formatContents: Map<string, string>; pathsToLoadRemotely: string[] } {
-  const formatContents = new Map<string, string>();
-  const pathsToLoadRemotely: string[] = [];
-
-  for (const path of paths) {
-    const draft = draftStore.getDraft(path);
-    if (draft && draft.content !== draft.remoteContent) {
-      formatContents.set(path, draft.content);
-      continue;
-    }
-    pathsToLoadRemotely.push(path);
-  }
-
-  return { formatContents, pathsToLoadRemotely };
-}
-
-async function loadRemoteFormatContents(params: {
-  pathsToLoadRemotely: string[];
-  sourceRefName: string;
+async function loadLatestFormatContent(params: {
+  path: string;
+  sourceRefName: string | null;
   repository: RepoRef;
   draftStore: ValidationDraftStore;
-  formatContents: Map<string, string>;
-}) {
-  const {
-    pathsToLoadRemotely,
-    sourceRefName,
-    repository,
-    draftStore,
-    formatContents,
-  } = params;
-
-  await Promise.all(
-    pathsToLoadRemotely.map(async (path) => {
-      try {
-        const remoteContent = await fetchFileContent(
-          path,
-          sourceRefName,
-          repository
-        );
-        formatContents.set(path, remoteContent);
-      } catch {
-        const draft = draftStore.getDraft(path);
-        if (draft) {
-          formatContents.set(path, draft.content);
-        }
-      }
-    })
-  );
-}
-
-function loadDraftFallbackContents(params: {
-  pathsToLoadRemotely: string[];
-  draftStore: ValidationDraftStore;
-  formatContents: Map<string, string>;
-}) {
-  const { pathsToLoadRemotely, draftStore, formatContents } = params;
-  for (const path of pathsToLoadRemotely) {
-    const draft = draftStore.getDraft(path);
-    if (draft) {
-      formatContents.set(path, draft.content);
-    }
+}): Promise<string | null> {
+  const { path, sourceRefName, repository, draftStore } = params;
+  const draft = draftStore.getDraft(path);
+  if (draft && draft.content !== draft.remoteContent) {
+    return draft.content;
+  }
+  if (!sourceRefName) {
+    return draft?.content ?? null;
+  }
+  try {
+    return await fetchFileContent(path, sourceRefName, repository);
+  } catch {
+    return draft?.content ?? null;
   }
 }
 
-function hasDraftSenders(
-  bankPath: string,
-  draftStore: ValidationDraftStore
-): boolean {
-  return !!draftStore.getDraft(`${bankPath}/senders.txt`);
+async function collectChangedFormatContents(params: {
+  changedFormatPaths: string[];
+  sourceRefName: string | null;
+  repository: RepoRef;
+  draftStore: ValidationDraftStore;
+}): Promise<Map<string, string>> {
+  const { changedFormatPaths, sourceRefName, repository, draftStore } = params;
+  const entries = await Promise.all(
+    changedFormatPaths.map(async (path) => {
+      const latestContent = await loadLatestFormatContent({
+        path,
+        sourceRefName,
+        repository,
+        draftStore,
+      });
+      return latestContent == null ? null : ([path, latestContent] as const);
+    })
+  );
+
+  const formatContents = new Map<string, string>();
+  for (const entry of entries) {
+    if (!entry) {
+      continue;
+    }
+    formatContents.set(entry[0], entry[1]);
+  }
+  return formatContents;
 }
 
-export function ValidationPanel({ bankPath, bank, onClose }: Props) {
+function runChangedFormatsValidation(
+  formatContents: Map<string, string>
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const parsedFormats: Array<{
+    filePath: string;
+    parsed: ReturnType<typeof parseFormatFile>;
+  }> = [];
+
+  for (const [path, content] of formatContents) {
+    const parsed = parseFormatFile(content, path);
+    parsedFormats.push({ filePath: path, parsed });
+    issues.push(...validateFormat(parsed, path));
+  }
+
+  issues.push(...checkCrossFormatCollisions(parsedFormats));
+  return issues;
+}
+
+export function ValidationPanel({
+  bankPath,
+  bank,
+  changedFormatPaths,
+  onClose,
+}: Props) {
   const { t } = useTranslation();
   const dialogTitleId = useId();
   const draftStore = useDraftStore();
@@ -138,38 +125,23 @@ export function ValidationPanel({ bankPath, bank, onClose }: Props) {
       }
 
       const sourceRefName = sourceRef?.sha ?? sourceRef?.name ?? null;
-      const allPaths = collectAllFormatPaths(bankPath, bank, draftStore);
-      const { formatContents, pathsToLoadRemotely } = splitDraftAndRemotePaths(
-        allPaths,
-        draftStore
-      );
-
-      if (sourceRefName) {
-        await loadRemoteFormatContents({
-          pathsToLoadRemotely,
-          sourceRefName,
-          repository,
-          draftStore,
-          formatContents,
-        });
-      } else {
-        loadDraftFallbackContents({
-          pathsToLoadRemotely,
-          draftStore,
-          formatContents,
-        });
+      if (changedFormatPaths.length === 0) {
+        setIssues([]);
+        return;
       }
 
-      const bankForValidation: BankInfo = {
-        ...bank,
-        hasSenders: bank.hasSenders || hasDraftSenders(bankPath, draftStore),
-      };
-      setIssues(validateBankLevel(bankForValidation, formatContents));
+      const formatContents = await collectChangedFormatContents({
+        changedFormatPaths,
+        sourceRefName,
+        repository,
+        draftStore,
+      });
+      setIssues(runChangedFormatsValidation(formatContents));
     } finally {
       setRan(true);
       setRunning(false);
     }
-  }, [bank, bankPath, draftStore, repository, sourceRef]);
+  }, [bank, bankPath, changedFormatPaths, draftStore, repository, sourceRef]);
 
   useEffect(() => {
     if (hasAutoRun.current) {

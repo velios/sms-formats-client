@@ -564,7 +564,6 @@ function renderWorkspaceContent(params: {
   selectedFile: string | null;
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
-  onOpenValidation: () => void;
   t: (key: string) => string;
 }): ReactNode {
   const {
@@ -573,7 +572,6 @@ function renderWorkspaceContent(params: {
     selectedFile,
     allFormatFiles,
     handleRenameFile,
-    onOpenValidation,
     t,
   } = params;
   if (showSenders) {
@@ -585,7 +583,6 @@ function renderWorkspaceContent(params: {
         allFormatFiles={allFormatFiles}
         filePath={selectedFile}
         key={selectedFile}
-        onOpenValidation={onOpenValidation}
         onRenameFile={handleRenameFile}
       />
     );
@@ -600,6 +597,7 @@ function renderWorkspaceContent(params: {
 function BankActionsPanel(params: {
   bankPath: string;
   onApprovePullRequest: () => void;
+  onOpenValidation: () => void;
   onPublish: () => void;
   onOpenQuickCheck: () => void;
   approvePullRequestError: string | null;
@@ -615,6 +613,7 @@ function BankActionsPanel(params: {
   const {
     bankPath,
     onApprovePullRequest,
+    onOpenValidation,
     onPublish,
     onOpenQuickCheck,
     approvePullRequestError,
@@ -651,6 +650,12 @@ function BankActionsPanel(params: {
       {approvePullRequestError && (
         <div className="badge badge--error">{approvePullRequestError}</div>
       )}
+      <button
+        className="btn bank-actions__btn w-full"
+        onClick={onOpenValidation}
+      >
+        {t("editor.validation")}
+      </button>
       <button
         className="btn bank-actions__btn w-full"
         onClick={onOpenQuickCheck}
@@ -1245,6 +1250,10 @@ export function BankWorkspace() {
       ]),
     [localChangedFormatFiles, sourceChangedFormatFiles]
   );
+  const changedFormatPathsForValidation = useMemo(
+    () => Array.from(changedFormatFiles),
+    [changedFormatFiles]
+  );
 
   const allFormatFiles = useMemo(() => {
     return collectAllFormatFiles(
@@ -1421,6 +1430,7 @@ export function BankWorkspace() {
             void handleApprovePullRequest();
           }}
           onOpenQuickCheck={() => setShowQuickCheck(true)}
+          onOpenValidation={() => setShowValidation(true)}
           onPublish={handlePublishAction}
           publishActionLabel={publishActionLabel}
           publishError={publishError}
@@ -1463,7 +1473,6 @@ export function BankWorkspace() {
           selectedFile,
           allFormatFiles,
           handleRenameFile,
-          onOpenValidation: () => setShowValidation(true),
           t,
         })}
       </div>
@@ -1490,6 +1499,7 @@ export function BankWorkspace() {
         <ValidationPanel
           bank={bank ?? null}
           bankPath={bankPath}
+          changedFormatPaths={changedFormatPathsForValidation}
           onClose={() => setShowValidation(false)}
         />
       )}
