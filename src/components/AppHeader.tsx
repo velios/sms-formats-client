@@ -103,7 +103,7 @@ export function AppHeader() {
         </button>
         <button
           aria-label={t("githubAuth.openSettings")}
-          className="btn app-header__settings-btn"
+          className="app-header__settings-btn"
           onClick={openGitHubTokenModal}
           title={
             hasSavedGitHubToken
