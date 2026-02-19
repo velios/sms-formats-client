@@ -9,6 +9,13 @@ import {
 import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
+import {
+  type BankRouteSource,
+  isRouteSourceMatched,
+  type ParsedBankRouteParams,
+  parseBankRouteParams,
+  resolveRouteRepository,
+} from "@/domain/bank-route";
 import { parseFormatFile } from "@/domain/format";
 import {
   approvePullRequest,
@@ -19,7 +26,7 @@ import {
   updatePullRequestHead,
 } from "@/domain/github";
 import { type FormatSearchDoc, searchFormatPaths } from "@/domain/search";
-import type { BankInfo } from "@/domain/types";
+import type { BankInfo, RepoRef, SourceRef } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { PublishPanel } from "@/features/publish-panel/PublishPanel";
@@ -27,6 +34,7 @@ import { QuickCheckPanel } from "@/features/quick-check/QuickCheckPanel";
 import { RefreshButton } from "@/features/refresh/RefreshButton";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
+import { useSwitchRepository, useSwitchSource } from "@/hooks/useGitHub";
 import { useDraftStore, useSourceStore } from "@/store";
 
 const RECENT_FILES_KEY = "sms-formats-recent-formats";
@@ -1161,21 +1169,192 @@ function useBankPublishAction(params: {
   };
 }
 
+type SwitchSourceHandler = (
+  type: "branch" | "pr",
+  name: string,
+  prNumber?: number,
+  shaHint?: string
+) => Promise<void>;
+type SwitchRepositoryHandler = (nextRepository: RepoRef) => Promise<void>;
+
+function makeRouteSyncKey(params: {
+  parsedRoute: ParsedBankRouteParams;
+  routeRepository: RepoRef | null;
+}): string {
+  const { parsedRoute, routeRepository } = params;
+  if (!parsedRoute.isStructuredRoute) {
+    return "";
+  }
+  const repoKey = routeRepository
+    ? `${routeRepository.owner}/${routeRepository.repo}`
+    : "";
+  if (!parsedRoute.source) {
+    return `repo:${repoKey}|source:none`;
+  }
+  if (parsedRoute.source.type === "pr") {
+    return `repo:${repoKey}|source:pr:${parsedRoute.source.prNumber}`;
+  }
+  return `repo:${repoKey}|source:branch:${parsedRoute.source.name}`;
+}
+
+async function syncRouteSource(params: {
+  targetSource: BankRouteSource | null;
+  switchSource: SwitchSourceHandler;
+}) {
+  const { targetSource, switchSource } = params;
+  if (!targetSource) {
+    return;
+  }
+  const currentSource = useSourceStore.getState().sourceRef;
+  if (targetSource.type === "pr") {
+    const alreadySelected =
+      currentSource?.type === "pr" &&
+      currentSource.prNumber === targetSource.prNumber;
+    if (!alreadySelected) {
+      await switchSource("pr", config.defaultBranch, targetSource.prNumber);
+    }
+    return;
+  }
+
+  const alreadySelected =
+    currentSource?.type === "branch" &&
+    currentSource.name === targetSource.name;
+  if (!alreadySelected) {
+    await switchSource("branch", targetSource.name);
+  }
+}
+
+function useRouteStateSync(params: {
+  parsedRoute: ParsedBankRouteParams;
+  repository: RepoRef;
+  sourceRef: SourceRef | null;
+  switchRepository: SwitchRepositoryHandler;
+  switchSource: SwitchSourceHandler;
+}) {
+  const { parsedRoute, repository, sourceRef, switchRepository, switchSource } =
+    params;
+  const [isRouteSyncInFlight, setIsRouteSyncInFlight] = useState(false);
+  const [routeSyncAttemptKey, setRouteSyncAttemptKey] = useState<string | null>(
+    null
+  );
+
+  const routeRepository = useMemo(
+    () => resolveRouteRepository(parsedRoute.repoOwner, repository),
+    [parsedRoute.repoOwner, repository]
+  );
+  const routeRepoMismatch = useMemo(() => {
+    if (!routeRepository) {
+      return false;
+    }
+    return (
+      routeRepository.owner !== repository.owner ||
+      routeRepository.repo !== repository.repo
+    );
+  }, [routeRepository, repository]);
+  const routeSourceMismatch = useMemo(
+    () => !isRouteSourceMatched(sourceRef, parsedRoute.source),
+    [parsedRoute.source, sourceRef]
+  );
+  const routeSyncKey = useMemo(
+    () => makeRouteSyncKey({ parsedRoute, routeRepository }),
+    [parsedRoute, routeRepository]
+  );
+  const routeNeedsSync =
+    parsedRoute.isStructuredRoute && (routeRepoMismatch || routeSourceMismatch);
+  const waitForInitialSource = parsedRoute.isStructuredRoute && !sourceRef;
+  const routeSyncPending =
+    waitForInitialSource ||
+    (routeNeedsSync && routeSyncAttemptKey !== routeSyncKey);
+
+  useEffect(() => {
+    setRouteSyncAttemptKey((current) =>
+      current && current !== routeSyncKey ? null : current
+    );
+  }, [routeSyncKey]);
+
+  useEffect(() => {
+    if (!sourceRef) {
+      return;
+    }
+    if (!routeNeedsSync) {
+      return;
+    }
+    if (!routeSyncKey || routeSyncAttemptKey === routeSyncKey) {
+      return;
+    }
+
+    let isCancelled = false;
+    setRouteSyncAttemptKey(routeSyncKey);
+
+    const runSync = async () => {
+      setIsRouteSyncInFlight(true);
+      try {
+        if (routeRepository && routeRepoMismatch) {
+          await switchRepository(routeRepository);
+        }
+        await syncRouteSource({
+          targetSource: parsedRoute.source,
+          switchSource,
+        });
+      } finally {
+        if (!isCancelled) {
+          setIsRouteSyncInFlight(false);
+        }
+      }
+    };
+
+    void runSync();
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    parsedRoute.source,
+    routeNeedsSync,
+    routeRepoMismatch,
+    routeRepository,
+    sourceRef,
+    routeSyncAttemptKey,
+    routeSyncKey,
+    switchRepository,
+    switchSource,
+  ]);
+
+  return { isRouteSyncInFlight, routeSyncPending };
+}
+
 export function BankWorkspace() {
   const { t } = useTranslation();
-  const { bankPath: encodedBankPath } = useParams();
+  const routeParams = useParams();
   const [searchParams] = useSearchParams();
-  const bankPath = decodeURIComponent(encodedBankPath ?? "");
+  const parsedRoute = useMemo(
+    () =>
+      parseBankRouteParams({
+        bankKey: routeParams.bankKey,
+        repoOwner: routeParams.repoOwner,
+        branchOrPr: routeParams.branchOrPr,
+      }),
+    [routeParams.bankKey, routeParams.repoOwner, routeParams.branchOrPr]
+  );
+  const bankPath = parsedRoute.bankPath;
   const requestedFile = useMemo(
     () => decodeRequestedFileValue(searchParams),
     [searchParams]
   );
 
+  const switchSource = useSwitchSource();
+  const switchRepository = useSwitchRepository();
   const banks = useSourceStore((s) => s.banks);
   const setBanks = useSourceStore((s) => s.setBanks);
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
   const repository = useSourceStore((s) => s.repository);
+  const { isRouteSyncInFlight, routeSyncPending } = useRouteStateSync({
+    parsedRoute,
+    repository,
+    sourceRef,
+    switchRepository,
+    switchSource,
+  });
 
   const bank = useMemo(
     () => banks.find((b) => b.folderPath === bankPath),
@@ -1371,6 +1550,15 @@ export function BankWorkspace() {
     setSelectedFile,
     setShowSenders,
   });
+
+  if (isRouteSyncInFlight || routeSyncPending) {
+    return (
+      <div className="flex items-center gap-sm">
+        <span className="spinner" />
+        <span>{t("app.loading")}</span>
+      </div>
+    );
+  }
 
   if (!bank && allFormatFiles.length === 0) {
     return (

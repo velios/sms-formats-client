@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { config } from "@/config";
+import { buildBankWorkspacePath } from "@/domain/bank-route";
 import type { BankInfo } from "@/domain/types";
 import { useOpenPRs, useRepoTree, useSwitchSource } from "@/hooks/useGitHub";
 import { useDraftStore, useSourceStore } from "@/store";
@@ -247,10 +248,15 @@ export function Dashboard() {
         await switchSource("branch", config.defaultBranch);
       }
       addRecentBank(bank.folderPath);
-      const encodedPath = encodeURIComponent(bank.folderPath);
-      navigate(`/bank/${encodedPath}`);
+      navigate(
+        buildBankWorkspacePath({
+          bankPath: bank.folderPath,
+          repository,
+          source: { type: "branch", name: config.defaultBranch },
+        })
+      );
     },
-    [navigate, sourceRef?.name, sourceRef?.type, switchSource]
+    [navigate, repository, sourceRef?.name, sourceRef?.type, switchSource]
   );
 
   const handlePRSelect = useCallback(
@@ -263,13 +269,19 @@ export function Dashboard() {
       if (changedBankPaths.length === 1) {
         const [bankPath] = changedBankPaths;
         if (bankPath) {
-          navigate(`/bank/${encodeURIComponent(bankPath)}`);
+          navigate(
+            buildBankWorkspacePath({
+              bankPath,
+              repository,
+              source: { type: "pr", prNumber: pr.number },
+            })
+          );
           return;
         }
       }
       navigate("/workspace");
     },
-    [navigate, repoSlug, switchSource]
+    [navigate, repoSlug, repository, switchSource]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

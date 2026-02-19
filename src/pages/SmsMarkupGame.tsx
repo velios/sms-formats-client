@@ -3,6 +3,10 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
+import {
+  buildBankWorkspacePath,
+  sourceRefToRouteSource,
+} from "@/domain/bank-route";
 import { serializeFormat } from "@/domain/format";
 import {
   createAuthenticatedOctokit,
@@ -17,7 +21,7 @@ import {
   parseIssueIdentifier,
   parseSmsGameIssueBody,
 } from "@/domain/sms-game/issue-import";
-import type { BankInfo } from "@/domain/types";
+import type { BankInfo, RepoRef, SourceRef } from "@/domain/types";
 import { ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { useDraftStore, useSourceStore } from "@/store";
 
@@ -583,12 +587,19 @@ function applyImportedFormatsToBanks(params: {
 function navigateToImportedWorkspace(
   navigate: (path: string) => void,
   bankPath: string,
-  createdFiles: string[]
+  createdFiles: string[],
+  repository: RepoRef,
+  sourceRef: SourceRef | null
 ): void {
   const firstFile = createdFiles[0];
-  const encodedBankPath = encodeURIComponent(bankPath);
-  const fileQuery = firstFile ? `?file=${encodeURIComponent(firstFile)}` : "";
-  navigate(`/bank/${encodedBankPath}${fileQuery}`);
+  navigate(
+    buildBankWorkspacePath({
+      bankPath,
+      repository,
+      source: sourceRefToRouteSource(sourceRef, config.defaultBranch),
+      filePath: firstFile,
+    })
+  );
 }
 
 function loadCachedSelectedIssueFromSession(
@@ -1227,6 +1238,8 @@ export function SmsMarkupGame() {
   const [searchParams] = useSearchParams();
   const lang = i18n.resolvedLanguage?.startsWith("ru") ? "ru" : "en";
   const draftStore = useDraftStore();
+  const repository = useSourceStore((s) => s.repository);
+  const sourceRef = useSourceStore((s) => s.sourceRef);
 
   const presetIssueQuery = searchParams.get("issue") ?? "";
   const autoStartFromSource = searchParams.get("autostart") === "1";
@@ -1476,7 +1489,9 @@ export function SmsMarkupGame() {
     navigateToImportedWorkspace(
       navigate,
       resolvedTarget.bankPath,
-      createdFiles
+      createdFiles,
+      repository,
+      sourceRef
     );
   };
 

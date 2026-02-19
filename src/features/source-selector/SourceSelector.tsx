@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { config } from "@/config";
+import { buildBankWorkspacePath } from "@/domain/bank-route";
 import {
   useAvailableSourceRepos,
   useOpenPRs,
@@ -153,7 +154,13 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
     if (changedBankPaths.length === 1) {
       const [bankPath] = changedBankPaths;
       if (bankPath) {
-        navigate(`/bank/${encodeURIComponent(bankPath)}`);
+        navigate(
+          buildBankWorkspacePath({
+            bankPath,
+            repository,
+            source: { type: "pr", prNumber: pr.number },
+          })
+        );
         return;
       }
     }
