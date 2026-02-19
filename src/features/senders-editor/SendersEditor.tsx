@@ -30,8 +30,11 @@ export function SendersEditor({ bankPath }: Props) {
   const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
   const saveLabel = t("app.save");
   const resetLabel = t("app.reset");
+  const isModified = draft ? draft.content !== draft.remoteContent : false;
 
   const [value, setValue] = useState(currentContent);
+  const saveDisabled = value === currentContent;
+  const resetDisabled = !isModified;
 
   useEffect(() => {
     setValue(currentContent);
@@ -63,8 +66,6 @@ export function SendersEditor({ bankPath }: Props) {
     setValue(remoteBaseline);
     saveDraft(remoteBaseline);
   };
-
-  const isModified = draft ? draft.content !== draft.remoteContent : false;
 
   if (isLoading) {
     return (
@@ -98,11 +99,16 @@ export function SendersEditor({ bankPath }: Props) {
           )}
         </div>
         <div className="flex gap-sm">
-          <button className="btn bank-actions__btn" onClick={handleReset}>
+          <button
+            className="btn bank-actions__btn"
+            disabled={resetDisabled}
+            onClick={handleReset}
+          >
             {resetLabel}
           </button>
           <button
             className="btn btn--primary bank-actions__btn"
+            disabled={saveDisabled}
             onClick={handleSave}
           >
             {saveLabel}

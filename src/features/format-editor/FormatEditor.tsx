@@ -15,6 +15,22 @@ interface Props {
   onOpenValidation: () => void;
 }
 
+function computeSaveDisabled(params: {
+  mode: EditorMode;
+  structuredRawCandidate: string | null;
+  currentContent: string;
+  rawContent: string;
+}): boolean {
+  const { mode, structuredRawCandidate, currentContent, rawContent } = params;
+  if (mode === "raw") {
+    return rawContent === currentContent;
+  }
+  if (!structuredRawCandidate) {
+    return true;
+  }
+  return structuredRawCandidate === currentContent;
+}
+
 function isRegexValid(value: string): boolean {
   try {
     // eslint-disable-next-line no-new
@@ -71,6 +87,7 @@ export function FormatEditor({
   const draft = draftStore.getDraft(filePath);
   const currentContent = draft?.content ?? remoteContent ?? "";
   const baseSha = draft?.baseSha ?? sourceRef?.sha ?? "";
+  const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
   const hasLoadedInitial = draft != null || remoteContent !== undefined;
 
   // Structured state
@@ -115,14 +132,13 @@ export function FormatEditor({
 
   const saveDraft = useCallback(
     (content: string) => {
-      const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
       if (content === remoteBaseline) {
         draftStore.removeDraft(filePath);
         return;
       }
       draftStore.setDraft(filePath, content, baseSha, remoteBaseline);
     },
-    [draftStore, filePath, baseSha, draft?.remoteContent, remoteContent]
+    [draftStore, filePath, baseSha, remoteBaseline]
   );
 
   const syncRawFromStructured = useCallback(
@@ -181,9 +197,9 @@ export function FormatEditor({
     if (initialContent == null) {
       return;
     }
-    setRawContent(initialContent);
-    saveDraft(initialContent);
-    parseRawToStructured(initialContent, false);
+    setRawContent(remoteBaseline);
+    saveDraft(remoteBaseline);
+    parseRawToStructured(remoteBaseline, false);
   };
 
   const handleRawChange = (value: string) => {
@@ -236,7 +252,13 @@ export function FormatEditor({
   const resetLabel = t("app.reset");
   const handleSave =
     mode === "structured" ? handleSaveStructured : handleSaveRaw;
-  const saveDisabled = mode === "structured" ? !structuredRawCandidate : false;
+  const saveDisabled = computeSaveDisabled({
+    mode,
+    structuredRawCandidate,
+    currentContent,
+    rawContent,
+  });
+  const resetDisabled = !isModified;
 
   const handleRename = () => {
     const currentDraft = draftStore.getDraft(filePath);
@@ -315,7 +337,7 @@ export function FormatEditor({
         <div className="flex gap-sm">
           <button
             className="btn bank-actions__btn"
-            disabled={initialContent == null}
+            disabled={initialContent == null || resetDisabled}
             onClick={handleReset}
           >
             {resetLabel}
