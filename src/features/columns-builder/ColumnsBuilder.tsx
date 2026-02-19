@@ -175,8 +175,10 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
                       <span className="badge badge--warning text-sm">?</span>
                     )}
                     <button
+                      aria-label={t("editor.removeExample")}
                       className="column-item__remove"
                       onClick={() => handleRemoveColumn(i)}
+                      type="button"
                     >
                       ×
                     </button>
@@ -216,10 +218,12 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
             />
             <div style={{ maxHeight: 200, overflowY: "auto" }}>
               {filteredColumns.map((col) => (
-                <div
+                <button
+                  aria-label={col.name}
                   className="autocomplete__item"
                   key={col.name}
                   onClick={() => handleAddColumn(col)}
+                  type="button"
                 >
                   <span className="font-medium text-mono text-sm">
                     {col.name}
@@ -230,7 +234,7 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
                   {col.parameterized && (
                     <span className="badge badge--info text-sm">param</span>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           </div>

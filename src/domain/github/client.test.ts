@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { indexBanksFromTree } from "./client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RepoRef } from "../types";
+import {
+  getCachedPullRequestApprovalPermission,
+  indexBanksFromTree,
+  setCachedPullRequestApprovalPermission,
+  setGitHubUserToken,
+} from "./client";
 
 describe("indexBanksFromTree", () => {
   it("indexes banks from explicit tree folders", () => {
@@ -32,5 +38,51 @@ describe("indexBanksFromTree", () => {
       "src/FallbackBank_7",
       "src/SecondBank",
     ]);
+  });
+});
+
+describe("pull request approval permission cache", () => {
+  const repo: RepoRef = { owner: "zenmoney", repo: "sms-formats" };
+
+  beforeEach(() => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+    });
+    setGitHubUserToken(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setGitHubUserToken(null);
+  });
+
+  it("stores cached approval permission per repository", () => {
+    expect(getCachedPullRequestApprovalPermission(repo)).toBe(false);
+
+    setCachedPullRequestApprovalPermission(true, repo);
+
+    expect(getCachedPullRequestApprovalPermission(repo)).toBe(true);
+    expect(
+      getCachedPullRequestApprovalPermission({
+        owner: "zenmoney",
+        repo: "other-repo",
+      })
+    ).toBe(false);
+  });
+
+  it("clears cached approval permissions when user token changes", () => {
+    setCachedPullRequestApprovalPermission(true, repo);
+    expect(getCachedPullRequestApprovalPermission(repo)).toBe(true);
+
+    setGitHubUserToken("ghp_test");
+
+    expect(getCachedPullRequestApprovalPermission(repo)).toBe(false);
   });
 });

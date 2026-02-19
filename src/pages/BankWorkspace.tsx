@@ -9,10 +9,24 @@ import {
 import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
+import {
+  type BankRouteSource,
+  isRouteSourceMatched,
+  type ParsedBankRouteParams,
+  parseBankRouteParams,
+  resolveRouteRepository,
+} from "@/domain/bank-route";
 import { parseFormatFile } from "@/domain/format";
-import { fetchFileContent } from "@/domain/github";
+import {
+  approvePullRequest,
+  fetchFileContent,
+  fetchPullRequestFiles,
+  getCachedPullRequestApprovalPermission,
+  getGitHubUserToken,
+  updatePullRequestHead,
+} from "@/domain/github";
 import { type FormatSearchDoc, searchFormatPaths } from "@/domain/search";
-import type { BankInfo } from "@/domain/types";
+import type { BankInfo, RepoRef, SourceRef } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { PublishPanel } from "@/features/publish-panel/PublishPanel";
@@ -20,50 +34,46 @@ import { QuickCheckPanel } from "@/features/quick-check/QuickCheckPanel";
 import { RefreshButton } from "@/features/refresh/RefreshButton";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
+import { useSwitchRepository, useSwitchSource } from "@/hooks/useGitHub";
 import { useDraftStore, useSourceStore } from "@/store";
 
-// ─── Recent formats persistence ───
-const RECENT_FORMATS_KEY = "sms-formats-recent-formats";
-const MAX_RECENT_FORMATS = 10;
+const RECENT_FILES_KEY = "sms-formats-recent-formats";
+const MAX_RECENT_FILES = 10;
 const SEARCH_EXAMPLE_MIN_QUERY_LENGTH = 2;
 const SEARCH_INDEX_PARALLELISM = 4;
 
-function getRecentFormats(bankPath: string): string[] {
+function getRecentFiles(bankPath: string): string[] {
   try {
-    const data = JSON.parse(localStorage.getItem(RECENT_FORMATS_KEY) ?? "{}");
+    const data = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? "{}");
     return (data[bankPath] ?? []) as string[];
   } catch {
     return [];
   }
 }
 
-function addRecentFormat(bankPath: string, filePath: string) {
+function addRecentFile(bankPath: string, filePath: string) {
   try {
-    const data = JSON.parse(localStorage.getItem(RECENT_FORMATS_KEY) ?? "{}");
+    const data = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? "{}");
     const list: string[] = data[bankPath] ?? [];
     const filtered = list.filter((f: string) => f !== filePath);
     filtered.unshift(filePath);
-    data[bankPath] = filtered.slice(0, MAX_RECENT_FORMATS);
-    localStorage.setItem(RECENT_FORMATS_KEY, JSON.stringify(data));
+    data[bankPath] = filtered.slice(0, MAX_RECENT_FILES);
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(data));
   } catch {
     /* ignore */
   }
 }
 
-function replaceRecentFormat(
-  bankPath: string,
-  oldPath: string,
-  newPath: string
-) {
+function replaceRecentFile(bankPath: string, oldPath: string, newPath: string) {
   try {
-    const data = JSON.parse(localStorage.getItem(RECENT_FORMATS_KEY) ?? "{}");
+    const data = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? "{}");
     const list: string[] = data[bankPath] ?? [];
     const replaced = list.map((path: string) =>
       path === oldPath ? newPath : path
     );
     const deduped = Array.from(new Set(replaced));
-    data[bankPath] = deduped.slice(0, MAX_RECENT_FORMATS);
-    localStorage.setItem(RECENT_FORMATS_KEY, JSON.stringify(data));
+    data[bankPath] = deduped.slice(0, MAX_RECENT_FILES);
+    localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(data));
   } catch {
     /* ignore */
   }
@@ -85,12 +95,10 @@ function decodeRequestedFileValue(
 
 function collectChangedFilesInBank(
   bankPath: string,
-  sourceChangedFiles: string[],
-  localChangedFiles: string[]
+  changedFiles: string[]
 ): Set<string> {
-  const files = [...sourceChangedFiles, ...localChangedFiles];
   const result = new Set<string>();
-  for (const filePath of files) {
+  for (const filePath of changedFiles) {
     if (filePath.startsWith(`${bankPath}/`)) {
       result.add(filePath);
     }
@@ -416,6 +424,9 @@ function useBankFormatSearch(params: {
 function useAutoSelectFormat(params: {
   requestedFile: string | null;
   allFormatFiles: string[];
+  sendersPath: string;
+  preferredFormatFile: string | null;
+  selectionReady: boolean;
   selectedFile: string | null;
   showSenders: boolean;
   setSelectedFile: (filePath: string | null) => void;
@@ -424,6 +435,9 @@ function useAutoSelectFormat(params: {
   const {
     requestedFile,
     allFormatFiles,
+    sendersPath,
+    preferredFormatFile,
+    selectionReady,
     selectedFile,
     showSenders,
     setSelectedFile,
@@ -436,6 +450,15 @@ function useAutoSelectFormat(params: {
       appliedRequestedFileRef.current = null;
       return;
     }
+    if (requestedFile === sendersPath) {
+      if (appliedRequestedFileRef.current === requestedFile) {
+        return;
+      }
+      setShowSenders(true);
+      setSelectedFile(null);
+      appliedRequestedFileRef.current = requestedFile;
+      return;
+    }
     if (!allFormatFiles.includes(requestedFile)) {
       return;
     }
@@ -446,25 +469,101 @@ function useAutoSelectFormat(params: {
     setSelectedFile(requestedFile);
     setShowSenders(false);
     appliedRequestedFileRef.current = requestedFile;
-  }, [requestedFile, allFormatFiles, setSelectedFile, setShowSenders]);
+  }, [
+    requestedFile,
+    allFormatFiles,
+    sendersPath,
+    setSelectedFile,
+    setShowSenders,
+  ]);
 
   useEffect(() => {
-    if (!(showSenders || selectedFile || allFormatFiles.length === 0)) {
-      setSelectedFile(allFormatFiles[0]!);
+    if (!selectedFile) {
+      return;
     }
-  }, [allFormatFiles, selectedFile, setSelectedFile, showSenders]);
+    if (allFormatFiles.includes(selectedFile)) {
+      return;
+    }
+    setSelectedFile(null);
+  }, [allFormatFiles, selectedFile, setSelectedFile]);
+
+  useEffect(() => {
+    if (!selectionReady) {
+      return;
+    }
+    if (showSenders || selectedFile) {
+      return;
+    }
+    if (preferredFormatFile) {
+      setSelectedFile(preferredFormatFile);
+    }
+  }, [
+    preferredFormatFile,
+    selectionReady,
+    selectedFile,
+    setSelectedFile,
+    setShowSenders,
+    showSenders,
+  ]);
 }
 
-function resolveVisibleFormats(params: {
-  formatTab: "all" | "recent";
-  recentFormats: string[];
-  filteredFormatFiles: string[];
-}): string[] {
-  const { formatTab, recentFormats, filteredFormatFiles } = params;
-  if (formatTab === "recent") {
-    return recentFormats;
-  }
-  return filteredFormatFiles;
+function useResetSelectionOnSourceChange(params: {
+  requestedFile: string | null;
+  sourceSelectionKey: string;
+  setSelectedFile: (filePath: string | null) => void;
+  setShowSenders: (value: boolean) => void;
+}) {
+  const { requestedFile, sourceSelectionKey, setSelectedFile, setShowSenders } =
+    params;
+  const previousSourceKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (requestedFile || previousSourceKeyRef.current === sourceSelectionKey) {
+      return;
+    }
+    previousSourceKeyRef.current = sourceSelectionKey;
+    setSelectedFile(null);
+    setShowSenders(false);
+  }, [requestedFile, setSelectedFile, setShowSenders, sourceSelectionKey]);
+}
+
+function buildSearchIndexingMeta(params: {
+  shouldIndexExamples: boolean;
+  indexedScopeSummary: { loadedCount: number; total: number };
+  indexingInFlight: number;
+  indexingErrors: number;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): { showSearchIndexStatus: boolean; searchIndexingLabel: string } {
+  const {
+    shouldIndexExamples,
+    indexedScopeSummary,
+    indexingInFlight,
+    indexingErrors,
+    t,
+  } = params;
+  const showSearchIndexStatus =
+    shouldIndexExamples &&
+    indexedScopeSummary.total > 0 &&
+    (indexingInFlight > 0 ||
+      indexedScopeSummary.loadedCount < indexedScopeSummary.total ||
+      indexingErrors > 0);
+
+  const searchIndexingLabel =
+    indexingErrors > 0
+      ? t("bank.searchIndexingWithErrors", {
+          loaded: indexedScopeSummary.loadedCount,
+          total: indexedScopeSummary.total,
+          errors: indexingErrors,
+        })
+      : t("bank.searchIndexing", {
+          loaded: indexedScopeSummary.loadedCount,
+          total: indexedScopeSummary.total,
+        });
+
+  return {
+    showSearchIndexStatus,
+    searchIndexingLabel,
+  };
 }
 
 function renderWorkspaceContent(params: {
@@ -473,7 +572,6 @@ function renderWorkspaceContent(params: {
   selectedFile: string | null;
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
-  onOpenValidation: () => void;
   t: (key: string) => string;
 }): ReactNode {
   const {
@@ -482,7 +580,6 @@ function renderWorkspaceContent(params: {
     selectedFile,
     allFormatFiles,
     handleRenameFile,
-    onOpenValidation,
     t,
   } = params;
   if (showSenders) {
@@ -494,61 +591,173 @@ function renderWorkspaceContent(params: {
         allFormatFiles={allFormatFiles}
         filePath={selectedFile}
         key={selectedFile}
-        onOpenValidation={onOpenValidation}
         onRenameFile={handleRenameFile}
       />
     );
   }
   return (
     <div className="flex h-full items-center justify-center text-muted">
-      {t("bank.formats")}: {t("bank.noResults")}
+      {t("bank.files")}: {t("bank.noResults")}
+    </div>
+  );
+}
+
+function BankActionsPanel(params: {
+  bankPath: string;
+  onApprovePullRequest: () => void;
+  onOpenValidation: () => void;
+  onPublish: () => void;
+  onOpenQuickCheck: () => void;
+  approvePullRequestError: string | null;
+  approvePullRequestLabel: string;
+  publishError: string | null;
+  publishActionLabel: string;
+  isPublishing: boolean;
+  isApprovingPullRequest: boolean;
+  isPullRequestApproved: boolean;
+  showApprovePullRequestButton: boolean;
+  t: (key: string) => string;
+}): ReactNode {
+  const {
+    bankPath,
+    onApprovePullRequest,
+    onOpenValidation,
+    onPublish,
+    onOpenQuickCheck,
+    approvePullRequestError,
+    approvePullRequestLabel,
+    publishError,
+    publishActionLabel,
+    isPublishing,
+    isApprovingPullRequest,
+    isPullRequestApproved,
+    showApprovePullRequestButton,
+    t,
+  } = params;
+
+  return (
+    <div className="bank-actions flex-col">
+      <button
+        className="btn btn--primary bank-actions__btn w-full"
+        disabled={isPublishing}
+        onClick={onPublish}
+      >
+        {isPublishing ? <span className="spinner" /> : null}
+        {publishActionLabel}
+      </button>
+      {publishError && <div className="badge badge--error">{publishError}</div>}
+      {showApprovePullRequestButton && (
+        <button
+          className={`btn bank-actions__btn w-full ${isPullRequestApproved ? "btn--success" : ""}`}
+          disabled={isApprovingPullRequest || isPullRequestApproved}
+          onClick={onApprovePullRequest}
+        >
+          {approvePullRequestLabel}
+        </button>
+      )}
+      {approvePullRequestError && (
+        <div className="badge badge--error">{approvePullRequestError}</div>
+      )}
+      <button
+        className="btn bank-actions__btn w-full"
+        onClick={onOpenValidation}
+      >
+        {t("editor.validation")}
+      </button>
+      <button
+        className="btn bank-actions__btn w-full"
+        onClick={onOpenQuickCheck}
+      >
+        {t("quickCheck.open")}
+      </button>
+      <RefreshButton bankPath={bankPath} />
     </div>
   );
 }
 
 function FormatsPanel(params: {
   t: (key: string) => string;
-  totalFormatsCount: number;
+  totalFilesCount: number;
   formatTab: "all" | "recent";
   setFormatTab: (value: "all" | "recent") => void;
+  recentFiles: string[];
   setShowCreateFormat: (value: boolean) => void;
   formatSearch: string;
   setFormatSearch: (value: string) => void;
   showSearchIndexStatus: boolean;
   searchIndexingLabel: string;
   visibleFormats: string[];
-  changedFormatFiles: Set<string>;
+  localChangedFormatFiles: Set<string>;
+  sourceChangedFormatFiles: Set<string>;
   selectedFile: string | null;
+  showSenders: boolean;
+  handleSelectSenders: () => void;
   handleSelectFile: (path: string) => void;
   repository: { owner: string; repo: string };
   refName: string;
+  sendersPath: string;
+  sendersMissing: boolean;
+  localSendersChanged: boolean;
+  sourceSendersChanged: boolean;
 }): ReactNode {
   const {
     t,
-    totalFormatsCount,
+    totalFilesCount,
     formatTab,
     setFormatTab,
+    recentFiles,
     setShowCreateFormat,
     formatSearch,
     setFormatSearch,
     showSearchIndexStatus,
     searchIndexingLabel,
     visibleFormats,
-    changedFormatFiles,
+    localChangedFormatFiles,
+    sourceChangedFormatFiles,
     selectedFile,
+    showSenders,
+    handleSelectSenders,
     handleSelectFile,
     repository,
     refName,
+    sendersPath,
+    sendersMissing,
+    localSendersChanged,
+    sourceSendersChanged,
   } = params;
+  const normalizedSearch = formatSearch.trim().toLowerCase();
+  const visibleFormatSet = new Set(visibleFormats);
+  const sendersMatchesSearch =
+    normalizedSearch.length === 0 ||
+    "senders.txt".includes(normalizedSearch) ||
+    t("bank.senders").toLowerCase().includes(normalizedSearch);
+  const allFiles = sendersMatchesSearch
+    ? [sendersPath, ...visibleFormats]
+    : visibleFormats;
+  const recentFilesVisible = recentFiles.filter((path) => {
+    if (path === sendersPath) {
+      return sendersMatchesSearch;
+    }
+    if (normalizedSearch.length === 0) {
+      return true;
+    }
+    if (visibleFormatSet.has(path)) {
+      return true;
+    }
+    return extractFormatFileName(path).toLowerCase().includes(normalizedSearch);
+  });
+  const filesForRender = formatTab === "recent" ? recentFilesVisible : allFiles;
+  const showNoResults = filesForRender.length === 0;
 
   return (
     <div className="panel formats-panel">
       <div className="panel__header">
         <span>
-          {t("bank.formats")}{" "}
-          <span className="text-muted text-sm">({totalFormatsCount})</span>
+          {t("bank.files")}{" "}
+          <span className="text-muted text-sm">({totalFilesCount})</span>
         </span>
         <button
+          aria-label={t("bank.createFormat")}
           className="btn btn--ghost btn--sm"
           onClick={() => setShowCreateFormat(true)}
         >
@@ -560,55 +769,86 @@ function FormatsPanel(params: {
           className={`tab ${formatTab === "all" ? "tab--active" : ""}`}
           onClick={() => setFormatTab("all")}
         >
-          {t("bank.allFormats")}
+          {t("bank.allFiles")}
         </button>
         <button
           className={`tab ${formatTab === "recent" ? "tab--active" : ""}`}
           onClick={() => setFormatTab("recent")}
         >
-          {t("bank.recentFormats")}
+          {t("bank.recentFiles")}
         </button>
       </div>
-      {formatTab === "all" && (
-        <div
-          style={{
-            padding: "8px",
-            borderBottom: "1px solid var(--c-border)",
-          }}
-        >
-          <input
-            className="input"
-            onChange={(e) => setFormatSearch(e.target.value)}
-            placeholder={t("bank.searchFormat")}
-            style={{ fontSize: 12, padding: "4px 8px" }}
-            value={formatSearch}
-          />
-          {showSearchIndexStatus && (
-            <div className="text-muted text-sm" style={{ marginTop: 6 }}>
-              {searchIndexingLabel}
-            </div>
-          )}
-        </div>
-      )}
+      <div
+        style={{
+          padding: "8px",
+          borderBottom: "1px solid var(--c-border)",
+        }}
+      >
+        <input
+          aria-label={t("bank.searchFile")}
+          className="input"
+          onChange={(e) => setFormatSearch(e.target.value)}
+          placeholder={t("bank.searchFile")}
+          style={{ fontSize: 12, padding: "4px 8px" }}
+          value={formatSearch}
+        />
+        {showSearchIndexStatus && (
+          <div className="text-muted text-sm" style={{ marginTop: 6 }}>
+            {searchIndexingLabel}
+          </div>
+        )}
+      </div>
       <div className="formats-panel__list">
-        {visibleFormats.map((f) => {
-          const name = extractFormatFileName(f);
-          const isModified = changedFormatFiles.has(f);
-          const isSelected = selectedFile === f;
-          const encodedPath = f.split("/").map(encodeURIComponent).join("/");
+        {filesForRender.map((path) => {
+          const isSenders = path === sendersPath;
+          const displayName = isSenders
+            ? "senders.txt"
+            : extractFormatFileName(path);
+          const isSelected = isSenders ? showSenders : selectedFile === path;
+          const isLocalChanged = isSenders
+            ? localSendersChanged
+            : localChangedFormatFiles.has(path);
+          const isSourceChanged = isSenders
+            ? !localSendersChanged && sourceSendersChanged
+            : !isLocalChanged && sourceChangedFormatFiles.has(path);
+          const encodedPath = path.split("/").map(encodeURIComponent).join("/");
           const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
           return (
             <div
               className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""}`}
-              key={f}
-              onClick={() => handleSelectFile(f)}
+              key={path}
+              onClick={() => {
+                if (isSenders) {
+                  handleSelectSenders();
+                  return;
+                }
+                handleSelectFile(path);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  if (isSenders) {
+                    handleSelectSenders();
+                    return;
+                  }
+                  handleSelectFile(path);
+                }
+              }}
+              role="button"
+              tabIndex={0}
             >
-              <span className="truncate text-mono text-sm">{name}</span>
-              {isModified && (
+              <span className="truncate text-mono text-sm">{displayName}</span>
+              {isLocalChanged && (
                 <span className="badge badge--modified text-sm">●</span>
               )}
+              {isSourceChanged && (
+                <span className="badge badge--warning text-sm">●</span>
+              )}
+              {isSenders && sendersMissing && (
+                <span className="badge badge--warning">!</span>
+              )}
               <a
-                aria-label={`${t("bank.openFormatInRepo")}: ${name}`}
+                aria-label={`${t("bank.openFormatInRepo")}: ${displayName}`}
                 className="format-row-link"
                 href={repoUrl}
                 onClick={(e) => e.stopPropagation()}
@@ -621,7 +861,7 @@ function FormatsPanel(params: {
             </div>
           );
         })}
-        {visibleFormats.length === 0 && (
+        {showNoResults && (
           <div className="p-md text-muted text-sm">{t("bank.noResults")}</div>
         )}
       </div>
@@ -670,7 +910,7 @@ function renameDraftFormat(params: {
   }
 
   draftStore.renameDraft(fromPath, toPath);
-  replaceRecentFormat(bankPath, fromPath, toPath);
+  replaceRecentFile(bankPath, fromPath, toPath);
 
   const currentBanks = useSourceStore.getState().banks;
   const nextBanks = currentBanks.map((item) => {
@@ -696,21 +936,425 @@ function renameDraftFormat(params: {
   return true;
 }
 
+function usePullRequestChangedFiles(params: {
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
+}) {
+  const { repository, sourceRef } = params;
+  const [prChangedFiles, setPrChangedFiles] = useState<string[]>([]);
+  const [isPrChangedFilesReady, setIsPrChangedFilesReady] = useState(false);
+
+  useEffect(() => {
+    if (!(sourceRef?.type === "pr" && sourceRef.prNumber)) {
+      setPrChangedFiles([]);
+      setIsPrChangedFilesReady(true);
+      return;
+    }
+
+    setIsPrChangedFilesReady(false);
+    let cancelled = false;
+    void fetchPullRequestFiles(sourceRef.prNumber, repository)
+      .then((files) => {
+        if (!cancelled) {
+          setPrChangedFiles(files);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrChangedFiles([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsPrChangedFilesReady(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [repository, sourceRef?.prNumber, sourceRef?.type]);
+
+  return {
+    isPrChangedFilesReady,
+    prChangedFiles,
+  };
+}
+
+function usePullRequestApproval(params: {
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
+  t: (key: string) => string;
+}) {
+  const { repository, sourceRef, t } = params;
+  const [isApprovingPullRequest, setIsApprovingPullRequest] = useState(false);
+  const [isPullRequestApproved, setIsPullRequestApproved] = useState(false);
+  const [approvePullRequestError, setApprovePullRequestError] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    setIsApprovingPullRequest(false);
+    setIsPullRequestApproved(false);
+    setApprovePullRequestError(null);
+  }, [repository.owner, repository.repo, sourceRef?.prNumber, sourceRef?.type]);
+
+  const handleApprovePullRequest = useCallback(async () => {
+    if (!(sourceRef?.type === "pr" && sourceRef.prNumber)) {
+      return;
+    }
+
+    setIsApprovingPullRequest(true);
+    setApprovePullRequestError(null);
+    try {
+      await approvePullRequest(sourceRef.prNumber, repository);
+      setIsPullRequestApproved(true);
+    } catch (error) {
+      setIsPullRequestApproved(false);
+      setApprovePullRequestError(
+        error instanceof Error ? error.message : t("source.approvePrError")
+      );
+    } finally {
+      setIsApprovingPullRequest(false);
+    }
+  }, [repository, sourceRef?.prNumber, sourceRef?.type, t]);
+
+  const showApprovePullRequestButton = Boolean(
+    sourceRef?.type === "pr" &&
+      sourceRef.prNumber &&
+      getCachedPullRequestApprovalPermission(repository)
+  );
+  const approvePullRequestLabel = isApprovingPullRequest
+    ? t("source.approvingPr")
+    : isPullRequestApproved
+      ? t("source.approvePrDone")
+      : t("source.approvePr");
+
+  return {
+    approvePullRequestError,
+    approvePullRequestLabel,
+    handleApprovePullRequest,
+    isApprovingPullRequest,
+    isPullRequestApproved,
+    showApprovePullRequestButton,
+  };
+}
+
+function useQuickPullRequestUpdate(params: {
+  canUpdateCurrentPullRequest: boolean;
+  changedFiles: Array<{ filePath: string; content: string }>;
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
+  t: (key: string) => string;
+}) {
+  const {
+    canUpdateCurrentPullRequest,
+    changedFiles,
+    repository,
+    sourceRef,
+    t,
+  } = params;
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsPublishing(false);
+    setPublishError(null);
+  }, [repository.owner, repository.repo, sourceRef?.prNumber, sourceRef?.type]);
+
+  const run = useCallback(async () => {
+    if (
+      !(
+        canUpdateCurrentPullRequest &&
+        sourceRef?.type === "pr" &&
+        sourceRef.prNumber
+      )
+    ) {
+      return;
+    }
+
+    const token = getGitHubUserToken()?.trim() ?? "";
+    if (!token) {
+      setPublishError(t("githubAuth.emptyToken"));
+      return;
+    }
+    if (changedFiles.length === 0) {
+      setPublishError(t("publish.noChanges"));
+      return;
+    }
+
+    setIsPublishing(true);
+    setPublishError(null);
+    try {
+      await updatePullRequestHead(
+        token,
+        sourceRef.prNumber,
+        changedFiles.map((file) => ({
+          path: file.filePath,
+          content: file.content,
+        })),
+        repository
+      );
+    } catch (error) {
+      setPublishError(
+        error instanceof Error ? error.message : t("publish.updateError")
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [
+    canUpdateCurrentPullRequest,
+    changedFiles,
+    repository,
+    sourceRef?.prNumber,
+    sourceRef?.type,
+    t,
+  ]);
+
+  return {
+    isPublishing,
+    publishError,
+    run,
+  };
+}
+
+function useBankPublishAction(params: {
+  changedFiles: Array<{ filePath: string; content: string }>;
+  onOpenCreatePublish: () => void;
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; name: string; prNumber?: number } | null;
+  t: (key: string) => string;
+}) {
+  const { changedFiles, onOpenCreatePublish, repository, sourceRef, t } =
+    params;
+  const canUpdateCurrentPullRequest = Boolean(
+    sourceRef?.type === "pr" &&
+      sourceRef.prNumber &&
+      getCachedPullRequestApprovalPermission(repository)
+  );
+  const {
+    isPublishing,
+    publishError,
+    run: runQuickPullRequestUpdate,
+  } = useQuickPullRequestUpdate({
+    canUpdateCurrentPullRequest,
+    changedFiles,
+    repository,
+    sourceRef,
+    t,
+  });
+  const publishActionLabel = canUpdateCurrentPullRequest
+    ? isPublishing
+      ? t("publish.publishing")
+      : t("publish.updatePR")
+    : t("publish.createPR");
+  const onPublish = useCallback(() => {
+    if (canUpdateCurrentPullRequest) {
+      void runQuickPullRequestUpdate();
+      return;
+    }
+    onOpenCreatePublish();
+  }, [
+    canUpdateCurrentPullRequest,
+    onOpenCreatePublish,
+    runQuickPullRequestUpdate,
+  ]);
+
+  return {
+    canUpdateCurrentPullRequest,
+    isPublishing,
+    onPublish,
+    publishActionLabel,
+    publishError,
+  };
+}
+
+type SwitchSourceHandler = (
+  type: "branch" | "pr",
+  name: string,
+  prNumber?: number,
+  shaHint?: string
+) => Promise<void>;
+type SwitchRepositoryHandler = (nextRepository: RepoRef) => Promise<void>;
+
+function makeRouteSyncKey(params: {
+  parsedRoute: ParsedBankRouteParams;
+  routeRepository: RepoRef | null;
+}): string {
+  const { parsedRoute, routeRepository } = params;
+  if (!parsedRoute.isStructuredRoute) {
+    return "";
+  }
+  const repoKey = routeRepository
+    ? `${routeRepository.owner}/${routeRepository.repo}`
+    : "";
+  if (!parsedRoute.source) {
+    return `repo:${repoKey}|source:none`;
+  }
+  if (parsedRoute.source.type === "pr") {
+    return `repo:${repoKey}|source:pr:${parsedRoute.source.prNumber}`;
+  }
+  return `repo:${repoKey}|source:branch:${parsedRoute.source.name}`;
+}
+
+async function syncRouteSource(params: {
+  targetSource: BankRouteSource | null;
+  switchSource: SwitchSourceHandler;
+}) {
+  const { targetSource, switchSource } = params;
+  if (!targetSource) {
+    return;
+  }
+  const currentSource = useSourceStore.getState().sourceRef;
+  if (targetSource.type === "pr") {
+    const alreadySelected =
+      currentSource?.type === "pr" &&
+      currentSource.prNumber === targetSource.prNumber;
+    if (!alreadySelected) {
+      await switchSource("pr", config.defaultBranch, targetSource.prNumber);
+    }
+    return;
+  }
+
+  const alreadySelected =
+    currentSource?.type === "branch" &&
+    currentSource.name === targetSource.name;
+  if (!alreadySelected) {
+    await switchSource("branch", targetSource.name);
+  }
+}
+
+function useRouteStateSync(params: {
+  parsedRoute: ParsedBankRouteParams;
+  repository: RepoRef;
+  sourceRef: SourceRef | null;
+  switchRepository: SwitchRepositoryHandler;
+  switchSource: SwitchSourceHandler;
+}) {
+  const { parsedRoute, repository, sourceRef, switchRepository, switchSource } =
+    params;
+  const [isRouteSyncInFlight, setIsRouteSyncInFlight] = useState(false);
+  const [routeSyncAttemptKey, setRouteSyncAttemptKey] = useState<string | null>(
+    null
+  );
+
+  const routeRepository = useMemo(
+    () => resolveRouteRepository(parsedRoute.repoOwner, repository),
+    [parsedRoute.repoOwner, repository]
+  );
+  const routeRepoMismatch = useMemo(() => {
+    if (!routeRepository) {
+      return false;
+    }
+    return (
+      routeRepository.owner !== repository.owner ||
+      routeRepository.repo !== repository.repo
+    );
+  }, [routeRepository, repository]);
+  const routeSourceMismatch = useMemo(
+    () => !isRouteSourceMatched(sourceRef, parsedRoute.source),
+    [parsedRoute.source, sourceRef]
+  );
+  const routeSyncKey = useMemo(
+    () => makeRouteSyncKey({ parsedRoute, routeRepository }),
+    [parsedRoute, routeRepository]
+  );
+  const routeNeedsSync =
+    parsedRoute.isStructuredRoute && (routeRepoMismatch || routeSourceMismatch);
+  const waitForInitialSource = parsedRoute.isStructuredRoute && !sourceRef;
+  const routeSyncPending =
+    waitForInitialSource ||
+    (routeNeedsSync && routeSyncAttemptKey !== routeSyncKey);
+
+  useEffect(() => {
+    setRouteSyncAttemptKey((current) =>
+      current && current !== routeSyncKey ? null : current
+    );
+  }, [routeSyncKey]);
+
+  useEffect(() => {
+    if (!sourceRef) {
+      return;
+    }
+    if (!routeNeedsSync) {
+      return;
+    }
+    if (!routeSyncKey || routeSyncAttemptKey === routeSyncKey) {
+      return;
+    }
+
+    let isCancelled = false;
+    setRouteSyncAttemptKey(routeSyncKey);
+
+    const runSync = async () => {
+      setIsRouteSyncInFlight(true);
+      try {
+        if (routeRepository && routeRepoMismatch) {
+          await switchRepository(routeRepository);
+        }
+        await syncRouteSource({
+          targetSource: parsedRoute.source,
+          switchSource,
+        });
+      } finally {
+        if (!isCancelled) {
+          setIsRouteSyncInFlight(false);
+        }
+      }
+    };
+
+    void runSync();
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    parsedRoute.source,
+    routeNeedsSync,
+    routeRepoMismatch,
+    routeRepository,
+    sourceRef,
+    routeSyncAttemptKey,
+    routeSyncKey,
+    switchRepository,
+    switchSource,
+  ]);
+
+  return { isRouteSyncInFlight, routeSyncPending };
+}
+
 export function BankWorkspace() {
   const { t } = useTranslation();
-  const { bankPath: encodedBankPath } = useParams();
+  const routeParams = useParams();
   const [searchParams] = useSearchParams();
-  const bankPath = decodeURIComponent(encodedBankPath ?? "");
+  const parsedRoute = useMemo(
+    () =>
+      parseBankRouteParams({
+        bankKey: routeParams.bankKey,
+        repoOwner: routeParams.repoOwner,
+        branchOrPr: routeParams.branchOrPr,
+      }),
+    [routeParams.bankKey, routeParams.repoOwner, routeParams.branchOrPr]
+  );
+  const bankPath = parsedRoute.bankPath;
   const requestedFile = useMemo(
     () => decodeRequestedFileValue(searchParams),
     [searchParams]
   );
 
+  const switchSource = useSwitchSource();
+  const switchRepository = useSwitchRepository();
   const banks = useSourceStore((s) => s.banks);
   const setBanks = useSourceStore((s) => s.setBanks);
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
   const repository = useSourceStore((s) => s.repository);
+  const { isRouteSyncInFlight, routeSyncPending } = useRouteStateSync({
+    parsedRoute,
+    repository,
+    sourceRef,
+    switchRepository,
+    switchSource,
+  });
 
   const bank = useMemo(
     () => banks.find((b) => b.folderPath === bankPath),
@@ -725,25 +1369,69 @@ export function BankWorkspace() {
   const [showQuickCheck, setShowQuickCheck] = useState(false);
   const [formatSearch, setFormatSearch] = useState("");
   const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
+  const sendersPath = `${bankPath}/senders.txt`;
+  const { prChangedFiles, isPrChangedFilesReady } = usePullRequestChangedFiles({
+    repository,
+    sourceRef,
+  });
 
   // Get all format files including draft-only (new) files
   const draftStore = useDraftStore();
+  const changedFilesForPublish = useMemo(
+    () =>
+      draftStore
+        .getChangedFiles()
+        .filter((entry) => entry.filePath.startsWith(bankPath))
+        .map((entry) => ({
+          filePath: entry.filePath,
+          content: entry.content,
+        })),
+    [bankPath, draftStore, draftStore.drafts]
+  );
   const localChangedFiles = useMemo(
     () => draftStore.getChangedFiles().map((item) => item.filePath),
     [draftStore, draftStore.drafts]
   );
-  const changedFilesInBank = useMemo(
-    () =>
-      collectChangedFilesInBank(
-        bankPath,
-        sourceChangedFiles,
-        localChangedFiles
-      ),
-    [bankPath, localChangedFiles, sourceChangedFiles]
+  const effectiveSourceChangedFiles = useMemo(
+    () => Array.from(new Set([...sourceChangedFiles, ...prChangedFiles])),
+    [prChangedFiles, sourceChangedFiles]
+  );
+  const localChangedFilesInBank = useMemo(
+    () => collectChangedFilesInBank(bankPath, localChangedFiles),
+    [bankPath, localChangedFiles]
+  );
+  const sourceChangedFilesInBank = useMemo(
+    () => collectChangedFilesInBank(bankPath, effectiveSourceChangedFiles),
+    [bankPath, effectiveSourceChangedFiles]
+  );
+  const isSelectionReady = useMemo(() => {
+    if (sourceRef?.type !== "pr") {
+      return true;
+    }
+    if (sourceChangedFiles.length > 0) {
+      return true;
+    }
+    return isPrChangedFilesReady;
+  }, [isPrChangedFilesReady, sourceChangedFiles.length, sourceRef?.type]);
+  const localChangedFormatFiles = useMemo(
+    () => collectChangedFormatFiles(bankPath, localChangedFilesInBank),
+    [bankPath, localChangedFilesInBank]
+  );
+  const sourceChangedFormatFiles = useMemo(
+    () => collectChangedFormatFiles(bankPath, sourceChangedFilesInBank),
+    [bankPath, sourceChangedFilesInBank]
   );
   const changedFormatFiles = useMemo(
-    () => collectChangedFormatFiles(bankPath, changedFilesInBank),
-    [bankPath, changedFilesInBank]
+    () =>
+      new Set<string>([
+        ...Array.from(localChangedFormatFiles),
+        ...Array.from(sourceChangedFormatFiles),
+      ]),
+    [localChangedFormatFiles, sourceChangedFormatFiles]
+  );
+  const changedFormatPathsForValidation = useMemo(
+    () => Array.from(changedFormatFiles),
+    [changedFormatFiles]
   );
 
   const allFormatFiles = useMemo(() => {
@@ -756,6 +1444,15 @@ export function BankWorkspace() {
   }, [bank, bankPath, changedFormatFiles, draftStore.drafts]);
 
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
+  const sourceSelectionKey = `${repository.owner}/${repository.repo}:${sourceRef?.type ?? "none"}:${sourceRef?.name ?? ""}:${sourceRef?.sha ?? ""}:${sourceRef?.prNumber ?? ""}:${bankPath}`;
+
+  useResetSelectionOnSourceChange({
+    requestedFile,
+    sourceSelectionKey,
+    setSelectedFile,
+    setShowSenders,
+  });
+
   const {
     filteredFormatFiles,
     shouldIndexExamples,
@@ -773,29 +1470,27 @@ export function BankWorkspace() {
     sourceRefNameForContent,
   });
 
-  // Recent formats
-  const recentFormats = useMemo(() => {
-    const recent = getRecentFormats(bankPath);
-    return recent.filter((f) => allFormatFiles.includes(f));
-  }, [bankPath, allFormatFiles]);
-
-  useAutoSelectFormat({
-    requestedFile,
-    allFormatFiles,
-    selectedFile,
-    showSenders,
-    setSelectedFile,
-    setShowSenders,
-  });
+  const recentFiles = useMemo(() => {
+    const recent = getRecentFiles(bankPath);
+    return recent.filter(
+      (path) => path === sendersPath || allFormatFiles.includes(path)
+    );
+  }, [allFormatFiles, bankPath, sendersPath]);
 
   const handleSelectFile = useCallback(
     (f: string) => {
       setSelectedFile(f);
       setShowSenders(false);
-      addRecentFormat(bankPath, f);
+      addRecentFile(bankPath, f);
     },
     [bankPath]
   );
+
+  const handleSelectSenders = useCallback(() => {
+    setShowSenders(true);
+    setSelectedFile(null);
+    addRecentFile(bankPath, sendersPath);
+  }, [bankPath, sendersPath]);
 
   const handleRenameFile = useCallback(
     (fromPath: string, toPath: string): boolean => {
@@ -813,6 +1508,58 @@ export function BankWorkspace() {
     [allFormatFiles, bankPath, draftStore, selectedFile, setBanks]
   );
 
+  const localSendersChanged = localChangedFilesInBank.has(sendersPath);
+  const sourceSendersChanged =
+    !localSendersChanged && sourceChangedFilesInBank.has(sendersPath);
+  const sendersMissing =
+    !!bank && !bank.hasSenders && !draftStore.getDraft(sendersPath);
+  const {
+    showApprovePullRequestButton,
+    isApprovingPullRequest,
+    isPullRequestApproved,
+    approvePullRequestError,
+    handleApprovePullRequest,
+    approvePullRequestLabel,
+  } = usePullRequestApproval({
+    repository,
+    sourceRef,
+    t,
+  });
+  const {
+    isPublishing: isPublishingQuickUpdate,
+    publishError,
+    onPublish: handlePublishAction,
+    canUpdateCurrentPullRequest,
+    publishActionLabel,
+  } = useBankPublishAction({
+    changedFiles: changedFilesForPublish,
+    onOpenCreatePublish: () => setShowPublish(true),
+    repository,
+    sourceRef,
+    t,
+  });
+
+  useAutoSelectFormat({
+    requestedFile,
+    allFormatFiles,
+    sendersPath,
+    preferredFormatFile: allFormatFiles[0] ?? null,
+    selectionReady: isSelectionReady,
+    selectedFile,
+    showSenders,
+    setSelectedFile,
+    setShowSenders,
+  });
+
+  if (isRouteSyncInFlight || routeSyncPending) {
+    return (
+      <div className="flex items-center gap-sm">
+        <span className="spinner" />
+        <span>{t("app.loading")}</span>
+      </div>
+    );
+  }
+
   if (!bank && allFormatFiles.length === 0) {
     return (
       <div className="flex-col gap-md">
@@ -823,7 +1570,6 @@ export function BankWorkspace() {
     );
   }
 
-  const sendersPath = `${bankPath}/senders.txt`;
   const displayName = bank?.displayName ?? bankPath.replace("src/", "");
   const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
   const encodedBankPathSegments = bankPath
@@ -831,29 +1577,14 @@ export function BankWorkspace() {
     .map(encodeURIComponent)
     .join("/");
   const bankRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/tree/${encodeURIComponent(refName)}/${encodedBankPathSegments}`;
-  const visibleFormats = resolveVisibleFormats({
-    formatTab,
-    recentFormats,
-    filteredFormatFiles,
-  });
-  const sendersChanged = changedFilesInBank.has(sendersPath);
-  const showSearchIndexStatus =
-    shouldIndexExamples &&
-    indexedScopeSummary.total > 0 &&
-    (indexingInFlight > 0 ||
-      indexedScopeSummary.loadedCount < indexedScopeSummary.total ||
-      indexingErrors > 0);
-  const searchIndexingLabel =
-    indexingErrors > 0
-      ? t("bank.searchIndexingWithErrors", {
-          loaded: indexedScopeSummary.loadedCount,
-          total: indexedScopeSummary.total,
-          errors: indexingErrors,
-        })
-      : t("bank.searchIndexing", {
-          loaded: indexedScopeSummary.loadedCount,
-          total: indexedScopeSummary.total,
-        });
+  const { showSearchIndexStatus, searchIndexingLabel } =
+    buildSearchIndexingMeta({
+      shouldIndexExamples,
+      indexedScopeSummary,
+      indexingInFlight,
+      indexingErrors,
+      t,
+    });
 
   return (
     <div className="grid-sidebar">
@@ -876,57 +1607,49 @@ export function BankWorkspace() {
         </div>
 
         {/* Action bar */}
-        <div className="bank-actions flex-col">
-          <button
-            className="btn btn--primary bank-actions__btn w-full"
-            onClick={() => setShowPublish(true)}
-          >
-            {t("publish.createPR")}
-          </button>
-          <button
-            className="btn bank-actions__btn w-full"
-            onClick={() => setShowQuickCheck(true)}
-          >
-            {t("quickCheck.open")}
-          </button>
-          <RefreshButton bankPath={bankPath} />
-          <button
-            className={`btn bank-actions__btn w-full ${showSenders ? "btn--primary" : ""}`}
-            onClick={() => {
-              setShowSenders(true);
-              setSelectedFile(null);
-            }}
-          >
-            {t("bank.senders")}
-            {sendersChanged && (
-              <span className="badge badge--modified" style={{ marginLeft: 8 }}>
-                ●
-              </span>
-            )}
-            {bank && !bank.hasSenders && !draftStore.getDraft(sendersPath) && (
-              <span className="badge badge--warning" style={{ marginLeft: 8 }}>
-                !
-              </span>
-            )}
-          </button>
-        </div>
+        <BankActionsPanel
+          approvePullRequestError={approvePullRequestError}
+          approvePullRequestLabel={approvePullRequestLabel}
+          bankPath={bankPath}
+          isApprovingPullRequest={isApprovingPullRequest}
+          isPublishing={isPublishingQuickUpdate}
+          isPullRequestApproved={isPullRequestApproved}
+          onApprovePullRequest={() => {
+            void handleApprovePullRequest();
+          }}
+          onOpenQuickCheck={() => setShowQuickCheck(true)}
+          onOpenValidation={() => setShowValidation(true)}
+          onPublish={handlePublishAction}
+          publishActionLabel={publishActionLabel}
+          publishError={publishError}
+          showApprovePullRequestButton={showApprovePullRequestButton}
+          t={t}
+        />
 
         <FormatsPanel
-          changedFormatFiles={changedFormatFiles}
           formatSearch={formatSearch}
           formatTab={formatTab}
           handleSelectFile={handleSelectFile}
+          handleSelectSenders={handleSelectSenders}
+          localChangedFormatFiles={localChangedFormatFiles}
+          localSendersChanged={localSendersChanged}
+          recentFiles={recentFiles}
           refName={refName}
           repository={repository}
           searchIndexingLabel={searchIndexingLabel}
           selectedFile={selectedFile}
+          sendersMissing={sendersMissing}
+          sendersPath={sendersPath}
           setFormatSearch={setFormatSearch}
           setFormatTab={setFormatTab}
           setShowCreateFormat={setShowCreateFormat}
           showSearchIndexStatus={showSearchIndexStatus}
+          showSenders={showSenders}
+          sourceChangedFormatFiles={sourceChangedFormatFiles}
+          sourceSendersChanged={sourceSendersChanged}
           t={t}
-          totalFormatsCount={allFormatFiles.length}
-          visibleFormats={visibleFormats}
+          totalFilesCount={allFormatFiles.length + 1}
+          visibleFormats={filteredFormatFiles}
         />
       </div>
 
@@ -938,7 +1661,6 @@ export function BankWorkspace() {
           selectedFile,
           allFormatFiles,
           handleRenameFile,
-          onOpenValidation: () => setShowValidation(true),
           t,
         })}
       </div>
@@ -954,7 +1676,7 @@ export function BankWorkspace() {
           }}
         />
       )}
-      {showPublish && (
+      {showPublish && !canUpdateCurrentPullRequest && (
         <PublishPanel
           bankName={displayName}
           bankPath={bankPath}
@@ -965,6 +1687,7 @@ export function BankWorkspace() {
         <ValidationPanel
           bank={bank ?? null}
           bankPath={bankPath}
+          changedFormatPaths={changedFormatPathsForValidation}
           onClose={() => setShowValidation(false)}
         />
       )}

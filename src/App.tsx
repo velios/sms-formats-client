@@ -5,7 +5,6 @@ import { AppHeader } from "./components/AppHeader";
 import { useInitMainBranch } from "./hooks/useGitHub";
 import { BankWorkspace } from "./pages/BankWorkspace";
 import { Dashboard } from "./pages/Dashboard";
-import { HomeHub } from "./pages/HomeHub";
 import { SmsMarkupGame } from "./pages/SmsMarkupGame";
 import { useSourceStore } from "./store";
 
@@ -41,7 +40,10 @@ export function App() {
         <AppHeader />
         <main className="app-main">
           <Routes>
-            <Route element={<HomeHub />} path="/" />
+            <Route
+              element={workspaceBlocked ? workspaceFallback : <Dashboard />}
+              path="/"
+            />
             <Route element={<SmsMarkupGame />} path="/share-your-sms" />
             <Route
               element={workspaceBlocked ? workspaceFallback : <Dashboard />}
@@ -49,7 +51,7 @@ export function App() {
             />
             <Route
               element={workspaceBlocked ? workspaceFallback : <BankWorkspace />}
-              path="/bank/:bankPath/*"
+              path="/bank/:bankKey/repo/:repoOwner/branch-or-pr/:branchOrPr/*"
             />
             <Route element={<Navigate replace to="/" />} path="*" />
           </Routes>

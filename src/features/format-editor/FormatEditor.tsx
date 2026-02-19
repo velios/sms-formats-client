@@ -12,7 +12,22 @@ interface Props {
   filePath: string;
   allFormatFiles: string[];
   onRenameFile: (fromPath: string, toPath: string) => boolean;
-  onOpenValidation: () => void;
+}
+
+function computeSaveDisabled(params: {
+  mode: EditorMode;
+  structuredRawCandidate: string | null;
+  currentContent: string;
+  rawContent: string;
+}): boolean {
+  const { mode, structuredRawCandidate, currentContent, rawContent } = params;
+  if (mode === "raw") {
+    return rawContent === currentContent;
+  }
+  if (!structuredRawCandidate) {
+    return true;
+  }
+  return structuredRawCandidate === currentContent;
 }
 
 function isRegexValid(value: string): boolean {
@@ -55,7 +70,6 @@ export function FormatEditor({
   filePath,
   allFormatFiles,
   onRenameFile,
-  onOpenValidation,
 }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
@@ -71,6 +85,7 @@ export function FormatEditor({
   const draft = draftStore.getDraft(filePath);
   const currentContent = draft?.content ?? remoteContent ?? "";
   const baseSha = draft?.baseSha ?? sourceRef?.sha ?? "";
+  const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
   const hasLoadedInitial = draft != null || remoteContent !== undefined;
 
   // Structured state
@@ -115,14 +130,13 @@ export function FormatEditor({
 
   const saveDraft = useCallback(
     (content: string) => {
-      const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
       if (content === remoteBaseline) {
         draftStore.removeDraft(filePath);
         return;
       }
       draftStore.setDraft(filePath, content, baseSha, remoteBaseline);
     },
-    [draftStore, filePath, baseSha, draft?.remoteContent, remoteContent]
+    [draftStore, filePath, baseSha, remoteBaseline]
   );
 
   const syncRawFromStructured = useCallback(
@@ -181,9 +195,9 @@ export function FormatEditor({
     if (initialContent == null) {
       return;
     }
-    setRawContent(initialContent);
-    saveDraft(initialContent);
-    parseRawToStructured(initialContent, false);
+    setRawContent(remoteBaseline);
+    saveDraft(remoteBaseline);
+    parseRawToStructured(remoteBaseline, false);
   };
 
   const handleRawChange = (value: string) => {
@@ -236,7 +250,13 @@ export function FormatEditor({
   const resetLabel = t("app.reset");
   const handleSave =
     mode === "structured" ? handleSaveStructured : handleSaveRaw;
-  const saveDisabled = mode === "structured" ? !structuredRawCandidate : false;
+  const saveDisabled = computeSaveDisabled({
+    mode,
+    structuredRawCandidate,
+    currentContent,
+    rawContent,
+  });
+  const resetDisabled = !isModified;
 
   const handleRename = () => {
     const currentDraft = draftStore.getDraft(filePath);
@@ -288,16 +308,30 @@ export function FormatEditor({
 
   return (
     <div className="format-editor">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-sm">
+      {/* Compact header: mode tabs + file name + actions */}
+      <div className="format-editor__toolbar">
+        <div className="mode-tabs mode-tabs--inline">
+          <button
+            className={`mode-tab ${mode === "structured" ? "mode-tab--active" : ""}`}
+            onClick={() => setMode("structured")}
+          >
+            {t("editor.structured")}
+          </button>
+          <button
+            className={`mode-tab ${mode === "raw" ? "mode-tab--active" : ""}`}
+            onClick={() => setMode("raw")}
+          >
+            {t("editor.raw")}
+          </button>
+        </div>
+        <div className="format-editor__file-info">
           <span className="font-medium text-mono">{fileName}</span>
           <button className="btn btn--ghost btn--sm" onClick={handleRename}>
             {t("editor.renameFormat")}
           </button>
           <a
             aria-label={t("bank.openFormatInRepo")}
-            className="format-row-link"
+            className="btn btn--ghost btn--sm"
             href={formatRepoUrl}
             onClick={(e) => e.stopPropagation()}
             rel="noreferrer"
@@ -315,13 +349,10 @@ export function FormatEditor({
         <div className="flex gap-sm">
           <button
             className="btn bank-actions__btn"
-            disabled={initialContent == null}
+            disabled={initialContent == null || resetDisabled}
             onClick={handleReset}
           >
             {resetLabel}
-          </button>
-          <button className="btn bank-actions__btn" onClick={onOpenValidation}>
-            {t("editor.validation")}
           </button>
           <button
             className="btn btn--primary bank-actions__btn"
@@ -331,22 +362,6 @@ export function FormatEditor({
             {saveLabel}
           </button>
         </div>
-      </div>
-
-      {/* 3-block mode tabs */}
-      <div className="mode-tabs">
-        <button
-          className={`mode-tab ${mode === "structured" ? "mode-tab--active" : ""}`}
-          onClick={() => setMode("structured")}
-        >
-          {t("editor.structured")}
-        </button>
-        <button
-          className={`mode-tab ${mode === "raw" ? "mode-tab--active" : ""}`}
-          onClick={() => setMode("raw")}
-        >
-          {t("editor.raw")}
-        </button>
       </div>
 
       {/* Parse errors */}

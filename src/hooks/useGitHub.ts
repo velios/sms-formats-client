@@ -12,6 +12,7 @@ import {
   fetchSourceRepoForks,
   fetchStartableIssues,
   indexBanksFromTree,
+  refreshPullRequestApprovalPermission,
 } from "@/domain/github";
 import type { RepoRef } from "@/domain/types";
 import { useSourceStore } from "@/store";
@@ -178,6 +179,7 @@ export function useSwitchRepository() {
 
     setLoading(true);
     try {
+      await refreshPullRequestApprovalPermission(nextRepository);
       const sha = await fetchBranchSha(config.defaultBranch, nextRepository);
       const tree = await fetchRepoTree(sha, nextRepository);
       const banks = indexBanksFromTree(tree);

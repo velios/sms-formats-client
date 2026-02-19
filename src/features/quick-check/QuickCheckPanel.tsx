@@ -1,9 +1,14 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { config } from "@/config";
+import {
+  buildBankWorkspacePath,
+  sourceRefToRouteSource,
+} from "@/domain/bank-route";
 import { parseFormatFile, testRegex } from "@/domain/format";
 import { fetchFileContent } from "@/domain/github";
-import type { RepoRef } from "@/domain/types";
+import type { RepoRef, SourceRef } from "@/domain/types";
 import { useDraftStore, useSourceStore } from "@/store";
 
 const QUICK_CHECK_PARALLELISM = 4;
@@ -259,8 +264,19 @@ function countByStatus(
   return results.filter((result) => result.status === status).length;
 }
 
-function buildAppFileLink(bankPath: string, filePath: string): string {
-  return `/bank/${encodeURIComponent(bankPath)}?file=${encodeURIComponent(filePath)}`;
+function buildAppFileLink(params: {
+  bankPath: string;
+  filePath: string;
+  repository: RepoRef;
+  sourceRef: SourceRef | null;
+}): string {
+  const { bankPath, filePath, repository, sourceRef } = params;
+  return buildBankWorkspacePath({
+    bankPath,
+    repository,
+    source: sourceRefToRouteSource(sourceRef, config.defaultBranch),
+    filePath,
+  });
 }
 
 function buildGitHubFileLink(params: {
@@ -280,6 +296,8 @@ export function QuickCheckPanel({
   onClose,
 }: Props) {
   const { t } = useTranslation();
+  const dialogTitleId = useId();
+  const smsInputId = useId();
   const navigate = useNavigate();
   const draftStore = useDraftStore();
   const sourceRef = useSourceStore((s) => s.sourceRef);
@@ -295,10 +313,17 @@ export function QuickCheckPanel({
 
   const handleOpenInApp = useCallback(
     (filePath: string) => {
-      navigate(buildAppFileLink(bankPath, filePath));
+      navigate(
+        buildAppFileLink({
+          bankPath,
+          filePath,
+          repository,
+          sourceRef,
+        })
+      );
       onClose();
     },
-    [bankPath, navigate, onClose]
+    [bankPath, navigate, onClose, repository, sourceRef]
   );
 
   const runQuickCheck = useCallback(async () => {
@@ -367,20 +392,24 @@ export function QuickCheckPanel({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        aria-labelledby={dialogTitleId}
+        aria-modal="true"
         className="modal quick-check-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
         style={{ minWidth: 760, maxWidth: 960 }}
       >
-        <div className="modal__title">
+        <div className="modal__title" id={dialogTitleId}>
           {t("quickCheck.title", { bank: bankName })}
         </div>
 
         <div className="flex-col gap-xs">
-          <label className="text-muted text-sm">
+          <label className="text-muted text-sm" htmlFor={smsInputId}>
             {t("quickCheck.smsLabel")}
           </label>
           <textarea
             className="textarea quick-check__input"
+            id={smsInputId}
             onChange={(event) => setSmsText(event.target.value)}
             placeholder={t("quickCheck.smsPlaceholder")}
             value={smsText}
@@ -391,13 +420,21 @@ export function QuickCheckPanel({
         </div>
 
         {errorMessage && (
-          <div className="issue-item issue-item--error quick-check__feedback">
+          <div
+            aria-live="assertive"
+            className="issue-item issue-item--error quick-check__feedback"
+            role="alert"
+          >
             {errorMessage}
           </div>
         )}
 
         {summary && (
-          <div className="quick-check__summary">
+          <div
+            aria-live="polite"
+            className="quick-check__summary"
+            role="status"
+          >
             <span className="badge badge--info">
               {t("quickCheck.summaryChecked", {
                 checked: summary.checkedRegexes,
@@ -467,7 +504,12 @@ export function QuickCheckPanel({
                 <div className="quick-check__links">
                   <a
                     className="quick-check__link"
-                    href={buildAppFileLink(bankPath, result.filePath)}
+                    href={buildAppFileLink({
+                      bankPath,
+                      filePath: result.filePath,
+                      repository,
+                      sourceRef,
+                    })}
                     onClick={(event) => {
                       event.preventDefault();
                       handleOpenInApp(result.filePath);

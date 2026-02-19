@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FORMAT_TEMPLATE } from "@/domain/format";
 import { useDraftStore, useSourceStore } from "@/store";
@@ -11,6 +11,9 @@ interface Props {
 
 export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
   const { t } = useTranslation();
+  const dialogTitleId = useId();
+  const formatNameInputId = useId();
+  const formatIdInputId = useId();
   const [formatName, setFormatName] = useState("");
   const [formatId, setFormatId] = useState("");
   const draftStore = useDraftStore();
@@ -33,17 +36,26 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal__title">{t("bank.createFormat")}</div>
+      <div
+        aria-labelledby={dialogTitleId}
+        aria-modal="true"
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+      >
+        <div className="modal__title" id={dialogTitleId}>
+          {t("bank.createFormat")}
+        </div>
 
         <div className="flex-col gap-md">
           <div className="flex-col gap-xs">
-            <label className="text-muted text-sm">
+            <label className="text-muted text-sm" htmlFor={formatNameInputId}>
               {t("bank.formatName")} *
             </label>
             <input
               autoFocus
               className="input"
+              id={formatNameInputId}
               onChange={(e) => setFormatName(e.target.value)}
               placeholder="format_name"
               value={formatName}
@@ -51,9 +63,12 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
           </div>
 
           <div className="flex-col gap-xs">
-            <label className="text-muted text-sm">{t("bank.formatId")}</label>
+            <label className="text-muted text-sm" htmlFor={formatIdInputId}>
+              {t("bank.formatId")}
+            </label>
             <input
               className="input"
+              id={formatIdInputId}
               onChange={(e) => setFormatId(e.target.value.replace(/\D/g, ""))}
               placeholder="1"
               value={formatId}

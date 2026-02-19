@@ -1,8 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { config } from "@/config";
+import {
+  buildBankWorkspacePath,
+  sourceRefToRouteSource,
+} from "@/domain/bank-route";
 import { serializeFormat } from "@/domain/format";
 import {
   createAuthenticatedOctokit,
@@ -17,7 +21,7 @@ import {
   parseIssueIdentifier,
   parseSmsGameIssueBody,
 } from "@/domain/sms-game/issue-import";
-import type { BankInfo } from "@/domain/types";
+import type { BankInfo, RepoRef, SourceRef } from "@/domain/types";
 import { ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { useDraftStore, useSourceStore } from "@/store";
 
@@ -583,12 +587,19 @@ function applyImportedFormatsToBanks(params: {
 function navigateToImportedWorkspace(
   navigate: (path: string) => void,
   bankPath: string,
-  createdFiles: string[]
+  createdFiles: string[],
+  repository: RepoRef,
+  sourceRef: SourceRef | null
 ): void {
   const firstFile = createdFiles[0];
-  const encodedBankPath = encodeURIComponent(bankPath);
-  const fileQuery = firstFile ? `?file=${encodeURIComponent(firstFile)}` : "";
-  navigate(`/bank/${encodedBankPath}${fileQuery}`);
+  navigate(
+    buildBankWorkspacePath({
+      bankPath,
+      repository,
+      source: sourceRefToRouteSource(sourceRef, config.defaultBranch),
+      filePath: firstFile,
+    })
+  );
 }
 
 function loadCachedSelectedIssueFromSession(
@@ -1227,6 +1238,8 @@ export function SmsMarkupGame() {
   const [searchParams] = useSearchParams();
   const lang = i18n.resolvedLanguage?.startsWith("ru") ? "ru" : "en";
   const draftStore = useDraftStore();
+  const repository = useSourceStore((s) => s.repository);
+  const sourceRef = useSourceStore((s) => s.sourceRef);
 
   const presetIssueQuery = searchParams.get("issue") ?? "";
   const autoStartFromSource = searchParams.get("autostart") === "1";
@@ -1476,7 +1489,9 @@ export function SmsMarkupGame() {
     navigateToImportedWorkspace(
       navigate,
       resolvedTarget.bankPath,
-      createdFiles
+      createdFiles,
+      repository,
+      sourceRef
     );
   };
 
@@ -1825,6 +1840,7 @@ function SmsGameMarkupNode({
           {t("smsGame.emptySlot")}
         </button>
         <button
+          aria-label={t("smsGame.deleteChip")}
           className="sms-game__chip-remove sms-game__chip-remove--empty"
           onClick={(event) => {
             event.stopPropagation();
@@ -1855,6 +1871,7 @@ function SmsGameMarkupNode({
         {`\${${node.placeholder}}`}
       </button>
       <button
+        aria-label={t("smsGame.deleteChip")}
         className="sms-game__chip-remove"
         onClick={(event) => {
           event.stopPropagation();
@@ -2015,6 +2032,7 @@ function SmsGameSavedFormatItem({
             key={`${format.id}-${exampleIndex}`}
           >
             <textarea
+              aria-label={t("smsGame.similarExamples")}
               className="textarea"
               onChange={(event) =>
                 updateFormatExample(format.id, exampleIndex, event.target.value)
@@ -2065,6 +2083,7 @@ function SmsGameBankStage(props: SmsMarkupGameLayoutProps) {
             {t("smsGame.bankInputLabel")}
           </label>
           <input
+            aria-label={t("smsGame.bankInputLabel")}
             className="input"
             onChange={(event) => setBankName(event.target.value)}
             placeholder={t("smsGame.bankInputPlaceholder")}
@@ -2075,6 +2094,7 @@ function SmsGameBankStage(props: SmsMarkupGameLayoutProps) {
             {t("smsGame.sendersInputLabel")}
           </label>
           <textarea
+            aria-label={t("smsGame.sendersInputLabel")}
             className="textarea"
             onChange={(event) => setSendersTemplate(event.target.value)}
             placeholder={t("smsGame.sendersInputPlaceholder")}
@@ -2203,6 +2223,7 @@ function SmsGameIssueImportPanel({
                 {t("smsGame.importTargetExistingLabel")}
               </label>
               <select
+                aria-label={t("smsGame.importTargetExistingLabel")}
                 className="input"
                 disabled={importBanks.length === 0}
                 onChange={(event) =>
@@ -2234,6 +2255,7 @@ function SmsGameIssueImportPanel({
                 {t("smsGame.importTargetNewLabel")}
               </label>
               <input
+                aria-label={t("smsGame.importTargetNewLabel")}
                 className="input"
                 onChange={(event) => setNewImportBankName(event.target.value)}
                 placeholder={t("smsGame.bankInputPlaceholder")}
@@ -2461,6 +2483,7 @@ function ColumnPickerModal({
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
+  const titleId = useId();
 
   const currentBaseName = toComparableBase(currentValue);
   const usedBaseNames = useMemo(() => {
@@ -2492,10 +2515,13 @@ function ColumnPickerModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        aria-labelledby={titleId}
+        aria-modal="true"
         className="modal regex-column-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
       >
-        <div className="modal__title">
+        <div className="modal__title" id={titleId}>
           {t("columns.selectForGroup", { index: groupIndex })}
         </div>
         {selectionText && (
