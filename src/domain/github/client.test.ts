@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RepoRef } from "../types";
 import {
   getCachedPullRequestApprovalPermission,
+  getGitHubAuthChangeVersion,
   indexBanksFromTree,
   setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
+  subscribeGitHubAuthChange,
 } from "./client";
 
 describe("indexBanksFromTree", () => {
@@ -84,5 +86,25 @@ describe("pull request approval permission cache", () => {
     setGitHubUserToken("ghp_test");
 
     expect(getCachedPullRequestApprovalPermission(repo)).toBe(false);
+  });
+
+  it("notifies subscribers when user token is set or reset", () => {
+    const onAuthChange = vi.fn();
+    const initialVersion = getGitHubAuthChangeVersion();
+    const unsubscribe = subscribeGitHubAuthChange(onAuthChange);
+
+    setGitHubUserToken("ghp_test");
+    expect(onAuthChange).toHaveBeenCalledTimes(1);
+    expect(getGitHubAuthChangeVersion()).toBe(initialVersion + 1);
+
+    setGitHubUserToken("ghp_test");
+    expect(onAuthChange).toHaveBeenCalledTimes(1);
+    expect(getGitHubAuthChangeVersion()).toBe(initialVersion + 1);
+
+    setGitHubUserToken(null);
+    expect(onAuthChange).toHaveBeenCalledTimes(2);
+    expect(getGitHubAuthChangeVersion()).toBe(initialVersion + 2);
+
+    unsubscribe();
   });
 });

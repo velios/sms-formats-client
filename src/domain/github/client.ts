@@ -29,6 +29,8 @@ type PullRequestApprovalPermissionCache = Record<
   PullRequestApprovalPermissionEntry
 >;
 
+type GitHubAuthChangeListener = () => void;
+
 function resolveRepo(repoRef?: RepoRef): RepoRef {
   return repoRef ?? defaultRepoRef;
 }
@@ -151,6 +153,15 @@ function canApproveByRepositoryPermission(
 
 let userToken = readStoredGitHubUserToken();
 let publicOctokit = createPublicOctokit(userToken || sharedToken);
+const githubAuthChangeListeners = new Set<GitHubAuthChangeListener>();
+let githubAuthChangeVersion = 0;
+
+function notifyGitHubAuthChange(): void {
+  githubAuthChangeVersion += 1;
+  for (const listener of githubAuthChangeListeners) {
+    listener();
+  }
+}
 
 export function createAuthenticatedOctokit(token: string): Octokit {
   return new Octokit({ auth: token });
@@ -158,6 +169,19 @@ export function createAuthenticatedOctokit(token: string): Octokit {
 
 export function getGitHubUserToken(): string | null {
   return userToken || null;
+}
+
+export function subscribeGitHubAuthChange(
+  listener: GitHubAuthChangeListener
+): () => void {
+  githubAuthChangeListeners.add(listener);
+  return () => {
+    githubAuthChangeListeners.delete(listener);
+  };
+}
+
+export function getGitHubAuthChangeVersion(): number {
+  return githubAuthChangeVersion;
 }
 
 export function setGitHubUserToken(token: string | null): void {
@@ -168,6 +192,7 @@ export function setGitHubUserToken(token: string | null): void {
   publicOctokit = createPublicOctokit(userToken || sharedToken);
   if (tokenChanged) {
     clearPullRequestApprovalPermissionCache();
+    notifyGitHubAuthChange();
   }
 }
 

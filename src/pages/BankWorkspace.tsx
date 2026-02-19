@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -22,7 +23,10 @@ import {
   fetchFileContent,
   fetchPullRequestFiles,
   getCachedPullRequestApprovalPermission,
+  getGitHubAuthChangeVersion,
   getGitHubUserToken,
+  refreshPullRequestApprovalPermission,
+  subscribeGitHubAuthChange,
   updatePullRequestHead,
 } from "@/domain/github";
 import { type FormatSearchDoc, searchFormatPaths } from "@/domain/search";
@@ -982,11 +986,12 @@ function usePullRequestChangedFiles(params: {
 }
 
 function usePullRequestApproval(params: {
+  canApprovePullRequest: boolean;
   repository: { owner: string; repo: string };
   sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
   t: (key: string) => string;
 }) {
-  const { repository, sourceRef, t } = params;
+  const { canApprovePullRequest, repository, sourceRef, t } = params;
   const [isApprovingPullRequest, setIsApprovingPullRequest] = useState(false);
   const [isPullRequestApproved, setIsPullRequestApproved] = useState(false);
   const [approvePullRequestError, setApprovePullRequestError] = useState<
@@ -1020,9 +1025,7 @@ function usePullRequestApproval(params: {
   }, [repository, sourceRef?.prNumber, sourceRef?.type, t]);
 
   const showApprovePullRequestButton = Boolean(
-    sourceRef?.type === "pr" &&
-      sourceRef.prNumber &&
-      getCachedPullRequestApprovalPermission(repository)
+    sourceRef?.type === "pr" && sourceRef.prNumber && canApprovePullRequest
   );
   const approvePullRequestLabel = isApprovingPullRequest
     ? t("source.approvingPr")
@@ -1038,6 +1041,50 @@ function usePullRequestApproval(params: {
     isPullRequestApproved,
     showApprovePullRequestButton,
   };
+}
+
+function usePullRequestApprovalPermission(params: {
+  repository: { owner: string; repo: string };
+  sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
+}) {
+  const { repository, sourceRef } = params;
+  const authChangeVersion = useSyncExternalStore(
+    subscribeGitHubAuthChange,
+    getGitHubAuthChangeVersion,
+    getGitHubAuthChangeVersion
+  );
+  const [canApprovePullRequest, setCanApprovePullRequest] = useState(() =>
+    getCachedPullRequestApprovalPermission(repository)
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!(sourceRef?.type === "pr" && sourceRef.prNumber)) {
+      setCanApprovePullRequest(false);
+      return;
+    }
+
+    setCanApprovePullRequest(
+      getCachedPullRequestApprovalPermission(repository)
+    );
+    void refreshPullRequestApprovalPermission(repository).then((canApprove) => {
+      if (!cancelled) {
+        setCanApprovePullRequest(canApprove);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authChangeVersion,
+    repository.owner,
+    repository.repo,
+    sourceRef?.prNumber,
+    sourceRef?.type,
+  ]);
+
+  return canApprovePullRequest;
 }
 
 function useQuickPullRequestUpdate(params: {
@@ -1119,18 +1166,23 @@ function useQuickPullRequestUpdate(params: {
 }
 
 function useBankPublishAction(params: {
+  canApprovePullRequest: boolean;
   changedFiles: Array<{ filePath: string; content: string }>;
   onOpenCreatePublish: () => void;
   repository: { owner: string; repo: string };
   sourceRef: { type: "branch" | "pr"; name: string; prNumber?: number } | null;
   t: (key: string) => string;
 }) {
-  const { changedFiles, onOpenCreatePublish, repository, sourceRef, t } =
-    params;
+  const {
+    canApprovePullRequest,
+    changedFiles,
+    onOpenCreatePublish,
+    repository,
+    sourceRef,
+    t,
+  } = params;
   const canUpdateCurrentPullRequest = Boolean(
-    sourceRef?.type === "pr" &&
-      sourceRef.prNumber &&
-      getCachedPullRequestApprovalPermission(repository)
+    sourceRef?.type === "pr" && sourceRef.prNumber && canApprovePullRequest
   );
   const {
     isPublishing,
@@ -1513,6 +1565,10 @@ export function BankWorkspace() {
     !localSendersChanged && sourceChangedFilesInBank.has(sendersPath);
   const sendersMissing =
     !!bank && !bank.hasSenders && !draftStore.getDraft(sendersPath);
+  const canApprovePullRequest = usePullRequestApprovalPermission({
+    repository,
+    sourceRef,
+  });
   const {
     showApprovePullRequestButton,
     isApprovingPullRequest,
@@ -1521,6 +1577,7 @@ export function BankWorkspace() {
     handleApprovePullRequest,
     approvePullRequestLabel,
   } = usePullRequestApproval({
+    canApprovePullRequest,
     repository,
     sourceRef,
     t,
@@ -1532,6 +1589,7 @@ export function BankWorkspace() {
     canUpdateCurrentPullRequest,
     publishActionLabel,
   } = useBankPublishAction({
+    canApprovePullRequest,
     changedFiles: changedFilesForPublish,
     onOpenCreatePublish: () => setShowPublish(true),
     repository,
