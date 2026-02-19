@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { config } from "@/config";
 import type { BankInfo } from "@/domain/types";
-import { CreateBankModal } from "@/features/create-entity/CreateBankModal";
-import { useRepoTree, useSwitchSource } from "@/hooks/useGitHub";
+import { useOpenPRs, useRepoTree, useSwitchSource } from "@/hooks/useGitHub";
 import { useDraftStore, useSourceStore } from "@/store";
 
 // ─── Recent banks persistence ───
 const RECENT_BANKS_KEY = "sms-formats-recent-banks";
 const MAX_RECENT_BANKS = 10;
+const RECENT_PRS_KEY = "sms-formats-recent-prs";
+const MAX_RECENT_PRS = 20;
 
 function getRecentBanks(): string[] {
   try {
@@ -34,6 +35,72 @@ export function addRecentBank(bankPath: string) {
   }
 }
 
+function getRecentPRs(repoSlug: string): number[] {
+  try {
+    const allData = JSON.parse(localStorage.getItem(RECENT_PRS_KEY) ?? "{}") as
+      | Record<string, number[]>
+      | undefined;
+    const repoItems = allData?.[repoSlug];
+    if (!Array.isArray(repoItems)) {
+      return [];
+    }
+    return repoItems.filter((item): item is number => Number.isInteger(item));
+  } catch {
+    return [];
+  }
+}
+
+function addRecentPR(repoSlug: string, prNumber: number) {
+  try {
+    const allData = JSON.parse(localStorage.getItem(RECENT_PRS_KEY) ?? "{}") as
+      | Record<string, number[]>
+      | undefined;
+    const next = { ...(allData ?? {}) };
+    const current = Array.isArray(next[repoSlug]) ? next[repoSlug] : [];
+    const deduplicated = current.filter((item) => item !== prNumber);
+    deduplicated.unshift(prNumber);
+    next[repoSlug] = deduplicated.slice(0, MAX_RECENT_PRS);
+    localStorage.setItem(RECENT_PRS_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
+
+function collectChangedBankPaths(paths: string[]): string[] {
+  const banks = new Set<string>();
+  for (const path of paths) {
+    if (!path.startsWith("src/")) {
+      continue;
+    }
+    const bankFolder = path.split("/")[1];
+    if (bankFolder) {
+      banks.add(`src/${bankFolder}`);
+    }
+  }
+  return Array.from(banks).sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" })
+  );
+}
+
+function sortPRs(
+  prs:
+    | Array<{
+        number: number;
+        title: string;
+        headRef: string;
+        headSha: string;
+        approvedCount: number;
+      }>
+    | undefined
+) {
+  return [...(prs ?? [])].sort((a, b) => {
+    if (a.approvedCount !== b.approvedCount) {
+      return b.approvedCount - a.approvedCount;
+    }
+    return b.number - a.number;
+  });
+}
+
 export function Dashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -45,10 +112,13 @@ export function Dashboard() {
   const draftStore = useDraftStore();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  const [showCreateBank, setShowCreateBank] = useState(false);
+  const [prTab, setPrTab] = useState<"all" | "recent">("all");
   const [banksTab, setBanksTab] = useState<"all" | "recent">("all");
   const [reloadAttemptKey, setReloadAttemptKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { data: openPRs = [], isLoading: isPRsLoading } = useOpenPRs();
+  const sortedPRs = useMemo(() => sortPRs(openPRs), [openPRs]);
+  const repoSlug = `${repository.owner}/${repository.repo}`;
 
   // Load tree when source is set
   const { isLoading, error } = useRepoTree(sourceRef?.sha);
@@ -106,6 +176,23 @@ export function Dashboard() {
       .map((p) => banks.find((b) => b.folderPath === p))
       .filter((b): b is BankInfo => b != null);
   }, [banks]);
+  const recentPRs = useMemo(() => {
+    const numbers = getRecentPRs(repoSlug);
+    return numbers
+      .map((number) => sortedPRs.find((pr) => pr.number === number))
+      .filter(
+        (
+          pr
+        ): pr is {
+          number: number;
+          title: string;
+          headRef: string;
+          headSha: string;
+          approvedCount: number;
+        } => pr != null
+      );
+  }, [repoSlug, sortedPRs]);
+  const visiblePRs = prTab === "recent" ? recentPRs : sortedPRs;
   const visibleBanks = banksTab === "recent" ? recentBanks : filtered;
 
   useEffect(() => {
@@ -150,12 +237,39 @@ export function Dashboard() {
   ]);
 
   const handleSelect = useCallback(
-    (bank: BankInfo) => {
+    async (bank: BankInfo) => {
+      if (
+        !(
+          sourceRef?.type === "branch" &&
+          sourceRef.name === config.defaultBranch
+        )
+      ) {
+        await switchSource("branch", config.defaultBranch);
+      }
       addRecentBank(bank.folderPath);
       const encodedPath = encodeURIComponent(bank.folderPath);
       navigate(`/bank/${encodedPath}`);
     },
-    [navigate]
+    [navigate, sourceRef?.name, sourceRef?.type, switchSource]
+  );
+
+  const handlePRSelect = useCallback(
+    async (pr: { number: number; headRef: string; headSha: string }) => {
+      addRecentPR(repoSlug, pr.number);
+      await switchSource("pr", pr.headRef, pr.number, pr.headSha);
+      const changedBankPaths = collectChangedBankPaths(
+        useSourceStore.getState().sourceChangedFiles
+      );
+      if (changedBankPaths.length === 1) {
+        const [bankPath] = changedBankPaths;
+        if (bankPath) {
+          navigate(`/bank/${encodeURIComponent(bankPath)}`);
+          return;
+        }
+      }
+      navigate("/workspace");
+    },
+    [navigate, repoSlug, switchSource]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -172,7 +286,7 @@ export function Dashboard() {
       e.preventDefault();
       const bank = filtered[activeIndex];
       if (bank) {
-        handleSelect(bank);
+        void handleSelect(bank);
       }
     }
   };
@@ -195,96 +309,158 @@ export function Dashboard() {
   }
 
   return (
-    <div style={{ maxWidth: 700, margin: "0 auto" }}>
-      <div className="mb-md flex items-center justify-between">
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>{t("app.title")}</h2>
-        <div className="flex items-center gap-sm">
-          <button
-            className="btn btn--sm"
-            onClick={() => navigate("/share-your-sms")}
-          >
-            {t("smsGame.openPage")}
-          </button>
-          <button
-            className="btn btn--primary btn--sm"
-            onClick={() => setShowCreateBank(true)}
-          >
-            + {t("bank.createBank")}
-          </button>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel__header">
-          {t("bank.banks")} · {banks.length}
-        </div>
-        <div className="tabs">
-          <button
-            className={`tab ${banksTab === "all" ? "tab--active" : ""}`}
-            onClick={() => setBanksTab("all")}
-          >
-            {t("bank.banks")}
-          </button>
-          <button
-            className={`tab ${banksTab === "recent" ? "tab--active" : ""}`}
-            onClick={() => setBanksTab("recent")}
-          >
-            {t("bank.recentBanks")}
-          </button>
-        </div>
-        {banksTab === "all" && (
-          <div
-            style={{
-              padding: "8px",
-              borderBottom: "1px solid var(--c-border)",
-            }}
-          >
-            <div className="autocomplete">
-              <input
-                aria-label={t("bank.search")}
-                autoFocus
-                className="input"
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={t("bank.search")}
-                ref={inputRef}
-                value={query}
-              />
-            </div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+      }}
+    >
+      <div className="dashboard-grid">
+        <div className="panel dashboard-panel">
+          <div className="panel__header">
+            {t("source.pullRequest")} · {sortedPRs.length}
           </div>
-        )}
-        <div style={{ maxHeight: "calc(100vh - 320px)", overflowY: "auto" }}>
-          {visibleBanks.length === 0 ? (
-            <div className="p-md text-muted">{t("bank.noResults")}</div>
-          ) : (
-            visibleBanks.map((bank, i) => (
-              <BankListItem
-                bank={bank}
-                changedFiles={Array.from(
-                  changedFilesByBank.get(bank.folderPath) ?? []
-                )}
-                isActive={banksTab === "all" && i === activeIndex}
-                key={bank.folderPath}
-                onClick={() => handleSelect(bank)}
-                onMouseEnter={() => {
-                  if (banksTab === "all") {
-                    setActiveIndex(i);
-                  }
-                }}
-                openInRepoLabel={t("bank.openBankFolderInRepo")}
-                repository={repository}
-                sourceRefName={
-                  sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch
-                }
-              />
-            ))
+          <div className="tabs">
+            <button
+              className={`tab ${prTab === "all" ? "tab--active" : ""}`}
+              onClick={() => setPrTab("all")}
+            >
+              {t("source.pullRequest")}
+            </button>
+            <button
+              className={`tab ${prTab === "recent" ? "tab--active" : ""}`}
+              onClick={() => setPrTab("recent")}
+            >
+              {t("source.recentPullRequests", { defaultValue: "Recent PR" })}
+            </button>
+          </div>
+          <div className="dashboard-panel__list">
+            {isPRsLoading ? (
+              <div className="p-md text-muted">{t("app.loading")}</div>
+            ) : visiblePRs.length === 0 ? (
+              <div className="p-md text-muted">{t("bank.noResults")}</div>
+            ) : (
+              visiblePRs.map((pr) => {
+                const isActive =
+                  sourceRef?.type === "pr" && sourceRef.prNumber === pr.number;
+                const prUrl = `https://github.com/${repository.owner}/${repository.repo}/pull/${pr.number}`;
+                return (
+                  <div
+                    className={`autocomplete__item ${isActive ? "autocomplete__item--active" : ""}`}
+                    key={pr.number}
+                    onClick={() => {
+                      void handlePRSelect(pr);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        void handlePRSelect(pr);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <span className="text-muted text-sm">#{pr.number}</span>
+                    <div
+                      className="flex-col gap-xs"
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
+                      <span className="truncate text-sm">{pr.title}</span>
+                      <span className="text-dim text-xs">{pr.headRef}</span>
+                    </div>
+                    <span className="badge badge--info">
+                      ✓ {pr.approvedCount}
+                    </span>
+                    <a
+                      aria-label={`PR #${pr.number}`}
+                      className="format-row-link"
+                      href={prUrl}
+                      onClick={(event) => event.stopPropagation()}
+                      rel="noreferrer"
+                      target="_blank"
+                      title={prUrl}
+                    >
+                      ↗
+                    </a>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="panel dashboard-panel">
+          <div className="panel__header">
+            {t("bank.banks")} · {banks.length}
+          </div>
+          <div className="tabs">
+            <button
+              className={`tab ${banksTab === "all" ? "tab--active" : ""}`}
+              onClick={() => setBanksTab("all")}
+            >
+              {t("bank.banks")}
+            </button>
+            <button
+              className={`tab ${banksTab === "recent" ? "tab--active" : ""}`}
+              onClick={() => setBanksTab("recent")}
+            >
+              {t("bank.recentBanks")}
+            </button>
+          </div>
+          {banksTab === "all" && (
+            <div
+              style={{
+                padding: "8px",
+                borderBottom: "1px solid var(--c-border)",
+              }}
+            >
+              <div className="autocomplete">
+                <input
+                  aria-label={t("bank.search")}
+                  autoFocus
+                  className="input"
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t("bank.search")}
+                  ref={inputRef}
+                  value={query}
+                />
+              </div>
+            </div>
           )}
+          <div className="dashboard-panel__list">
+            {visibleBanks.length === 0 ? (
+              <div className="p-md text-muted">{t("bank.noResults")}</div>
+            ) : (
+              visibleBanks.map((bank, i) => (
+                <BankListItem
+                  bank={bank}
+                  changedFiles={Array.from(
+                    changedFilesByBank.get(bank.folderPath) ?? []
+                  )}
+                  isActive={banksTab === "all" && i === activeIndex}
+                  key={bank.folderPath}
+                  onClick={() => {
+                    void handleSelect(bank);
+                  }}
+                  onMouseEnter={() => {
+                    if (banksTab === "all") {
+                      setActiveIndex(i);
+                    }
+                  }}
+                  openInRepoLabel={t("bank.openBankFolderInRepo")}
+                  repository={repository}
+                  sourceRefName={
+                    sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch
+                  }
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
-
-      {showCreateBank && (
-        <CreateBankModal onClose={() => setShowCreateBank(false)} />
-      )}
     </div>
   );
 }

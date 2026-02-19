@@ -17,6 +17,7 @@
     "main": "main (основная ветка)",
     "branch": "Ветка",
     "pullRequest": "PR (Pull Request)",
+    "recentPullRequests": "Недавние PR",
     "startIssue": "Старт из issue",
     "repository": "Репозиторий",
     "repoSource": "исходный",

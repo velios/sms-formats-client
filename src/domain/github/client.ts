@@ -264,8 +264,50 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
     headSha: string;
     headOwner: string;
     headRepo: string;
+    approvedCount: number;
   }[]
 > {
+  function countApprovedReviews(
+    reviews: Array<{
+      user?: { login?: string } | null;
+      state?: string | null;
+    }>
+  ): number {
+    const latestStateByReviewer = new Map<string, string>();
+    for (const review of reviews) {
+      const login = review.user?.login;
+      if (!login) {
+        continue;
+      }
+      latestStateByReviewer.set(login, review.state ?? "");
+    }
+
+    let approvedCount = 0;
+    for (const state of latestStateByReviewer.values()) {
+      if (state === "APPROVED") {
+        approvedCount += 1;
+      }
+    }
+    return approvedCount;
+  }
+
+  async function fetchApprovedCount(prNumber: number, repo: RepoRef) {
+    try {
+      const reviews = await publicOctokit.paginate(
+        publicOctokit.pulls.listReviews,
+        {
+          owner: repo.owner,
+          repo: repo.repo,
+          pull_number: prNumber,
+          per_page: 100,
+        }
+      );
+      return countApprovedReviews(reviews);
+    } catch {
+      return 0;
+    }
+  }
+
   const repo = resolveRepo(repoRef);
   const res = await publicOctokit.pulls.list({
     owner: repo.owner,
@@ -273,13 +315,19 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
     state: "open",
     per_page: 100,
   });
-  return res.data.map((pr) => ({
+  const openPrs = res.data;
+  const approvedCounts = await Promise.all(
+    openPrs.map((pr) => fetchApprovedCount(pr.number, repo))
+  );
+
+  return openPrs.map((pr, index) => ({
     number: pr.number,
     title: pr.title,
     headRef: pr.head.ref,
     headSha: pr.head.sha,
     headOwner: pr.head.repo?.owner?.login ?? repo.owner,
     headRepo: pr.head.repo?.name ?? repo.repo,
+    approvedCount: approvedCounts[index] ?? 0,
   }));
 }
 

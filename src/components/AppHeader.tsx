@@ -7,30 +7,8 @@ import {
   setGitHubUserToken,
   validateToken,
 } from "@/domain/github";
-import type { RepoRef, SourceRef } from "@/domain/types";
 import { SourceSelector } from "@/features/source-selector/SourceSelector";
-import { useSourceStore, useUIStore } from "@/store";
-
-function resolveSourceBadgeLink(params: {
-  repository: RepoRef;
-  sourceRef: SourceRef | null;
-}): { label: string; url: string } | null {
-  const { repository, sourceRef } = params;
-  if (!sourceRef) {
-    return null;
-  }
-
-  const scope =
-    sourceRef.type === "pr" && sourceRef.prNumber
-      ? `PR #${sourceRef.prNumber} ${sourceRef.name}`
-      : sourceRef.name;
-  const label = `${repository.owner}/${repository.repo} · ${scope}`;
-  const url =
-    sourceRef.type === "pr" && sourceRef.prNumber
-      ? `https://github.com/${repository.owner}/${repository.repo}/pull/${sourceRef.prNumber}`
-      : `https://github.com/${repository.owner}/${repository.repo}/tree/${encodeURIComponent(sourceRef.name)}`;
-  return { label, url };
-}
+import { useUIStore } from "@/store";
 
 export function AppHeader() {
   const { t, i18n } = useTranslation();
@@ -39,11 +17,8 @@ export function AppHeader() {
   const location = useLocation();
   const githubTokenInputId = useId();
   const githubTokenDialogTitleId = useId();
-  const sourceRef = useSourceStore((s) => s.sourceRef);
   const setLocale = useUIStore((s) => s.setLocale);
   const locale = useUIStore((s) => s.locale);
-  const isHome = location.pathname === "/";
-  const repository = useSourceStore((s) => s.repository);
   const [githubTokenModalOpen, setGithubTokenModalOpen] = useState(false);
   const [githubTokenInput, setGithubTokenInput] = useState(
     getGitHubUserToken() ?? ""
@@ -54,10 +29,10 @@ export function AppHeader() {
   const [isSavingGitHubToken, setIsSavingGitHubToken] = useState(false);
   const [githubTokenError, setGithubTokenError] = useState<string | null>(null);
   const isDeveloperMode =
+    location.pathname === "/" ||
     location.pathname.startsWith("/workspace") ||
     location.pathname.startsWith("/bank/");
   const hasSavedGitHubToken = savedGitHubToken.trim().length > 0;
-  const sourceBadgeLink = resolveSourceBadgeLink({ repository, sourceRef });
 
   const toggleLocale = () => {
     const next = locale === "ru" ? "en" : "ru";
@@ -111,33 +86,24 @@ export function AppHeader() {
           onClick={() => navigate("/")}
           style={{ cursor: "pointer" }}
         >
-          {t("app.title")}
+          Zenmoney SMS Formats
         </div>
 
-        {!isHome && sourceBadgeLink && isDeveloperMode && (
-          <div className="flex items-center gap-sm">
-            <a
-              className="badge badge--info text-sm"
-              href={sourceBadgeLink.url}
-              rel="noreferrer"
-              target="_blank"
-              title={sourceBadgeLink.label}
-            >
-              {sourceBadgeLink.label}
-            </a>
-          </div>
+        {isDeveloperMode && (
+          <>
+            <span className="app-header__separator">/</span>
+            <SourceSelector allowRepoSwitch />
+          </>
         )}
 
         <div className="app-header__spacer" />
-
-        {isDeveloperMode && <SourceSelector allowRepoSwitch />}
 
         <button className="btn btn--ghost btn--sm" onClick={toggleLocale}>
           {locale === "ru" ? "EN" : "RU"}
         </button>
         <button
           aria-label={t("githubAuth.openSettings")}
-          className="btn btn--ghost btn--sm"
+          className="btn app-header__settings-btn"
           onClick={openGitHubTokenModal}
           title={
             hasSavedGitHubToken

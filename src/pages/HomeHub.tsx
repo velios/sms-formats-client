@@ -13,7 +13,7 @@ export function HomeHub() {
         <span className="home-card__action">{t("home.userAction")}</span>
       </Link>
 
-      <Link className="home-card home-card--developer" to="/workspace">
+      <Link className="home-card home-card--developer" to="/">
         <span className="home-card__badge">{t("home.developerBadge")}</span>
         <h2 className="home-card__title">{t("home.developerTitle")}</h2>
         <p className="home-card__description">
