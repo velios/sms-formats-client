@@ -45,6 +45,7 @@ import { useSwitchRepository, useSwitchSource } from "@/hooks/useGitHub";
 import { useDraftStore, useSourceStore } from "@/store";
 
 const RECENT_FILES_KEY = "sms-formats-recent-formats";
+const WORKSPACE_SELECTION_HISTORY_KEY = "sms-formats-workspace-selection";
 const MAX_RECENT_FILES = 10;
 const SEARCH_EXAMPLE_MIN_QUERY_LENGTH = 2;
 const SEARCH_INDEX_PARALLELISM = 4;
@@ -54,6 +55,65 @@ interface ActiveFormatSearchContext {
   regex: string;
   examples: string[];
   activeExampleIndex: number;
+}
+
+interface WorkspaceSelectionHistoryState {
+  workspaceKey: string;
+  selectedFile: string | null;
+  showSenders: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readWorkspaceSelectionHistoryState(
+  historyState: unknown,
+  workspaceKey: string
+): WorkspaceSelectionHistoryState | null {
+  if (!isRecord(historyState)) {
+    return null;
+  }
+  const candidate = historyState[WORKSPACE_SELECTION_HISTORY_KEY];
+  if (!isRecord(candidate)) {
+    return null;
+  }
+  if (candidate.workspaceKey !== workspaceKey) {
+    return null;
+  }
+  const selectedFile =
+    typeof candidate.selectedFile === "string" ? candidate.selectedFile : null;
+  return {
+    workspaceKey,
+    selectedFile,
+    showSenders: Boolean(candidate.showSenders),
+  };
+}
+
+function writeWorkspaceSelectionHistoryState(params: {
+  mode: "push" | "replace";
+  workspaceKey: string;
+  selectedFile: string | null;
+  showSenders: boolean;
+}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const { mode, workspaceKey, selectedFile, showSenders } = params;
+  const baseState = isRecord(window.history.state) ? window.history.state : {};
+  const nextState = {
+    ...baseState,
+    [WORKSPACE_SELECTION_HISTORY_KEY]: {
+      workspaceKey,
+      selectedFile,
+      showSenders,
+    },
+  };
+  if (mode === "push") {
+    window.history.pushState(nextState, "");
+    return;
+  }
+  window.history.replaceState(nextState, "");
 }
 
 function getActiveExampleText(
@@ -1538,6 +1598,35 @@ export function BankWorkspace() {
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
   const sourceSelectionKey = `${repository.owner}/${repository.repo}:${sourceRef?.type ?? "none"}:${sourceRef?.name ?? ""}:${sourceRef?.sha ?? ""}:${sourceRef?.prNumber ?? ""}:${bankPath}`;
 
+  const applySelectionFromHistoryState = useCallback(
+    (historyState: unknown): boolean => {
+      const selection = readWorkspaceSelectionHistoryState(
+        historyState,
+        sourceSelectionKey
+      );
+      if (!selection) {
+        return false;
+      }
+      if (selection.showSenders) {
+        setShowSenders(true);
+        setSelectedFile(null);
+        return true;
+      }
+      if (!selection.selectedFile) {
+        setShowSenders(false);
+        setSelectedFile(null);
+        return true;
+      }
+      if (!allFormatFiles.includes(selection.selectedFile)) {
+        return false;
+      }
+      setShowSenders(false);
+      setSelectedFile(selection.selectedFile);
+      return true;
+    },
+    [allFormatFiles, sourceSelectionKey]
+  );
+
   useResetSelectionOnSourceChange({
     requestedFile,
     sourceSelectionKey,
@@ -1571,18 +1660,82 @@ export function BankWorkspace() {
 
   const handleSelectFile = useCallback(
     (f: string) => {
+      const currentSelection = readWorkspaceSelectionHistoryState(
+        window.history.state,
+        sourceSelectionKey
+      );
       setSelectedFile(f);
       setShowSenders(false);
+      if (
+        !(
+          currentSelection &&
+          currentSelection.showSenders === false &&
+          currentSelection.selectedFile === f
+        )
+      ) {
+        writeWorkspaceSelectionHistoryState({
+          mode: "push",
+          workspaceKey: sourceSelectionKey,
+          selectedFile: f,
+          showSenders: false,
+        });
+      }
       addRecentFile(bankPath, f);
     },
-    [bankPath]
+    [bankPath, sourceSelectionKey]
   );
 
   const handleSelectSenders = useCallback(() => {
+    const currentSelection = readWorkspaceSelectionHistoryState(
+      window.history.state,
+      sourceSelectionKey
+    );
     setShowSenders(true);
     setSelectedFile(null);
+    if (
+      !(currentSelection?.showSenders && currentSelection.selectedFile === null)
+    ) {
+      writeWorkspaceSelectionHistoryState({
+        mode: "push",
+        workspaceKey: sourceSelectionKey,
+        selectedFile: null,
+        showSenders: true,
+      });
+    }
     addRecentFile(bankPath, sendersPath);
-  }, [bankPath, sendersPath]);
+  }, [bankPath, sendersPath, sourceSelectionKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    applySelectionFromHistoryState(window.history.state);
+  }, [applySelectionFromHistoryState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handlePopState = (event: PopStateEvent) => {
+      applySelectionFromHistoryState(event.state);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [applySelectionFromHistoryState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    writeWorkspaceSelectionHistoryState({
+      mode: "replace",
+      workspaceKey: sourceSelectionKey,
+      selectedFile,
+      showSenders,
+    });
+  }, [selectedFile, showSenders, sourceSelectionKey]);
 
   const handleRenameFile = useCallback(
     (fromPath: string, toPath: string): boolean => {
@@ -1831,10 +1984,10 @@ export function BankWorkspace() {
               : null
           }
           bankName={displayName}
-          bankPath={bankPath}
           formatPaths={allFormatFiles}
           initialMode={quickCheckMode}
           onClose={() => setShowQuickCheck(false)}
+          onOpenFileInApp={handleSelectFile}
         />
       )}
     </div>

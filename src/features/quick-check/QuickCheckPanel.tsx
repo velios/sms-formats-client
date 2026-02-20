@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
-import { config } from "@/config";
-import {
-  buildBankWorkspacePath,
-  sourceRefToRouteSource,
-} from "@/domain/bank-route";
 import { parseFormatFile, testRegex } from "@/domain/format";
 import { fetchFileContent } from "@/domain/github";
-import type { RepoRef, SourceRef } from "@/domain/types";
+import type { RepoRef } from "@/domain/types";
 import { useDraftStore, useSourceStore } from "@/store";
 
 const QUICK_CHECK_PARALLELISM = 4;
@@ -120,10 +114,10 @@ type QuickCheckRunState =
 
 interface Props {
   bankName: string;
-  bankPath: string;
   formatPaths: string[];
   initialMode: QuickCheckMode;
   activeFormatContext: QuickCheckActiveFormatContext | null;
+  onOpenFileInApp: (filePath: string) => void;
   onClose: () => void;
 }
 
@@ -411,21 +405,6 @@ function evaluateSmsByTemplate(
   };
 }
 
-function buildAppFileLink(params: {
-  bankPath: string;
-  filePath: string;
-  repository: RepoRef;
-  sourceRef: SourceRef | null;
-}): string {
-  const { bankPath, filePath, repository, sourceRef } = params;
-  return buildBankWorkspacePath({
-    bankPath,
-    repository,
-    source: sourceRefToRouteSource(sourceRef, config.defaultBranch),
-    filePath,
-  });
-}
-
 function buildGitHubFileLink(params: {
   filePath: string;
   repository: RepoRef;
@@ -440,16 +419,15 @@ const sharedFormatCache = new Map<string, CachedFormatEntry>();
 
 export function QuickCheckPanel({
   bankName,
-  bankPath,
   formatPaths,
   initialMode,
   activeFormatContext,
+  onOpenFileInApp,
   onClose,
 }: Props) {
   const { t } = useTranslation();
   const dialogTitleId = useId();
   const inputId = useId();
-  const navigate = useNavigate();
   const draftStore = useDraftStore();
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const repository = useSourceStore((s) => s.repository);
@@ -481,17 +459,10 @@ export function QuickCheckPanel({
 
   const handleOpenInApp = useCallback(
     (filePath: string) => {
-      navigate(
-        buildAppFileLink({
-          bankPath,
-          filePath,
-          repository,
-          sourceRef,
-        })
-      );
+      onOpenFileInApp(filePath);
       onClose();
     },
-    [bankPath, navigate, onClose, repository, sourceRef]
+    [onClose, onOpenFileInApp]
   );
 
   const handleSwitchMode = useCallback(
@@ -831,21 +802,13 @@ export function QuickCheckPanel({
               <pre className="quick-check__regex">{result.regex}</pre>
               {result.status === "match" && sourceRefName && (
                 <div className="quick-check__links">
-                  <a
+                  <button
                     className="quick-check__link"
-                    href={buildAppFileLink({
-                      bankPath,
-                      filePath: result.filePath,
-                      repository,
-                      sourceRef,
-                    })}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      handleOpenInApp(result.filePath);
-                    }}
+                    onClick={() => handleOpenInApp(result.filePath)}
+                    type="button"
                   >
                     {t("quickCheck.openInApp")}
-                  </a>
+                  </button>
                   <a
                     className="quick-check__link"
                     href={buildGitHubFileLink({
@@ -904,21 +867,13 @@ export function QuickCheckPanel({
               )}
               {result.status === "match" && sourceRefName && (
                 <div className="quick-check__links">
-                  <a
+                  <button
                     className="quick-check__link"
-                    href={buildAppFileLink({
-                      bankPath,
-                      filePath: result.filePath,
-                      repository,
-                      sourceRef,
-                    })}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      handleOpenInApp(result.filePath);
-                    }}
+                    onClick={() => handleOpenInApp(result.filePath)}
+                    type="button"
                   >
                     {t("quickCheck.openInApp")}
-                  </a>
+                  </button>
                   <a
                     className="quick-check__link"
                     href={buildGitHubFileLink({
