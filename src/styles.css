@@ -675,6 +675,13 @@
     overflow: hidden;
   }
 
+  .regex-lab__header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
   .sms-game {
     @apply flex h-full flex-col gap-4;
     min-height: 0;
@@ -1162,8 +1169,19 @@
   max-height: min(88vh, 880px);
 }
 
+.quick-check__mode-switch {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
 .quick-check__input {
   min-height: 120px;
+}
+
+.quick-check__template-input {
+  min-height: 88px;
+  font-family: var(--font-mono);
 }
 
 .quick-check__feedback {

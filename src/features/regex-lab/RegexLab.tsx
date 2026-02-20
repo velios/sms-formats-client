@@ -35,6 +35,8 @@ interface Props {
   onRemoveExample: (index: number) => void;
   columns: string[];
   onColumnsChange: (columns: string[]) => void;
+  onOpenTemplateBySms?: () => void;
+  onOpenSmsByTemplate?: () => void;
 }
 
 interface PatternSelection {
@@ -55,6 +57,8 @@ export function RegexLab({
   onRemoveExample,
   columns,
   onColumnsChange,
+  onOpenTemplateBySms,
+  onOpenSmsByTemplate,
 }: Props) {
   const { t, i18n } = useTranslation();
   const activeExample = examples[activeExampleIndex] ?? "";
@@ -240,6 +244,15 @@ export function RegexLab({
       <div className="panel">
         <div className="panel__header">
           <span>{t("editor.regex")}</span>
+          <div className="regex-lab__header-actions">
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={onOpenSmsByTemplate}
+              type="button"
+            >
+              {t("quickCheck.openSmsByTemplate")}
+            </button>
+          </div>
         </div>
         <div className="panel__body">
           <UnifiedRegexEditor
@@ -277,14 +290,23 @@ export function RegexLab({
                 +
               </button>
             </div>
-            <a
-              className="btn btn--ghost btn--sm"
-              href={regex101Url}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              {t("editor.openInRegex101")}
-            </a>
+            <div className="regex-lab__header-actions">
+              <button
+                className="btn btn--ghost btn--sm"
+                onClick={onOpenTemplateBySms}
+                type="button"
+              >
+                {t("quickCheck.openTemplateBySms")}
+              </button>
+              <a
+                className="btn btn--ghost btn--sm"
+                href={regex101Url}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                {t("editor.openInRegex101")}
+              </a>
+            </div>
           </div>
           <div className="tabs">
             {examples.map((_, i) => (

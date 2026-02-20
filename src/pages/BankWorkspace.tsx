@@ -34,7 +34,10 @@ import type { BankInfo, RepoRef, SourceRef } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { PublishPanel } from "@/features/publish-panel/PublishPanel";
-import { QuickCheckPanel } from "@/features/quick-check/QuickCheckPanel";
+import {
+  type QuickCheckMode,
+  QuickCheckPanel,
+} from "@/features/quick-check/QuickCheckPanel";
 import { RefreshButton } from "@/features/refresh/RefreshButton";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
@@ -45,6 +48,22 @@ const RECENT_FILES_KEY = "sms-formats-recent-formats";
 const MAX_RECENT_FILES = 10;
 const SEARCH_EXAMPLE_MIN_QUERY_LENGTH = 2;
 const SEARCH_INDEX_PARALLELISM = 4;
+
+interface ActiveFormatSearchContext {
+  filePath: string;
+  regex: string;
+  examples: string[];
+  activeExampleIndex: number;
+}
+
+function getActiveExampleText(
+  context: ActiveFormatSearchContext | null
+): string {
+  if (!context) {
+    return "";
+  }
+  return context.examples[context.activeExampleIndex] ?? "";
+}
 
 function getRecentFiles(bankPath: string): string[] {
   try {
@@ -576,6 +595,9 @@ function renderWorkspaceContent(params: {
   selectedFile: string | null;
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
+  onFormatSearchContextChange: (context: ActiveFormatSearchContext) => void;
+  onOpenTemplateBySms: () => void;
+  onOpenSmsByTemplate: () => void;
   t: (key: string) => string;
 }): ReactNode {
   const {
@@ -584,6 +606,9 @@ function renderWorkspaceContent(params: {
     selectedFile,
     allFormatFiles,
     handleRenameFile,
+    onFormatSearchContextChange,
+    onOpenTemplateBySms,
+    onOpenSmsByTemplate,
     t,
   } = params;
   if (showSenders) {
@@ -595,7 +620,10 @@ function renderWorkspaceContent(params: {
         allFormatFiles={allFormatFiles}
         filePath={selectedFile}
         key={selectedFile}
+        onOpenSmsByTemplate={onOpenSmsByTemplate}
+        onOpenTemplateBySms={onOpenTemplateBySms}
         onRenameFile={handleRenameFile}
+        onSearchContextChange={onFormatSearchContextChange}
       />
     );
   }
@@ -611,7 +639,8 @@ function BankActionsPanel(params: {
   onApprovePullRequest: () => void;
   onOpenValidation: () => void;
   onPublish: () => void;
-  onOpenQuickCheck: () => void;
+  onOpenSmsByTemplate: () => void;
+  onOpenTemplateBySms: () => void;
   approvePullRequestError: string | null;
   approvePullRequestLabel: string;
   publishError: string | null;
@@ -627,7 +656,8 @@ function BankActionsPanel(params: {
     onApprovePullRequest,
     onOpenValidation,
     onPublish,
-    onOpenQuickCheck,
+    onOpenSmsByTemplate,
+    onOpenTemplateBySms,
     approvePullRequestError,
     approvePullRequestLabel,
     publishError,
@@ -670,9 +700,15 @@ function BankActionsPanel(params: {
       </button>
       <button
         className="btn bank-actions__btn w-full"
-        onClick={onOpenQuickCheck}
+        onClick={onOpenTemplateBySms}
       >
-        {t("quickCheck.open")}
+        {t("quickCheck.openTemplateBySms")}
+      </button>
+      <button
+        className="btn bank-actions__btn w-full"
+        onClick={onOpenSmsByTemplate}
+      >
+        {t("quickCheck.openSmsByTemplate")}
       </button>
       <RefreshButton bankPath={bankPath} />
     </div>
@@ -1419,6 +1455,10 @@ export function BankWorkspace() {
   const [showPublish, setShowPublish] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [showQuickCheck, setShowQuickCheck] = useState(false);
+  const [quickCheckMode, setQuickCheckMode] =
+    useState<QuickCheckMode>("template-by-sms");
+  const [activeFormatSearchContext, setActiveFormatSearchContext] =
+    useState<ActiveFormatSearchContext | null>(null);
   const [formatSearch, setFormatSearch] = useState("");
   const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
   const sendersPath = `${bankPath}/senders.txt`;
@@ -1609,6 +1649,16 @@ export function BankWorkspace() {
     setShowSenders,
   });
 
+  useEffect(() => {
+    if (showSenders || !selectedFile) {
+      setActiveFormatSearchContext(null);
+      return;
+    }
+    setActiveFormatSearchContext((prev) =>
+      prev?.filePath === selectedFile ? prev : null
+    );
+  }, [selectedFile, showSenders]);
+
   if (isRouteSyncInFlight || routeSyncPending) {
     return (
       <div className="flex items-center gap-sm">
@@ -1675,7 +1725,14 @@ export function BankWorkspace() {
           onApprovePullRequest={() => {
             void handleApprovePullRequest();
           }}
-          onOpenQuickCheck={() => setShowQuickCheck(true)}
+          onOpenSmsByTemplate={() => {
+            setQuickCheckMode("sms-by-template");
+            setShowQuickCheck(true);
+          }}
+          onOpenTemplateBySms={() => {
+            setQuickCheckMode("template-by-sms");
+            setShowQuickCheck(true);
+          }}
           onOpenValidation={() => setShowValidation(true)}
           onPublish={handlePublishAction}
           publishActionLabel={publishActionLabel}
@@ -1719,6 +1776,15 @@ export function BankWorkspace() {
           selectedFile,
           allFormatFiles,
           handleRenameFile,
+          onFormatSearchContextChange: setActiveFormatSearchContext,
+          onOpenSmsByTemplate: () => {
+            setQuickCheckMode("sms-by-template");
+            setShowQuickCheck(true);
+          },
+          onOpenTemplateBySms: () => {
+            setQuickCheckMode("template-by-sms");
+            setShowQuickCheck(true);
+          },
           t,
         })}
       </div>
@@ -1751,9 +1817,23 @@ export function BankWorkspace() {
       )}
       {showQuickCheck && (
         <QuickCheckPanel
+          activeFormatContext={
+            activeFormatSearchContext
+              ? {
+                  filePath: activeFormatSearchContext.filePath,
+                  regex: activeFormatSearchContext.regex,
+                  activeExampleIndex:
+                    activeFormatSearchContext.activeExampleIndex,
+                  activeSmsText: getActiveExampleText(
+                    activeFormatSearchContext
+                  ),
+                }
+              : null
+          }
           bankName={displayName}
           bankPath={bankPath}
           formatPaths={allFormatFiles}
+          initialMode={quickCheckMode}
           onClose={() => setShowQuickCheck(false)}
         />
       )}

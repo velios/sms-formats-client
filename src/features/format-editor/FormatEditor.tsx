@@ -12,6 +12,14 @@ interface Props {
   filePath: string;
   allFormatFiles: string[];
   onRenameFile: (fromPath: string, toPath: string) => boolean;
+  onOpenTemplateBySms?: () => void;
+  onOpenSmsByTemplate?: () => void;
+  onSearchContextChange?: (context: {
+    filePath: string;
+    regex: string;
+    examples: string[];
+    activeExampleIndex: number;
+  }) => void;
 }
 
 function computeSaveDisabled(params: {
@@ -70,6 +78,9 @@ export function FormatEditor({
   filePath,
   allFormatFiles,
   onRenameFile,
+  onOpenTemplateBySms,
+  onOpenSmsByTemplate,
+  onSearchContextChange,
 }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
@@ -240,6 +251,15 @@ export function FormatEditor({
     }
   };
 
+  useEffect(() => {
+    onSearchContextChange?.({
+      filePath,
+      regex,
+      examples,
+      activeExampleIndex,
+    });
+  }, [activeExampleIndex, examples, filePath, onSearchContextChange, regex]);
+
   const isModified = draft ? draft.content !== draft.remoteContent : false;
   const fileName = filePath.split("/").pop() ?? filePath;
   const fileDirPath = filePath.split("/").slice(0, -1).join("/");
@@ -388,6 +408,8 @@ export function FormatEditor({
           onAddExample={handleAddExample}
           onColumnsChange={handleColumnsChange}
           onExampleChange={handleExampleChange}
+          onOpenSmsByTemplate={onOpenSmsByTemplate}
+          onOpenTemplateBySms={onOpenTemplateBySms}
           onRegexChange={handleRegexChange}
           onRemoveExample={handleRemoveExample}
           regex={regex}
