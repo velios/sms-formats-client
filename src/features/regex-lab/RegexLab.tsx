@@ -27,6 +27,7 @@ import { UnifiedRegexEditor } from "./UnifiedRegexEditor";
 
 interface Props {
   regex: string;
+  readOnly?: boolean;
   onRegexChange: (v: string) => void;
   examples: string[];
   activeExampleIndex: number;
@@ -49,6 +50,7 @@ type RightPaneTab = "explanation" | "quickref";
 
 export function RegexLab({
   regex,
+  readOnly = false,
   onRegexChange,
   examples,
   activeExampleIndex,
@@ -269,10 +271,12 @@ export function RegexLab({
           <UnifiedRegexEditor
             activeTokenIndex={activePatternTokenIndex}
             canHighlight={explanation.canHighlightPattern}
+            key={readOnly ? "readonly" : "editable"}
             onRegexChange={onRegexChange}
             onSelectionChange={handlePatternSelectionChange}
             onTokenClick={handlePatternTokenActivate}
             onTokenHover={setHoveredPatternTokenIndex}
+            readOnly={readOnly}
             regex={regex}
             tokens={explanation.patternTokens}
           />
@@ -295,6 +299,7 @@ export function RegexLab({
               <button
                 aria-label={t("editor.addExample")}
                 className="btn btn--ghost btn--sm"
+                disabled={readOnly}
                 onClick={onAddExample}
                 type="button"
               >
@@ -352,6 +357,7 @@ export function RegexLab({
                   <button
                     aria-label={t("editor.removeExample")}
                     className="btn btn--ghost btn--sm"
+                    disabled={readOnly}
                     onClick={(e) => {
                       e.stopPropagation();
                       onRemoveExample(i);
@@ -378,6 +384,7 @@ export function RegexLab({
               onTextChange={(value) =>
                 onExampleChange(activeExampleIndex, value)
               }
+              readOnly={readOnly}
               result={matchResult}
               text={activeExample}
             />
@@ -399,6 +406,7 @@ export function RegexLab({
               onColumnParamChange={handleColumnParamChange}
               onGroupHover={handleGroupHover}
               onOpenColumnPicker={setColumnPickerGroupIndex}
+              readOnly={readOnly}
               result={matchResult}
             />
           </div>
@@ -465,12 +473,14 @@ function MatchOverlayTextarea({
   hoveredGroup,
   activeMatchRange,
   onTextChange,
+  readOnly = false,
 }: {
   text: string;
   result: RegexMatchResult;
   hoveredGroup: number | null;
   activeMatchRange: { start: number; end: number } | null;
   onTextChange: (value: string) => void;
+  readOnly?: boolean;
 }) {
   const highlightsRef = useRef<HTMLDivElement>(null);
   const segments = useMemo(
@@ -500,6 +510,7 @@ function MatchOverlayTextarea({
         onScroll={(e) =>
           handleScroll(e.currentTarget.scrollTop, e.currentTarget.scrollLeft)
         }
+        readOnly={readOnly}
         rows={3}
         spellCheck={false}
         value={text}
@@ -705,6 +716,7 @@ function MatchInfoPanel({
   onClearColumn,
   onColumnParamChange,
   hasMissingColumnMappings,
+  readOnly = false,
 }: {
   result: RegexMatchResult;
   hoveredGroup: number | null;
@@ -719,6 +731,7 @@ function MatchInfoPanel({
   onClearColumn: (groupIndex: number) => void;
   onColumnParamChange: (groupIndex: number, value: string) => void;
   hasMissingColumnMappings: boolean;
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -827,6 +840,7 @@ function MatchInfoPanel({
                           <div className="match-columns-cell">
                             <button
                               className={`btn btn--sm ${currentValue ? "" : "btn--danger"}`.trim()}
+                              disabled={readOnly}
                               onClick={() => onOpenColumnPicker(g.index)}
                             >
                               {currentValue || t("columns.select")}
@@ -835,6 +849,7 @@ function MatchInfoPanel({
                               <button
                                 aria-label={t("app.close")}
                                 className="btn btn--ghost btn--sm"
+                                disabled={readOnly}
                                 onClick={() => onClearColumn(g.index)}
                                 title={t("app.close")}
                                 type="button"
@@ -845,6 +860,7 @@ function MatchInfoPanel({
                             {columnDef?.parameterized && (
                               <input
                                 className="input input--mono match-columns-param-input"
+                                disabled={readOnly}
                                 onChange={(e) =>
                                   onColumnParamChange(g.index, e.target.value)
                                 }

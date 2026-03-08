@@ -1238,15 +1238,25 @@ export async function createCommit(
   forkOwner: string,
   branchName: string,
   parentSha: string,
-  files: { path: string; content: string }[],
+  files: Array<{ path: string; content?: string; delete?: boolean }>,
   message: string,
   repoRef?: RepoRef
 ): Promise<string> {
   const target = resolveRepo(repoRef);
 
-  // Create blobs
   const blobs = await Promise.all(
     files.map(async (f) => {
+      if (f.delete) {
+        return {
+          path: f.path,
+          sha: null,
+          mode: "100644" as const,
+          type: "blob" as const,
+        };
+      }
+      if (typeof f.content !== "string") {
+        throw new Error(`Missing content for file: ${f.path}`);
+      }
       const blob = await octokit.git.createBlob({
         owner: forkOwner,
         repo: target.repo,
@@ -1301,7 +1311,7 @@ export async function createCommit(
 export async function updatePullRequestHead(
   token: string,
   prNumber: number,
-  files: { path: string; content: string }[],
+  files: Array<{ path: string; content?: string; delete?: boolean }>,
   repoRef?: RepoRef
 ): Promise<{ url: string; title: string }> {
   const repo = resolveRepo(repoRef);

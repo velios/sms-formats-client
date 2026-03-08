@@ -126,6 +126,7 @@ const singleLineFilter: Extension = EditorState.transactionFilter.of((tr) => {
 
 interface UnifiedRegexEditorProps {
   regex: string;
+  readOnly?: boolean;
   onRegexChange: (value: string) => void;
   tokens: RegexPatternToken[];
   canHighlight: boolean;
@@ -142,6 +143,7 @@ interface UnifiedRegexEditorProps {
 
 export function UnifiedRegexEditor({
   regex,
+  readOnly = false,
   onRegexChange,
   tokens,
   canHighlight,
@@ -199,6 +201,8 @@ export function UnifiedRegexEditor({
       extensions: [
         baseTheme,
         EditorView.lineWrapping,
+        EditorState.readOnly.of(readOnly),
+        EditorView.editable.of(!readOnly),
         EditorState.allowMultipleSelections.of(false),
         tokenDecoField,
         tokensForClickField,

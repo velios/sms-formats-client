@@ -78,6 +78,7 @@ interface RemoteLoadResult {
 
 interface DraftEntryLike {
   content: string;
+  isDeleted?: boolean;
   timestamp: number;
 }
 
@@ -177,6 +178,9 @@ function collectLocalFormatEntries(params: {
     const cacheKey = buildCacheKey(repository, filePath);
     const draft = draftStore.getDraft(filePath);
     if (draft) {
+      if (draft.isDeleted) {
+        continue;
+      }
       const draftFingerprint = buildDraftFingerprint(draft.timestamp);
       const cached = cache.get(cacheKey);
       if (cached && cached.fingerprint === draftFingerprint) {

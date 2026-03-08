@@ -56,11 +56,13 @@ interface DraftEntry {
   baseSha: string;
   content: string;
   remoteContent: string;
+  isDeleted: boolean;
   timestamp: number;
 }
 
 interface DraftHistoryState {
   content: string;
+  isDeleted: boolean;
 }
 
 interface DraftState {
@@ -86,10 +88,12 @@ interface DraftState {
   getDraft: (filePath: string) => DraftEntry | undefined;
   removeDraft: (filePath: string) => void;
   renameDraft: (oldFilePath: string, newFilePath: string) => void;
+  markDeleted: (filePath: string) => void;
   undo: (filePath: string) => void;
   redo: (filePath: string) => void;
   canUndo: (filePath: string) => boolean;
   canRedo: (filePath: string) => boolean;
+  getDeletedFiles: () => DraftEntry[];
   resetFileToRemote: (filePath: string) => void;
   resetBankToRemote: (bankPath: string) => void;
   hasDrafts: () => boolean;
@@ -109,13 +113,21 @@ function createDraftEntry(params: {
   content: string;
   baseSha: string;
   remoteContent: string;
+  isDeleted?: boolean;
 }): DraftEntry {
-  const { filePath, content, baseSha, remoteContent } = params;
+  const {
+    filePath,
+    content,
+    baseSha,
+    remoteContent,
+    isDeleted = false,
+  } = params;
   return {
     filePath,
     baseSha,
     content,
     remoteContent,
+    isDeleted,
     timestamp: Date.now(),
   };
 }
@@ -124,23 +136,34 @@ function getDraftHistory(filePath: string) {
   return draftHistoryByPath.get(filePath);
 }
 
-function ensureDraftHistory(filePath: string, content: string) {
+function ensureDraftHistory(
+  filePath: string,
+  content: string,
+  isDeleted = false
+) {
   const existing = draftHistoryByPath.get(filePath);
   if (existing) {
     return existing;
   }
   const history = createTravels<DraftHistoryState>(
-    { content },
+    { content, isDeleted },
     { maxHistory: 200 }
   );
   draftHistoryByPath.set(filePath, history);
   return history;
 }
 
-function resetDraftHistory(filePath: string, content: string) {
+function resetDraftHistory(
+  filePath: string,
+  content: string,
+  isDeleted = false
+) {
   draftHistoryByPath.set(
     filePath,
-    createTravels<DraftHistoryState>({ content }, { maxHistory: 200 })
+    createTravels<DraftHistoryState>(
+      { content, isDeleted },
+      { maxHistory: 200 }
+    )
   );
 }
 
@@ -166,6 +189,7 @@ function persistDraftEntry(entry: DraftEntry) {
     filePath: entry.filePath,
     baseSha: entry.baseSha,
     content: entry.content,
+    isDeleted: entry.isDeleted,
     timestamp: entry.timestamp,
   });
 }
@@ -180,6 +204,7 @@ function syncEntryContentFromHistory(entry: DraftEntry, filePath: string) {
     content: history.getState().content,
     baseSha: entry.baseSha,
     remoteContent: entry.remoteContent,
+    isDeleted: history.getState().isDeleted,
   });
 }
 
@@ -194,7 +219,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
         existing.baseSha === baseSha &&
         existing.remoteContent === remoteContent
       ) {
-        ensureDraftHistory(filePath, existing.content);
+        ensureDraftHistory(filePath, existing.content, existing.isDeleted);
         return;
       }
       const nextDrafts = new Map(state.drafts);
@@ -203,10 +228,11 @@ export const useDraftStore = create<DraftState>((set, get) => ({
         content: existing.content,
         baseSha,
         remoteContent,
+        isDeleted: existing.isDeleted,
       });
       nextDrafts.set(filePath, nextEntry);
       set({ drafts: nextDrafts });
-      ensureDraftHistory(filePath, nextEntry.content);
+      ensureDraftHistory(filePath, nextEntry.content, nextEntry.isDeleted);
       persistDraftEntry(nextEntry);
       return;
     }
@@ -234,15 +260,22 @@ export const useDraftStore = create<DraftState>((set, get) => ({
         content: remoteContent,
         baseSha,
         remoteContent,
+        isDeleted: false,
       });
-    const history = ensureDraftHistory(filePath, currentEntry.content);
-    if (history.getState().content === content) {
+    const history = ensureDraftHistory(
+      filePath,
+      currentEntry.content,
+      currentEntry.isDeleted
+    );
+    const currentState = history.getState();
+    if (currentState.content === content && currentState.isDeleted === false) {
       if (existing) {
         return;
       }
     } else {
       history.setState((draft) => {
         draft.content = content;
+        draft.isDeleted = false;
       });
     }
 
@@ -251,6 +284,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       content: history.getState().content,
       baseSha,
       remoteContent,
+      isDeleted: history.getState().isDeleted,
     });
     const nextDrafts = new Map(state.drafts);
     nextDrafts.set(filePath, nextEntry);
@@ -269,7 +303,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     });
     newDrafts.set(filePath, entry);
     set({ drafts: newDrafts });
-    resetDraftHistory(filePath, content);
+    resetDraftHistory(filePath, content, false);
     persistDraftEntry(entry);
   },
 
@@ -297,6 +331,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       content: oldEntry.content,
       baseSha: oldEntry.baseSha,
       remoteContent: oldEntry.remoteContent,
+      isDeleted: oldEntry.isDeleted,
     });
     newDrafts.set(newFilePath, newEntry);
     set({ drafts: newDrafts });
@@ -305,10 +340,46 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       draftHistoryByPath.set(newFilePath, history);
       draftHistoryByPath.delete(oldFilePath);
     } else {
-      resetDraftHistory(newFilePath, newEntry.content);
+      resetDraftHistory(newFilePath, newEntry.content, newEntry.isDeleted);
     }
     deletePersistedDraft(oldFilePath);
     persistDraftEntry(newEntry);
+  },
+
+  markDeleted: (filePath) => {
+    const entry = get().drafts.get(filePath);
+    if (!entry) {
+      return;
+    }
+    if (entry.remoteContent === "") {
+      get().removeDraft(filePath);
+      return;
+    }
+    const history = ensureDraftHistory(
+      filePath,
+      entry.content,
+      entry.isDeleted
+    );
+    if (
+      history.getState().isDeleted &&
+      history.getState().content === entry.remoteContent
+    ) {
+      return;
+    }
+    if (
+      !history.getState().isDeleted ||
+      history.getState().content !== entry.remoteContent
+    ) {
+      history.setState((draft) => {
+        draft.content = entry.remoteContent;
+        draft.isDeleted = true;
+      });
+    }
+    const nextDrafts = new Map(get().drafts);
+    const nextEntry = syncEntryContentFromHistory(entry, filePath);
+    nextDrafts.set(filePath, nextEntry);
+    set({ drafts: nextDrafts });
+    persistDraftEntry(nextEntry);
   },
 
   undo: (filePath) => {
@@ -343,6 +414,16 @@ export const useDraftStore = create<DraftState>((set, get) => ({
 
   canRedo: (filePath) => getDraftHistory(filePath)?.canForward() ?? false,
 
+  getDeletedFiles: () => {
+    const result: DraftEntry[] = [];
+    for (const [, entry] of get().drafts) {
+      if (entry.isDeleted) {
+        result.push(entry);
+      }
+    }
+    return result;
+  },
+
   resetFileToRemote: (filePath) => {
     const entry = get().drafts.get(filePath);
     if (!entry) {
@@ -358,10 +439,11 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       content: entry.remoteContent,
       baseSha: entry.baseSha,
       remoteContent: entry.remoteContent,
+      isDeleted: false,
     });
     nextDrafts.set(filePath, nextEntry);
     set({ drafts: nextDrafts });
-    resetDraftHistory(filePath, entry.remoteContent);
+    resetDraftHistory(filePath, entry.remoteContent, false);
     persistDraftEntry(nextEntry);
   },
 
@@ -380,6 +462,9 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       if (entry.content !== entry.remoteContent) {
         return true;
       }
+      if (entry.isDeleted) {
+        return true;
+      }
     }
     return false;
   },
@@ -387,7 +472,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   getChangedFiles: () => {
     const result: DraftEntry[] = [];
     for (const [, entry] of get().drafts) {
-      if (entry.content !== entry.remoteContent) {
+      if (entry.content !== entry.remoteContent || entry.isDeleted) {
         result.push(entry);
       }
     }
@@ -409,6 +494,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
           baseSha: d.baseSha,
           content: d.content,
           remoteContent: "", // will be filled on first load
+          isDeleted: d.isDeleted ?? false,
           timestamp: d.timestamp,
         });
       }

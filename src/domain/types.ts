@@ -52,6 +52,7 @@ export interface DraftFile {
   filePath: string;
   baseSha: string;
   content: string;
+  isDeleted?: boolean;
   timestamp: number;
 }
 

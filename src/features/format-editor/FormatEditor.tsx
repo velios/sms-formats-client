@@ -63,6 +63,7 @@ export function FormatEditor({
   const currentContent = draft?.content ?? remoteContent ?? "";
   const baseSha = draft?.baseSha ?? sourceRef?.sha ?? "";
   const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
+  const isDeleted = draft?.isDeleted ?? false;
   const hasLoadedInitial = draft != null || remoteContent !== undefined;
 
   // Structured state
@@ -107,6 +108,9 @@ export function FormatEditor({
 
   const syncStructuredDraft = useCallback(
     (nextRegex: string, nextColumns: string[], nextExamples: string[]) => {
+      if (isDeleted) {
+        return;
+      }
       const syncedRaw = serializeStructuredDraft(
         nextRegex,
         nextColumns,
@@ -121,7 +125,7 @@ export function FormatEditor({
       lastAppliedContentRef.current = syncedRaw;
       draftStore.applyUserEdit(filePath, syncedRaw, baseSha, remoteBaseline);
     },
-    [baseSha, draftStore, filePath, remoteBaseline, t]
+    [baseSha, draftStore, filePath, isDeleted, remoteBaseline, t]
   );
 
   useEffect(() => {
@@ -143,6 +147,9 @@ export function FormatEditor({
   }, [remoteContent, draftStore, filePath, baseSha]);
 
   const handleRawChange = (value: string) => {
+    if (isDeleted) {
+      return;
+    }
     setRawContent(value);
     parseRawToStructured(value, true);
     lastAppliedContentRef.current = value;
@@ -167,6 +174,9 @@ export function FormatEditor({
   };
 
   const handleAddExample = () => {
+    if (isDeleted) {
+      return;
+    }
     const newExamples = [...examples, ""];
     setExamples(newExamples);
     setActiveExampleIndex(newExamples.length - 1);
@@ -174,6 +184,9 @@ export function FormatEditor({
   };
 
   const handleRemoveExample = (index: number) => {
+    if (isDeleted) {
+      return;
+    }
     if (examples.length <= 1) {
       return;
     }
@@ -202,7 +215,9 @@ export function FormatEditor({
   const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
   const canUndo = draftStore.canUndo(filePath);
   const canRedo = draftStore.canRedo(filePath);
-  const canResetFile = isModified;
+  const canResetFile = isModified || isDeleted;
+  const canDeleteFile = remoteBaseline !== "" && !isDeleted;
+  const canRenameFile = !isDeleted;
 
   const handleRename = () => {
     const currentDraft = draftStore.getDraft(filePath);
@@ -272,7 +287,11 @@ export function FormatEditor({
         </div>
         <div className="format-editor__file-info">
           <span className="font-medium text-mono">{fileName}</span>
-          <button className="btn btn--ghost btn--sm" onClick={handleRename}>
+          <button
+            className="btn btn--ghost btn--sm"
+            disabled={!canRenameFile}
+            onClick={handleRename}
+          >
             {t("editor.renameFormat")}
           </button>
           <a
@@ -290,6 +309,9 @@ export function FormatEditor({
             <span className="badge badge--modified">
               {t("editor.modified")}
             </span>
+          )}
+          {isDeleted && (
+            <span className="badge badge--modified">{t("editor.deleted")}</span>
           )}
         </div>
         <div className="format-editor__history">
@@ -310,6 +332,23 @@ export function FormatEditor({
             type="button"
           >
             ↷ {t("editor.redo")}
+          </button>
+          <button
+            aria-label={t("editor.deleteFormat")}
+            className="btn btn--ghost btn--sm"
+            disabled={!canDeleteFile}
+            onClick={() => {
+              if (
+                isModified &&
+                !window.confirm(t("editor.deleteFormatConfirmModified"))
+              ) {
+                return;
+              }
+              draftStore.markDeleted(filePath);
+            }}
+            type="button"
+          >
+            ✕ {t("editor.deleteFormat")}
           </button>
           <button
             aria-label={t("editor.resetFileToSource")}
@@ -351,6 +390,7 @@ export function FormatEditor({
           onOpenTemplateBySms={onOpenTemplateBySms}
           onRegexChange={handleRegexChange}
           onRemoveExample={handleRemoveExample}
+          readOnly={isDeleted}
           regex={regex}
         />
       )}
@@ -362,6 +402,7 @@ export function FormatEditor({
             <textarea
               className="textarea"
               onChange={(e) => handleRawChange(e.target.value)}
+              readOnly={isDeleted}
               rows={20}
               spellCheck={false}
               value={rawContent}

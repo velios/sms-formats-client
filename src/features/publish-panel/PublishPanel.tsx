@@ -26,6 +26,7 @@ interface Props {
 interface ChangedFile {
   filePath: string;
   content: string;
+  isDeleted: boolean;
 }
 
 interface PublishStoreLike {
@@ -47,6 +48,9 @@ type PublishMode = "create" | "update-pr";
 function buildFormatContents(changedFiles: ChangedFile[]): Map<string, string> {
   const formatContents = new Map<string, string>();
   for (const file of changedFiles) {
+    if (file.isDeleted) {
+      continue;
+    }
     if (
       !(file.filePath.endsWith(".txt") && file.filePath.includes("/formats/"))
     ) {
@@ -146,7 +150,8 @@ async function publishBankChanges(params: {
     baseSha,
     changedFiles.map((file) => ({
       path: file.filePath,
-      content: file.content,
+      content: file.isDeleted ? undefined : file.content,
+      delete: file.isDeleted,
     })),
     prTitle,
     repository
@@ -184,7 +189,8 @@ async function updateExistingPullRequestChanges(params: {
     prNumber,
     changedFiles.map((file) => ({
       path: file.filePath,
-      content: file.content,
+      content: file.isDeleted ? undefined : file.content,
+      delete: file.isDeleted,
     })),
     repository
   );

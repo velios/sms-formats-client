@@ -794,6 +794,7 @@ function FormatsPanel(params: {
   showSearchIndexStatus: boolean;
   searchIndexingLabel: string;
   visibleFormats: string[];
+  deletedFormatFiles: Set<string>;
   localChangedFormatFiles: Set<string>;
   sourceChangedFormatFiles: Set<string>;
   selectedFile: string | null;
@@ -819,6 +820,7 @@ function FormatsPanel(params: {
     showSearchIndexStatus,
     searchIndexingLabel,
     visibleFormats,
+    deletedFormatFiles,
     localChangedFormatFiles,
     sourceChangedFormatFiles,
     selectedFile,
@@ -912,6 +914,7 @@ function FormatsPanel(params: {
             ? "senders.txt"
             : extractFormatFileName(path);
           const isSelected = isSenders ? showSenders : selectedFile === path;
+          const isDeleted = !isSenders && deletedFormatFiles.has(path);
           const isLocalChanged = isSenders
             ? localSendersChanged
             : localChangedFormatFiles.has(path);
@@ -922,7 +925,7 @@ function FormatsPanel(params: {
           const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
           return (
             <div
-              className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""}`}
+              className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""} ${isDeleted ? "autocomplete__item--deleted" : ""}`}
               key={path}
               onClick={() => {
                 if (isSenders) {
@@ -1199,7 +1202,11 @@ function usePullRequestApprovalPermission(params: {
 
 function useQuickPullRequestUpdate(params: {
   canUpdateCurrentPullRequest: boolean;
-  changedFiles: Array<{ filePath: string; content: string }>;
+  changedFiles: Array<{
+    filePath: string;
+    content: string;
+    isDeleted: boolean;
+  }>;
   repository: { owner: string; repo: string };
   sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
   t: (key: string) => string;
@@ -1248,7 +1255,8 @@ function useQuickPullRequestUpdate(params: {
         sourceRef.prNumber,
         changedFiles.map((file) => ({
           path: file.filePath,
-          content: file.content,
+          content: file.isDeleted ? undefined : file.content,
+          delete: file.isDeleted,
         })),
         repository
       );
@@ -1277,7 +1285,11 @@ function useQuickPullRequestUpdate(params: {
 
 function useBankPublishAction(params: {
   canApprovePullRequest: boolean;
-  changedFiles: Array<{ filePath: string; content: string }>;
+  changedFiles: Array<{
+    filePath: string;
+    content: string;
+    isDeleted: boolean;
+  }>;
   onOpenCreatePublish: () => void;
   repository: { owner: string; repo: string };
   sourceRef: { type: "branch" | "pr"; name: string; prNumber?: number } | null;
@@ -1553,6 +1565,7 @@ export function BankWorkspace() {
         .map((entry) => ({
           filePath: entry.filePath,
           content: entry.content,
+          isDeleted: entry.isDeleted,
         })),
     [bankPath, draftStore, draftStore.drafts]
   );
@@ -1585,6 +1598,20 @@ export function BankWorkspace() {
     () => collectChangedFormatFiles(bankPath, localChangedFilesInBank),
     [bankPath, localChangedFilesInBank]
   );
+  const localDeletedFormatFiles = useMemo(
+    () =>
+      new Set(
+        draftStore
+          .getDeletedFiles()
+          .filter(
+            (entry) =>
+              entry.filePath.startsWith(`${bankPath}/formats/`) &&
+              entry.filePath.endsWith(".txt")
+          )
+          .map((entry) => entry.filePath)
+      ),
+    [bankPath, draftStore, draftStore.drafts]
+  );
   const sourceChangedFormatFiles = useMemo(
     () => collectChangedFormatFiles(bankPath, sourceChangedFilesInBank),
     [bankPath, sourceChangedFilesInBank]
@@ -1610,6 +1637,13 @@ export function BankWorkspace() {
       changedFormatFiles
     );
   }, [bank, bankPath, changedFormatFiles, draftStore.drafts]);
+  const quickCheckFormatPaths = useMemo(
+    () =>
+      allFormatFiles.filter(
+        (filePath) => !localDeletedFormatFiles.has(filePath)
+      ),
+    [allFormatFiles, localDeletedFormatFiles]
+  );
 
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
   const sourceSelectionKey = `${repository.owner}/${repository.repo}:${sourceRef?.type ?? "none"}:${sourceRef?.name ?? ""}:${sourceRef?.sha ?? ""}:${sourceRef?.prNumber ?? ""}:${bankPath}`;
@@ -1935,6 +1969,7 @@ export function BankWorkspace() {
         />
 
         <FormatsPanel
+          deletedFormatFiles={localDeletedFormatFiles}
           formatSearch={formatSearch}
           formatTab={formatTab}
           handleSelectFile={handleSelectFile}
@@ -2024,7 +2059,7 @@ export function BankWorkspace() {
               : null
           }
           bankName={displayName}
-          formatPaths={allFormatFiles}
+          formatPaths={quickCheckFormatPaths}
           initialMode={quickCheckMode}
           onClose={() => setShowQuickCheck(false)}
           onOpenFileInApp={handleSelectFile}
