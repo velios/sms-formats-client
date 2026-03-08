@@ -113,6 +113,7 @@ export function RegexLab({
     hoveredPatternTokenIndex ??
     resolvedPatternTokenIndexFromSelection ??
     selectedPatternTokenIndex;
+  const exampleTabRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
   // Derived reactively from activePatternTokenIndex so hover also syncs
   const activeCaptureGroup = useMemo(() => {
@@ -168,6 +169,15 @@ export function RegexLab({
   useEffect(() => {
     setSelectedPatternTokenIndex(null);
   }, [regex, activeExampleIndex]);
+
+  useEffect(() => {
+    const activeTab = exampleTabRefs.current.get(activeExampleIndex);
+    activeTab?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activeExampleIndex, examples.length]);
 
   const handleGroupHover = useCallback((groupIndex: number | null) => {
     setHoveredGroup(groupIndex);
@@ -309,12 +319,20 @@ export function RegexLab({
               </a>
             </div>
           </div>
-          <div className="tabs">
+          <div className="tabs regex-workspace__example-tabs">
             {examples.map((_, i) => (
               <div className="flex items-center" key={i}>
                 <button
                   className={`tab ${i === activeExampleIndex ? "tab--active" : ""}`}
                   onClick={() => onActiveExampleChange(i)}
+                  ref={(el) => {
+                    if (el) {
+                      exampleTabRefs.current.set(i, el);
+                    } else {
+                      exampleTabRefs.current.delete(i);
+                    }
+                  }}
+                  type="button"
                 >
                   #{i + 1}
                   {regex && (
