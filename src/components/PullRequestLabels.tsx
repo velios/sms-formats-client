@@ -45,16 +45,18 @@ interface PullRequestLabelsProps {
   className?: string;
   labels: PullRequestLabel[];
   maxVisible?: number;
+  neutralLabels?: string[];
 }
 
 export function PullRequestLabels({
   className,
   labels,
   maxVisible = 1,
+  neutralLabels = [],
 }: PullRequestLabelsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  if (labels.length === 0) {
+  if (labels.length === 0 && neutralLabels.length === 0) {
     return null;
   }
 
@@ -75,6 +77,15 @@ export function PullRequestLabels({
 
   return (
     <div className={containerClassName}>
+      {neutralLabels.map((label) => (
+        <span
+          className="pr-label-chip pr-label-chip--neutral"
+          key={`neutral-${label}`}
+          title={label}
+        >
+          {label}
+        </span>
+      ))}
       {visibleLabels.map((label) => {
         const chipStyle = buildLabelStyle(label.color);
         if (isExpandable) {

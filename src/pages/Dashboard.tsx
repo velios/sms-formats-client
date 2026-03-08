@@ -32,6 +32,7 @@ interface OpenPullRequestItem {
   failedValidationCount: number;
   validationErrors: string[];
   validationUrl: string | null;
+  lastCommitAuthorLogin: string | null;
   labels: PullRequestLabel[];
 }
 
@@ -485,6 +486,11 @@ export function Dashboard() {
                     <PullRequestLabels
                       className="dashboard-pr-labels"
                       labels={pr.labels}
+                      neutralLabels={
+                        pr.lastCommitAuthorLogin
+                          ? [pr.lastCommitAuthorLogin]
+                          : []
+                      }
                     />
                     <span className="badge badge--info">
                       ✓ {pr.approvedCount}

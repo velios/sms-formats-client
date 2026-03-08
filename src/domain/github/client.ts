@@ -809,6 +809,7 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
     failedValidationCount: number;
     validationErrors: string[];
     validationUrl: string | null;
+    lastCommitAuthorLogin: string | null;
     labels: PullRequestLabel[];
   }[]
 > {
@@ -829,6 +830,22 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
     }
   }
 
+  async function fetchLastCommitAuthorLogin(
+    commitSha: string,
+    repo: RepoRef
+  ): Promise<string | null> {
+    try {
+      const commit = await publicOctokit.repos.getCommit({
+        owner: repo.owner,
+        repo: repo.repo,
+        ref: commitSha,
+      });
+      return commit.data.author?.login ?? commit.data.committer?.login ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   const repo = resolveRepo(repoRef);
   const res = await publicOctokit.pulls.list({
     owner: repo.owner,
@@ -839,22 +856,29 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
   const openPrs = res.data;
   return Promise.all(
     openPrs.map(async (pr) => {
-      const [approvedCount, validation] = await Promise.all([
-        fetchApprovedCount(pr.number, repo),
-        fetchValidatorFailuresByHeadSha(pr.head.sha, repo),
-      ]);
+      const headRepo: RepoRef = {
+        owner: pr.head.repo?.owner?.login ?? repo.owner,
+        repo: pr.head.repo?.name ?? repo.repo,
+      };
+      const [approvedCount, validation, lastCommitAuthorLogin] =
+        await Promise.all([
+          fetchApprovedCount(pr.number, repo),
+          fetchValidatorFailuresByHeadSha(pr.head.sha, repo),
+          fetchLastCommitAuthorLogin(pr.head.sha, headRepo),
+        ]);
 
       return {
         number: pr.number,
         title: pr.title,
         headRef: pr.head.ref,
         headSha: pr.head.sha,
-        headOwner: pr.head.repo?.owner?.login ?? repo.owner,
-        headRepo: pr.head.repo?.name ?? repo.repo,
+        headOwner: headRepo.owner,
+        headRepo: headRepo.repo,
         approvedCount,
         failedValidationCount: validation.failedValidationCount,
         validationErrors: validation.validationErrors,
         validationUrl: validation.validationUrl,
+        lastCommitAuthorLogin,
         labels: (pr.labels ?? [])
           .flatMap((label) => {
             if (typeof label === "string" || !label.name) {

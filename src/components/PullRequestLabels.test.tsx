@@ -46,4 +46,12 @@ describe("PullRequestLabels", () => {
     expect(handleRowClick).not.toHaveBeenCalled();
     expect(screen.getByText("validator")).toBeInTheDocument();
   });
+
+  it("renders neutral labels without colored PR labels", () => {
+    render(
+      <PullRequestLabels labels={[]} neutralLabels={["T-Банк-ru_4902"]} />
+    );
+
+    expect(screen.getByText("T-Банк-ru_4902")).toBeInTheDocument();
+  });
 });

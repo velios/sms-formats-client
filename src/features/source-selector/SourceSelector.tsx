@@ -25,6 +25,7 @@ interface OpenPullRequestItem {
   headRef: string;
   headSha: string;
   approvedCount: number;
+  lastCommitAuthorLogin: string | null;
   labels: PullRequestLabel[];
 }
 
@@ -250,6 +251,11 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
             <PullRequestLabels
               className="source-nav__pr-labels"
               labels={activePullRequest?.labels ?? []}
+              neutralLabels={
+                activePullRequest?.lastCommitAuthorLogin
+                  ? [activePullRequest.lastCommitAuthorLogin]
+                  : []
+              }
             />
 
             {openMenu === "source" && (
