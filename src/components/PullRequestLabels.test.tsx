@@ -47,11 +47,15 @@ describe("PullRequestLabels", () => {
     expect(screen.getByText("validator")).toBeInTheDocument();
   });
 
-  it("renders neutral labels without colored PR labels", () => {
+  it("renders multiple neutral labels without colored PR labels", () => {
     render(
-      <PullRequestLabels labels={[]} neutralLabels={["T-Банк-ru_4902"]} />
+      <PullRequestLabels
+        labels={[]}
+        neutralLabels={["T-Банк-ru_4902", "✓ 2"]}
+      />
     );
 
     expect(screen.getByText("T-Банк-ru_4902")).toBeInTheDocument();
+    expect(screen.getByText("✓ 2")).toBeInTheDocument();
   });
 });

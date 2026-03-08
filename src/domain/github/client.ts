@@ -55,8 +55,32 @@ interface ValidatorFailureResult {
   validationUrl: string | null;
 }
 
+interface CommitAuthorIdentity {
+  login?: string | null;
+  name?: string | null;
+}
+
+interface CommitAuthorMetadata {
+  author?: CommitAuthorIdentity | null;
+  committer?: CommitAuthorIdentity | null;
+}
+
 function resolveRepo(repoRef?: RepoRef): RepoRef {
   return repoRef ?? defaultRepoRef;
+}
+
+export function resolveCommitAuthorLabel(commit: {
+  author?: CommitAuthorIdentity | null;
+  committer?: CommitAuthorIdentity | null;
+  commit?: CommitAuthorMetadata | null;
+}): string | null {
+  return (
+    commit.author?.login ??
+    commit.committer?.login ??
+    commit.commit?.author?.name ??
+    commit.commit?.committer?.name ??
+    null
+  );
 }
 
 function countApprovedReviews(
@@ -840,7 +864,7 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
         repo: repo.repo,
         ref: commitSha,
       });
-      return commit.data.author?.login ?? commit.data.committer?.login ?? null;
+      return resolveCommitAuthorLabel(commit.data);
     } catch {
       return null;
     }

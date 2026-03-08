@@ -66,6 +66,20 @@ function filterPRs(prs: OpenPullRequestItem[], query: string) {
   );
 }
 
+function buildPullRequestNeutralLabels(
+  pullRequest: OpenPullRequestItem | null
+): string[] {
+  if (!pullRequest) {
+    return [];
+  }
+
+  const labels = [`✓ ${pullRequest.approvedCount}`];
+  if (pullRequest.lastCommitAuthorLogin) {
+    labels.unshift(pullRequest.lastCommitAuthorLogin);
+  }
+  return labels;
+}
+
 export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -251,11 +265,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
             <PullRequestLabels
               className="source-nav__pr-labels"
               labels={activePullRequest?.labels ?? []}
-              neutralLabels={
-                activePullRequest?.lastCommitAuthorLogin
-                  ? [activePullRequest.lastCommitAuthorLogin]
-                  : []
-              }
+              neutralLabels={buildPullRequestNeutralLabels(activePullRequest)}
             />
 
             {openMenu === "source" && (

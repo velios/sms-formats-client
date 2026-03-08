@@ -4,6 +4,7 @@ import {
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
   indexBanksFromTree,
+  resolveCommitAuthorLabel,
   setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
   subscribeGitHubAuthChange,
@@ -106,5 +107,26 @@ describe("pull request approval permission cache", () => {
     expect(getGitHubAuthChangeVersion()).toBe(initialVersion + 2);
 
     unsubscribe();
+  });
+});
+
+describe("resolveCommitAuthorLabel", () => {
+  it("prefers associated GitHub login when available", () => {
+    expect(
+      resolveCommitAuthorLabel({
+        author: { login: "zenmoney-ai[bot]" },
+        commit: { author: { name: "Zenmoney AI" } },
+      })
+    ).toBe("zenmoney-ai[bot]");
+  });
+
+  it("falls back to commit author name when GitHub login is missing", () => {
+    expect(
+      resolveCommitAuthorLabel({
+        author: null,
+        committer: null,
+        commit: { author: { name: "Zenmoney AI" } },
+      })
+    ).toBe("Zenmoney AI");
   });
 });
