@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { ModalDialog } from "@/components/ModalDialog";
 import { config } from "@/config";
 import {
   buildBankWorkspacePath,
@@ -2513,79 +2514,73 @@ function ColumnPickerModal({
   }, [lang, search]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-labelledby={titleId}
-        aria-modal="true"
-        className="modal regex-column-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-      >
-        <div className="modal__title" id={titleId}>
-          {t("columns.selectForGroup", { index: groupIndex })}
+    <ModalDialog
+      className="regex-column-modal"
+      onClose={onClose}
+      title={t("columns.selectForGroup", { index: groupIndex })}
+      titleId={titleId}
+    >
+      {selectionText && (
+        <div className="badge badge--info sms-game__selection-badge">
+          {t("smsGame.selectionPrompt", { text: selectionText })}
         </div>
-        {selectionText && (
-          <div className="badge badge--info sms-game__selection-badge">
-            {t("smsGame.selectionPrompt", { text: selectionText })}
-          </div>
-        )}
-        <input
-          autoFocus
-          className="input"
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("columns.search")}
-          value={search}
-        />
-        <div className="regex-column-modal__list">
-          {filteredColumns.map((column) => {
-            const optionBase = toComparableBase(column.name);
-            const isUsedByOtherGroup = usedBaseNames.has(optionBase);
-            const isCurrent = optionBase === currentBaseName;
-            const isDisabled = isUsedByOtherGroup && !isCurrent;
+      )}
+      <input
+        autoFocus
+        className="input"
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={t("columns.search")}
+        value={search}
+      />
+      <div className="regex-column-modal__list">
+        {filteredColumns.map((column) => {
+          const optionBase = toComparableBase(column.name);
+          const isUsedByOtherGroup = usedBaseNames.has(optionBase);
+          const isCurrent = optionBase === currentBaseName;
+          const isDisabled = isUsedByOtherGroup && !isCurrent;
 
-            const value = column.parameterized
-              ? `${column.name}#${column.paramHint ?? ""}`
-              : column.name;
+          const value = column.parameterized
+            ? `${column.name}#${column.paramHint ?? ""}`
+            : column.name;
 
-            return (
-              <button
-                className={`regex-column-modal__item ${isCurrent ? "regex-column-modal__item--selected" : ""}`.trim()}
-                disabled={isDisabled}
-                key={column.name}
-                onClick={() => onSelectColumn(value)}
-                type="button"
-              >
-                <span className="font-medium text-mono">
-                  {SPECIAL_PLACEHOLDERS.get(column.name.toLowerCase()) ??
-                    column.name}
-                </span>
-                <span className="text-muted text-sm">
-                  {column.description[lang] ?? column.description.en}
-                </span>
-                {column.parameterized &&
-                  !SPECIAL_PLACEHOLDERS.has(column.name.toLowerCase()) && (
-                    <span className="badge badge--info text-sm">
-                      {t("columns.param")}
-                    </span>
-                  )}
-                {isDisabled && (
-                  <span className="badge badge--warning text-sm">
-                    {t("columns.alreadyUsed")}
+          return (
+            <button
+              className={`regex-column-modal__item ${isCurrent ? "regex-column-modal__item--selected" : ""}`.trim()}
+              disabled={isDisabled}
+              key={column.name}
+              onClick={() => onSelectColumn(value)}
+              type="button"
+            >
+              <span className="font-medium text-mono">
+                {SPECIAL_PLACEHOLDERS.get(column.name.toLowerCase()) ??
+                  column.name}
+              </span>
+              <span className="text-muted text-sm">
+                {column.description[lang] ?? column.description.en}
+              </span>
+              {column.parameterized &&
+                !SPECIAL_PLACEHOLDERS.has(column.name.toLowerCase()) && (
+                  <span className="badge badge--info text-sm">
+                    {t("columns.param")}
                   </span>
                 )}
-              </button>
-            );
-          })}
-          {filteredColumns.length === 0 && (
-            <div className="p-md text-muted text-sm">—</div>
-          )}
-        </div>
-        <div className="modal__actions">
-          <button className="btn" onClick={onClose}>
-            {t("app.cancel")}
-          </button>
-        </div>
+              {isDisabled && (
+                <span className="badge badge--warning text-sm">
+                  {t("columns.alreadyUsed")}
+                </span>
+              )}
+            </button>
+          );
+        })}
+        {filteredColumns.length === 0 && (
+          <div className="p-md text-muted text-sm">—</div>
+        )}
       </div>
-    </div>
+      <div className="modal__actions">
+        <button className="btn" onClick={onClose}>
+          {t("app.cancel")}
+        </button>
+      </div>
+    </ModalDialog>
   );
 }

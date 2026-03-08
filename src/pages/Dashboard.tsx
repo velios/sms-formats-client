@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { ModalDialog } from "@/components/ModalDialog";
 import { config } from "@/config";
 import { buildBankWorkspacePath } from "@/domain/bank-route";
 import { fetchPullRequestValidationDetails } from "@/domain/github";
@@ -593,82 +594,73 @@ export function Dashboard() {
       </div>
 
       {validationDetailsModal && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
+        <ModalDialog
+          className="validation-details-modal"
+          onClose={() => {
             setValidationDetailsModal(null);
             setValidationDetailsError(null);
           }}
+          title={t("source.validatorErrorsTitle", {
+            defaultValue: "Ошибки валидатора",
+          })}
+          titleId={validationDetailsTitleId}
         >
-          <div
-            aria-labelledby={validationDetailsTitleId}
-            aria-modal="true"
-            className="modal validation-details-modal"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-          >
-            <div className="modal__title" id={validationDetailsTitleId}>
-              {t("source.validatorErrorsTitle", {
-                defaultValue: "Ошибки валидатора",
-              })}
-            </div>
-            <div className="text-muted text-sm">
-              PR #{validationDetailsModal.prNumber} ·{" "}
-              {validationDetailsModal.prTitle}
-            </div>
-            <pre className="validation-details-modal__content">
+          <div className="text-muted text-sm">
+            PR #{validationDetailsModal.prNumber} ·{" "}
+            {validationDetailsModal.prTitle}
+          </div>
+          <pre className="validation-details-modal__content">
+            {isValidationDetailsLoading
+              ? t("source.loadingValidationResult", {
+                  defaultValue: "Загружаем результат валидации...",
+                })
+              : validationDetailsModal.validationErrors.length > 0
+                ? validationDetailsModal.validationErrors.join("\n")
+                : t("source.validatorErrorsUnavailable", {
+                    defaultValue:
+                      "Проверка валидатора не пройдена. Откройте checks в PR для деталей.",
+                  })}
+          </pre>
+          {validationDetailsError && (
+            <div className="badge badge--error">{validationDetailsError}</div>
+          )}
+          <div className="modal__actions">
+            <button
+              className="btn btn--primary"
+              disabled={isValidationDetailsLoading}
+              onClick={handleRetryValidationDetails}
+              type="button"
+            >
               {isValidationDetailsLoading
                 ? t("source.loadingValidationResult", {
-                    defaultValue: "Загружаем результат валидации...",
+                    defaultValue: "Загружаем...",
                   })
-                : validationDetailsModal.validationErrors.length > 0
-                  ? validationDetailsModal.validationErrors.join("\n")
-                  : t("source.validatorErrorsUnavailable", {
-                      defaultValue:
-                        "Проверка валидатора не пройдена. Откройте checks в PR для деталей.",
-                    })}
-            </pre>
-            {validationDetailsError && (
-              <div className="badge badge--error">{validationDetailsError}</div>
-            )}
-            <div className="modal__actions">
-              <button
-                className="btn btn--primary"
-                disabled={isValidationDetailsLoading}
-                onClick={handleRetryValidationDetails}
-                type="button"
-              >
-                {isValidationDetailsLoading
-                  ? t("source.loadingValidationResult", {
-                      defaultValue: "Загружаем...",
-                    })
-                  : t("source.loadValidationResult", {
-                      defaultValue: "Попробовать снова",
-                    })}
-              </button>
-              <a
-                className="btn"
-                href={validationDetailsModal.checksUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {t("source.openValidatorChecks", {
-                  defaultValue: "Открыть checks",
-                })}
-              </a>
-              <button
-                className="btn"
-                onClick={() => {
-                  setValidationDetailsModal(null);
-                  setValidationDetailsError(null);
-                }}
-                type="button"
-              >
-                {t("app.close")}
-              </button>
-            </div>
+                : t("source.loadValidationResult", {
+                    defaultValue: "Попробовать снова",
+                  })}
+            </button>
+            <a
+              className="btn"
+              href={validationDetailsModal.checksUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {t("source.openValidatorChecks", {
+                defaultValue: "Открыть checks",
+              })}
+            </a>
+            <button
+              className="btn"
+              onClick={() => {
+                setValidationDetailsModal(null);
+                setValidationDetailsError(null);
+              }}
+              type="button"
+            >
+              {t("app.close")}
+            </button>
           </div>
-        </div>
+        </ModalDialog>
       )}
     </div>
   );

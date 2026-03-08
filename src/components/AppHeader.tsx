@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
+import { ModalDialog } from "@/components/ModalDialog";
 import {
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
@@ -168,81 +169,68 @@ export function AppHeader() {
       </header>
 
       {githubTokenModalOpen && (
-        <div
-          className="modal-overlay"
-          onClick={() => setGithubTokenModalOpen(false)}
+        <ModalDialog
+          onClose={() => setGithubTokenModalOpen(false)}
+          style={{ minWidth: 520 }}
+          title={t("githubAuth.title")}
+          titleId={githubTokenDialogTitleId}
         >
-          <div
-            aria-labelledby={githubTokenDialogTitleId}
-            aria-modal="true"
-            className="modal"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            style={{ minWidth: 520 }}
-          >
-            <div className="modal__title" id={githubTokenDialogTitleId}>
-              {t("githubAuth.title")}
+          <div className="mb-md flex-col gap-sm">
+            <label className="text-muted text-sm" htmlFor={githubTokenInputId}>
+              {t("githubAuth.tokenLabel")}
+            </label>
+            <input
+              autoCapitalize="off"
+              autoComplete="off"
+              className="input input--mono"
+              id={githubTokenInputId}
+              onChange={(e) => setGithubTokenInput(e.target.value)}
+              placeholder="ghp_..."
+              spellCheck={false}
+              type="password"
+              value={githubTokenInput}
+            />
+            <div className="text-muted text-sm">
+              {t("githubAuth.tokenHint")}
             </div>
-            <div className="mb-md flex-col gap-sm">
-              <label
-                className="text-muted text-sm"
-                htmlFor={githubTokenInputId}
-              >
-                {t("githubAuth.tokenLabel")}
-              </label>
-              <input
-                autoCapitalize="off"
-                autoComplete="off"
-                className="input input--mono"
-                id={githubTokenInputId}
-                onChange={(e) => setGithubTokenInput(e.target.value)}
-                placeholder="ghp_..."
-                spellCheck={false}
-                type="password"
-                value={githubTokenInput}
-              />
-              <div className="text-muted text-sm">
-                {t("githubAuth.tokenHint")}
+            {hasSavedGitHubToken && (
+              <div className="badge badge--success">
+                {t("githubAuth.tokenSaved")}
               </div>
-              {hasSavedGitHubToken && (
-                <div className="badge badge--success">
-                  {t("githubAuth.tokenSaved")}
-                </div>
-              )}
-              {githubTokenError && (
-                <div className="badge badge--error">{githubTokenError}</div>
-              )}
-            </div>
-            <div className="modal__actions">
-              <button
-                className="btn btn--danger"
-                disabled={!hasSavedGitHubToken || isSavingGitHubToken}
-                onClick={() => void handleResetGitHubToken()}
-                type="button"
-              >
-                {t("githubAuth.resetToken")}
-              </button>
-              <button
-                className="btn btn--ghost"
-                disabled={isSavingGitHubToken}
-                onClick={() => setGithubTokenModalOpen(false)}
-                type="button"
-              >
-                {t("app.cancel")}
-              </button>
-              <button
-                className="btn btn--primary"
-                disabled={
-                  isSavingGitHubToken || githubTokenInput.trim().length === 0
-                }
-                onClick={() => void handleSaveGitHubToken()}
-                type="button"
-              >
-                {isSavingGitHubToken ? t("githubAuth.saving") : t("app.save")}
-              </button>
-            </div>
+            )}
+            {githubTokenError && (
+              <div className="badge badge--error">{githubTokenError}</div>
+            )}
           </div>
-        </div>
+          <div className="modal__actions">
+            <button
+              className="btn btn--danger"
+              disabled={!hasSavedGitHubToken || isSavingGitHubToken}
+              onClick={() => void handleResetGitHubToken()}
+              type="button"
+            >
+              {t("githubAuth.resetToken")}
+            </button>
+            <button
+              className="btn btn--ghost"
+              disabled={isSavingGitHubToken}
+              onClick={() => setGithubTokenModalOpen(false)}
+              type="button"
+            >
+              {t("app.cancel")}
+            </button>
+            <button
+              className="btn btn--primary"
+              disabled={
+                isSavingGitHubToken || githubTokenInput.trim().length === 0
+              }
+              onClick={() => void handleSaveGitHubToken()}
+              type="button"
+            >
+              {isSavingGitHubToken ? t("githubAuth.saving") : t("app.save")}
+            </button>
+          </div>
+        </ModalDialog>
       )}
     </>
   );

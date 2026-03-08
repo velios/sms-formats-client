@@ -1,5 +1,6 @@
 import { useCallback, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ModalDialog } from "@/components/ModalDialog";
 import { config } from "@/config";
 import {
   createAuthenticatedOctokit,
@@ -331,185 +332,167 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   const isPublishing = step !== "idle" && step !== "done" && step !== "error";
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-labelledby={dialogTitleId}
-        aria-modal="true"
-        className="modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        style={{ minWidth: 500 }}
-      >
-        <div className="modal__title" id={dialogTitleId}>
-          {t("publish.title")}
+    <ModalDialog
+      onClose={onClose}
+      style={{ minWidth: 500 }}
+      title={t("publish.title")}
+      titleId={dialogTitleId}
+    >
+      <div className="mb-md flex-col gap-md">
+        <div className="text-sm">
+          <span className="text-muted">
+            {t("publish.scopeCheck", { bank: bankName })}
+          </span>
+        </div>
+        <div className="text-muted text-sm">
+          {changedFiles.length} file(s) changed
         </div>
 
-        {/* Preflight info */}
-        <div className="mb-md flex-col gap-md">
-          <div className="text-sm">
-            <span className="text-muted">
-              {t("publish.scopeCheck", { bank: bankName })}
-            </span>
-          </div>
-          <div className="text-muted text-sm">
-            {changedFiles.length} file(s) changed
-          </div>
-
-          {isMultiBank && (
-            <div className="issue-item issue-item--error">
-              {t("validation.multiBankPublish")}
-            </div>
-          )}
-
-          {changedFiles.length === 0 && (
-            <div className="issue-item issue-item--warning">
-              No changes to publish for this bank
-            </div>
-          )}
-        </div>
-
-        {/* Token input */}
-        {showTokenInput && step === "idle" && (
-          <div className="mb-md flex-col gap-md">
-            <div className="flex-col gap-xs">
-              <label className="text-muted text-sm" htmlFor={tokenInputId}>
-                {t("publish.tokenLabel")}
-              </label>
-              <input
-                className="input input--mono"
-                id={tokenInputId}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="ghp_..."
-                type="password"
-                value={token}
-              />
-              <span className="text-dim text-sm">{t("publish.tokenHint")}</span>
-            </div>
-
-            <label className="flex items-center gap-sm text-sm">
-              <input
-                checked={storeInSession}
-                onChange={(e) => setStoreInSession(e.target.checked)}
-                type="checkbox"
-              />
-              {t("publish.storeInSession")}
-            </label>
-
-            <div className="flex-col gap-xs">
-              <label className="text-muted text-sm" htmlFor={prTitleInputId}>
-                {t("publish.prTitle")}
-              </label>
-              <input
-                className="input"
-                id={prTitleInputId}
-                onChange={(e) => setPrTitle(e.target.value)}
-                value={prTitle}
-              />
-            </div>
+        {isMultiBank && (
+          <div className="issue-item issue-item--error">
+            {t("validation.multiBankPublish")}
           </div>
         )}
 
-        {/* Publish progress */}
-        {step !== "idle" && (
-          <div
-            aria-live="polite"
-            className="publish-progress mb-md"
-            role="status"
-          >
-            <PublishStepItem
-              label={t("publish.validating")}
-              status={stepStatus("validating", step)}
-            />
-            <PublishStepItem
-              label={t("publish.forking")}
-              status={stepStatus("forking", step)}
-            />
-            <PublishStepItem
-              label={t("publish.branching")}
-              status={stepStatus("branching", step)}
-            />
-            <PublishStepItem
-              label={t("publish.committing")}
-              status={stepStatus("committing", step)}
-            />
-            <PublishStepItem
-              label={t("publish.openingPR")}
-              status={stepStatus("opening-pr", step)}
-            />
+        {changedFiles.length === 0 && (
+          <div className="issue-item issue-item--warning">
+            No changes to publish for this bank
           </div>
         )}
-
-        {/* Success */}
-        {step === "done" && publishStore.prUrl && (
-          <div
-            aria-live="polite"
-            className="mb-md flex-col gap-sm"
-            role="status"
-          >
-            <div className="badge badge--success">{publishSuccessLabel}</div>
-            <a
-              href={publishStore.prUrl}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              {t("publish.prLink")}: {publishStore.prUrl}
-            </a>
-          </div>
-        )}
-
-        {/* Error */}
-        {step === "error" && publishStore.error && (
-          <div
-            aria-live="assertive"
-            className="issue-item issue-item--error mb-md"
-            role="alert"
-          >
-            {publishStore.error}
-          </div>
-        )}
-
-        {/* Validation issues from publish */}
-        {publishStore.validationIssues.length > 0 && (
-          <div
-            className="issue-list mb-md"
-            style={{ maxHeight: 200, overflowY: "auto" }}
-          >
-            {publishStore.validationIssues.map((issue, i) => (
-              <div
-                className={`issue-item ${issue.level === "error" ? "issue-item--error" : "issue-item--warning"}`}
-                key={i}
-              >
-                <span className="text-mono text-sm">
-                  {issue.filePath.split("/").pop()}
-                </span>
-                <span className="text-sm">{issue.message}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="modal__actions">
-          <button className="btn" onClick={onClose}>
-            {t("app.close")}
-          </button>
-          {step !== "done" && (
-            <button
-              className="btn btn--primary"
-              disabled={
-                isPublishing ||
-                !token.trim() ||
-                changedFiles.length === 0 ||
-                isMultiBank
-              }
-              onClick={handlePublish}
-            >
-              {isPublishing ? <span className="spinner" /> : null}
-              {publishActionLabel}
-            </button>
-          )}
-        </div>
       </div>
-    </div>
+
+      {showTokenInput && step === "idle" && (
+        <div className="mb-md flex-col gap-md">
+          <div className="flex-col gap-xs">
+            <label className="text-muted text-sm" htmlFor={tokenInputId}>
+              {t("publish.tokenLabel")}
+            </label>
+            <input
+              className="input input--mono"
+              id={tokenInputId}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="ghp_..."
+              type="password"
+              value={token}
+            />
+            <span className="text-dim text-sm">{t("publish.tokenHint")}</span>
+          </div>
+
+          <label className="flex items-center gap-sm text-sm">
+            <input
+              checked={storeInSession}
+              onChange={(e) => setStoreInSession(e.target.checked)}
+              type="checkbox"
+            />
+            {t("publish.storeInSession")}
+          </label>
+
+          <div className="flex-col gap-xs">
+            <label className="text-muted text-sm" htmlFor={prTitleInputId}>
+              {t("publish.prTitle")}
+            </label>
+            <input
+              className="input"
+              id={prTitleInputId}
+              onChange={(e) => setPrTitle(e.target.value)}
+              value={prTitle}
+            />
+          </div>
+        </div>
+      )}
+
+      {step !== "idle" && (
+        <div
+          aria-live="polite"
+          className="publish-progress mb-md"
+          role="status"
+        >
+          <PublishStepItem
+            label={t("publish.validating")}
+            status={stepStatus("validating", step)}
+          />
+          <PublishStepItem
+            label={t("publish.forking")}
+            status={stepStatus("forking", step)}
+          />
+          <PublishStepItem
+            label={t("publish.branching")}
+            status={stepStatus("branching", step)}
+          />
+          <PublishStepItem
+            label={t("publish.committing")}
+            status={stepStatus("committing", step)}
+          />
+          <PublishStepItem
+            label={t("publish.openingPR")}
+            status={stepStatus("opening-pr", step)}
+          />
+        </div>
+      )}
+
+      {step === "done" && publishStore.prUrl && (
+        <div aria-live="polite" className="mb-md flex-col gap-sm" role="status">
+          <div className="badge badge--success">{publishSuccessLabel}</div>
+          <a
+            href={publishStore.prUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {t("publish.prLink")}: {publishStore.prUrl}
+          </a>
+        </div>
+      )}
+
+      {step === "error" && publishStore.error && (
+        <div
+          aria-live="assertive"
+          className="issue-item issue-item--error mb-md"
+          role="alert"
+        >
+          {publishStore.error}
+        </div>
+      )}
+
+      {publishStore.validationIssues.length > 0 && (
+        <div
+          className="issue-list mb-md"
+          style={{ maxHeight: 200, overflowY: "auto" }}
+        >
+          {publishStore.validationIssues.map((issue, i) => (
+            <div
+              className={`issue-item ${issue.level === "error" ? "issue-item--error" : "issue-item--warning"}`}
+              key={i}
+            >
+              <span className="text-mono text-sm">
+                {issue.filePath.split("/").pop()}
+              </span>
+              <span className="text-sm">{issue.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="modal__actions">
+        <button className="btn" onClick={onClose}>
+          {t("app.close")}
+        </button>
+        {step !== "done" && (
+          <button
+            className="btn btn--primary"
+            disabled={
+              isPublishing ||
+              !token.trim() ||
+              changedFiles.length === 0 ||
+              isMultiBank
+            }
+            onClick={handlePublish}
+          >
+            {isPublishing ? <span className="spinner" /> : null}
+            {publishActionLabel}
+          </button>
+        )}
+      </div>
+    </ModalDialog>
   );
 }
 

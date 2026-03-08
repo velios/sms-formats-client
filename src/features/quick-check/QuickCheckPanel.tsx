@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ModalDialog } from "@/components/ModalDialog";
 import { parseFormatFile, testRegex } from "@/domain/format";
 import { fetchFileContent } from "@/domain/github";
 import type { RepoRef } from "@/domain/types";
@@ -594,324 +595,305 @@ export function QuickCheckPanel({
     runState?.mode === "sms-by-template" ? runState : null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-labelledby={dialogTitleId}
-        aria-modal="true"
-        className="modal quick-check-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        style={{ minWidth: 760, maxWidth: 960 }}
-      >
-        <div className="modal__title" id={dialogTitleId}>
-          {t("quickCheck.title", { bank: bankName })}
-        </div>
-
-        <div className="quick-check__mode-switch" role="tablist">
-          <button
-            className={`tab ${mode === "template-by-sms" ? "tab--active" : ""}`.trim()}
-            onClick={() => handleSwitchMode("template-by-sms")}
-            role="tab"
-            type="button"
-          >
-            {t("quickCheck.openTemplateBySms")}
-          </button>
-          <button
-            className={`tab ${mode === "sms-by-template" ? "tab--active" : ""}`.trim()}
-            onClick={() => handleSwitchMode("sms-by-template")}
-            role="tab"
-            type="button"
-          >
-            {t("quickCheck.openSmsByTemplate")}
-          </button>
-        </div>
-
-        {mode === "template-by-sms" ? (
-          <div className="flex-col gap-xs">
-            <label className="text-muted text-sm" htmlFor={inputId}>
-              {t("quickCheck.smsLabel")}
-            </label>
-            <textarea
-              className="textarea quick-check__input"
-              id={inputId}
-              onChange={(event) => setSmsText(event.target.value)}
-              placeholder={t("quickCheck.smsPlaceholder")}
-              value={smsText}
-            />
-            <div className="text-dim text-sm">
-              {t("quickCheck.scopeInfo", { count: formatPaths.length })}
-            </div>
-            {activeFormatContext && (
-              <div className="text-dim text-sm">
-                {t("quickCheck.activeSmsSource", {
-                  file: extractFormatFileName(activeFormatContext.filePath),
-                  index: activeFormatContext.activeExampleIndex + 1,
-                })}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex-col gap-xs">
-            <label className="text-muted text-sm" htmlFor={inputId}>
-              {t("quickCheck.templateRegexLabel")}
-            </label>
-            <textarea
-              className="textarea quick-check__template-input"
-              id={inputId}
-              onChange={(event) => setTemplateRegex(event.target.value)}
-              placeholder={t("quickCheck.templateRegexPlaceholder")}
-              value={templateRegex}
-            />
-            <div className="text-dim text-sm">
-              {t("quickCheck.scopeInfo", { count: formatPaths.length })}
-            </div>
-            {activeFormatContext && (
-              <div className="text-dim text-sm">
-                {t("quickCheck.activeTemplateSource", {
-                  file: extractFormatFileName(activeFormatContext.filePath),
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {errorMessage && (
-          <div
-            aria-live="assertive"
-            className="issue-item issue-item--error quick-check__feedback"
-            role="alert"
-          >
-            {errorMessage}
-          </div>
-        )}
-
-        {templateBySmsState && (
-          <div
-            aria-live="polite"
-            className="quick-check__summary"
-            role="status"
-          >
-            <span className="badge badge--info">
-              {t("quickCheck.summaryChecked", {
-                checked: templateBySmsState.summary.checkedRegexes,
-                total: templateBySmsState.summary.totalFormats,
-              })}
-            </span>
-            <span className="badge badge--success">
-              {t("quickCheck.summaryMatched", {
-                count: templateBySmsState.summary.matchedCount,
-              })}
-            </span>
-            <span className="badge badge--warning">
-              {t("quickCheck.summaryInvalid", {
-                count: templateBySmsState.summary.invalidRegexCount,
-              })}
-            </span>
-            <span className="badge badge--warning">
-              {t("quickCheck.summaryMissingRegex", {
-                count: templateBySmsState.summary.missingRegexCount,
-              })}
-            </span>
-            <span className="badge badge--warning">
-              {t("quickCheck.summaryLoadErrors", {
-                count: templateBySmsState.summary.loadErrorsCount,
-              })}
-            </span>
-            <span className="badge badge--modified">
-              {t("quickCheck.summaryCache", {
-                cached: templateBySmsState.summary.cachedCount,
-                fetched: templateBySmsState.summary.remoteFetchedCount,
-              })}
-            </span>
-          </div>
-        )}
-
-        {smsByTemplateState && (
-          <div
-            aria-live="polite"
-            className="quick-check__summary"
-            role="status"
-          >
-            <span className="badge badge--info">
-              {t("quickCheck.summaryCheckedSms", {
-                checked: smsByTemplateState.summary.checkedSmsCount,
-                total: smsByTemplateState.summary.totalFormats,
-              })}
-            </span>
-            <span className="badge badge--success">
-              {t("quickCheck.summaryMatchedSms", {
-                count: smsByTemplateState.summary.matchedSmsCount,
-              })}
-            </span>
-            <span className="badge badge--success">
-              {t("quickCheck.summaryMatchedFormats", {
-                count: smsByTemplateState.summary.matchedFormatsCount,
-              })}
-            </span>
-            <span className="badge badge--warning">
-              {t("quickCheck.summaryMissingExamples", {
-                count: smsByTemplateState.summary.missingExamplesCount,
-              })}
-            </span>
-            <span className="badge badge--warning">
-              {t("quickCheck.summaryLoadErrors", {
-                count: smsByTemplateState.summary.loadErrorsCount,
-              })}
-            </span>
-            <span className="badge badge--modified">
-              {t("quickCheck.summaryCache", {
-                cached: smsByTemplateState.summary.cachedCount,
-                fetched: smsByTemplateState.summary.remoteFetchedCount,
-              })}
-            </span>
-          </div>
-        )}
-
-        <div className="quick-check__results">
-          {templateBySmsState && templateBySmsState.results.length === 0 && (
-            <div className="text-muted text-sm">
-              {t("quickCheck.noRegexes")}
-            </div>
-          )}
-
-          {templateBySmsState?.results.map((result) => (
-            <div className="quick-check__result" key={result.filePath}>
-              <div className="quick-check__result-header">
-                <span className="text-mono text-sm">{result.fileName}</span>
-                <span
-                  className={`badge ${
-                    result.status === "match"
-                      ? "badge--success"
-                      : result.status === "invalid"
-                        ? "badge--warning"
-                        : "badge--info"
-                  }`}
-                >
-                  {result.status === "match"
-                    ? t("quickCheck.resultMatch")
-                    : result.status === "invalid"
-                      ? t("quickCheck.resultInvalid")
-                      : t("quickCheck.resultNoMatch")}
-                </span>
-                <span className="badge badge--info">
-                  {result.source === "draft"
-                    ? t("quickCheck.sourceDraft")
-                    : t("quickCheck.sourceRemote")}
-                </span>
-              </div>
-              <pre className="quick-check__regex">{result.regex}</pre>
-              {result.status === "match" && sourceRefName && (
-                <div className="quick-check__links">
-                  <button
-                    className="quick-check__link"
-                    onClick={() => handleOpenInApp(result.filePath)}
-                    type="button"
-                  >
-                    {t("quickCheck.openInApp")}
-                  </button>
-                  <a
-                    className="quick-check__link"
-                    href={buildGitHubFileLink({
-                      filePath: result.filePath,
-                      repository,
-                      refName: sourceRefName,
-                    })}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {t("quickCheck.openInGitHub")}
-                  </a>
-                </div>
-              )}
-              {result.errorMessage && (
-                <div className="text-muted text-sm">{result.errorMessage}</div>
-              )}
-            </div>
-          ))}
-
-          {smsByTemplateState && smsByTemplateState.results.length === 0 && (
-            <div className="text-muted text-sm">
-              {t("quickCheck.noFormats")}
-            </div>
-          )}
-
-          {smsByTemplateState?.results.map((result) => (
-            <div className="quick-check__result" key={result.filePath}>
-              <div className="quick-check__result-header">
-                <span className="text-mono text-sm">{result.fileName}</span>
-                <span
-                  className={`badge ${
-                    result.status === "match" ? "badge--success" : "badge--info"
-                  }`}
-                >
-                  {result.status === "match"
-                    ? t("quickCheck.resultMatch")
-                    : t("quickCheck.resultNoMatch")}
-                </span>
-                <span className="badge badge--info">
-                  {t("quickCheck.smsMatchesInFormat", {
-                    matched: result.matchedExamples,
-                    total: result.totalExamples,
-                  })}
-                </span>
-                <span className="badge badge--info">
-                  {result.source === "draft"
-                    ? t("quickCheck.sourceDraft")
-                    : t("quickCheck.sourceRemote")}
-                </span>
-              </div>
-              {result.firstMatchedExample && (
-                <pre className="quick-check__regex">
-                  {result.firstMatchedExample}
-                </pre>
-              )}
-              {result.status === "match" && sourceRefName && (
-                <div className="quick-check__links">
-                  <button
-                    className="quick-check__link"
-                    onClick={() => handleOpenInApp(result.filePath)}
-                    type="button"
-                  >
-                    {t("quickCheck.openInApp")}
-                  </button>
-                  <a
-                    className="quick-check__link"
-                    href={buildGitHubFileLink({
-                      filePath: result.filePath,
-                      repository,
-                      refName: sourceRefName,
-                    })}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {t("quickCheck.openInGitHub")}
-                  </a>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="modal__actions">
-          <button className="btn" onClick={onClose}>
-            {t("app.close")}
-          </button>
-          <button
-            className="btn btn--primary"
-            disabled={isChecking}
-            onClick={() => void runQuickCheck()}
-          >
-            {isChecking ? (
-              <>
-                <span className="spinner" />
-                {t("quickCheck.running")}
-              </>
-            ) : (
-              t("quickCheck.run")
-            )}
-          </button>
-        </div>
+    <ModalDialog
+      className="quick-check-modal"
+      onClose={onClose}
+      style={{ minWidth: 760, maxWidth: 960 }}
+      title={t("quickCheck.title", { bank: bankName })}
+      titleId={dialogTitleId}
+    >
+      <div className="quick-check__mode-switch" role="tablist">
+        <button
+          className={`tab ${mode === "template-by-sms" ? "tab--active" : ""}`.trim()}
+          onClick={() => handleSwitchMode("template-by-sms")}
+          role="tab"
+          type="button"
+        >
+          {t("quickCheck.openTemplateBySms")}
+        </button>
+        <button
+          className={`tab ${mode === "sms-by-template" ? "tab--active" : ""}`.trim()}
+          onClick={() => handleSwitchMode("sms-by-template")}
+          role="tab"
+          type="button"
+        >
+          {t("quickCheck.openSmsByTemplate")}
+        </button>
       </div>
-    </div>
+
+      {mode === "template-by-sms" ? (
+        <div className="flex-col gap-xs">
+          <label className="text-muted text-sm" htmlFor={inputId}>
+            {t("quickCheck.smsLabel")}
+          </label>
+          <textarea
+            className="textarea quick-check__input"
+            id={inputId}
+            onChange={(event) => setSmsText(event.target.value)}
+            placeholder={t("quickCheck.smsPlaceholder")}
+            value={smsText}
+          />
+          <div className="text-dim text-sm">
+            {t("quickCheck.scopeInfo", { count: formatPaths.length })}
+          </div>
+          {activeFormatContext && (
+            <div className="text-dim text-sm">
+              {t("quickCheck.activeSmsSource", {
+                file: extractFormatFileName(activeFormatContext.filePath),
+                index: activeFormatContext.activeExampleIndex + 1,
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-col gap-xs">
+          <label className="text-muted text-sm" htmlFor={inputId}>
+            {t("quickCheck.templateRegexLabel")}
+          </label>
+          <textarea
+            className="textarea quick-check__template-input"
+            id={inputId}
+            onChange={(event) => setTemplateRegex(event.target.value)}
+            placeholder={t("quickCheck.templateRegexPlaceholder")}
+            value={templateRegex}
+          />
+          <div className="text-dim text-sm">
+            {t("quickCheck.scopeInfo", { count: formatPaths.length })}
+          </div>
+          {activeFormatContext && (
+            <div className="text-dim text-sm">
+              {t("quickCheck.activeTemplateSource", {
+                file: extractFormatFileName(activeFormatContext.filePath),
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div
+          aria-live="assertive"
+          className="issue-item issue-item--error quick-check__feedback"
+          role="alert"
+        >
+          {errorMessage}
+        </div>
+      )}
+
+      {templateBySmsState && (
+        <div aria-live="polite" className="quick-check__summary" role="status">
+          <span className="badge badge--info">
+            {t("quickCheck.summaryChecked", {
+              checked: templateBySmsState.summary.checkedRegexes,
+              total: templateBySmsState.summary.totalFormats,
+            })}
+          </span>
+          <span className="badge badge--success">
+            {t("quickCheck.summaryMatched", {
+              count: templateBySmsState.summary.matchedCount,
+            })}
+          </span>
+          <span className="badge badge--warning">
+            {t("quickCheck.summaryInvalid", {
+              count: templateBySmsState.summary.invalidRegexCount,
+            })}
+          </span>
+          <span className="badge badge--warning">
+            {t("quickCheck.summaryMissingRegex", {
+              count: templateBySmsState.summary.missingRegexCount,
+            })}
+          </span>
+          <span className="badge badge--warning">
+            {t("quickCheck.summaryLoadErrors", {
+              count: templateBySmsState.summary.loadErrorsCount,
+            })}
+          </span>
+          <span className="badge badge--modified">
+            {t("quickCheck.summaryCache", {
+              cached: templateBySmsState.summary.cachedCount,
+              fetched: templateBySmsState.summary.remoteFetchedCount,
+            })}
+          </span>
+        </div>
+      )}
+
+      {smsByTemplateState && (
+        <div aria-live="polite" className="quick-check__summary" role="status">
+          <span className="badge badge--info">
+            {t("quickCheck.summaryCheckedSms", {
+              checked: smsByTemplateState.summary.checkedSmsCount,
+              total: smsByTemplateState.summary.totalFormats,
+            })}
+          </span>
+          <span className="badge badge--success">
+            {t("quickCheck.summaryMatchedSms", {
+              count: smsByTemplateState.summary.matchedSmsCount,
+            })}
+          </span>
+          <span className="badge badge--success">
+            {t("quickCheck.summaryMatchedFormats", {
+              count: smsByTemplateState.summary.matchedFormatsCount,
+            })}
+          </span>
+          <span className="badge badge--warning">
+            {t("quickCheck.summaryMissingExamples", {
+              count: smsByTemplateState.summary.missingExamplesCount,
+            })}
+          </span>
+          <span className="badge badge--warning">
+            {t("quickCheck.summaryLoadErrors", {
+              count: smsByTemplateState.summary.loadErrorsCount,
+            })}
+          </span>
+          <span className="badge badge--modified">
+            {t("quickCheck.summaryCache", {
+              cached: smsByTemplateState.summary.cachedCount,
+              fetched: smsByTemplateState.summary.remoteFetchedCount,
+            })}
+          </span>
+        </div>
+      )}
+
+      <div className="quick-check__results">
+        {templateBySmsState && templateBySmsState.results.length === 0 && (
+          <div className="text-muted text-sm">{t("quickCheck.noRegexes")}</div>
+        )}
+
+        {templateBySmsState?.results.map((result) => (
+          <div className="quick-check__result" key={result.filePath}>
+            <div className="quick-check__result-header">
+              <span className="text-mono text-sm">{result.fileName}</span>
+              <span
+                className={`badge ${
+                  result.status === "match"
+                    ? "badge--success"
+                    : result.status === "invalid"
+                      ? "badge--warning"
+                      : "badge--info"
+                }`}
+              >
+                {result.status === "match"
+                  ? t("quickCheck.resultMatch")
+                  : result.status === "invalid"
+                    ? t("quickCheck.resultInvalid")
+                    : t("quickCheck.resultNoMatch")}
+              </span>
+              <span className="badge badge--info">
+                {result.source === "draft"
+                  ? t("quickCheck.sourceDraft")
+                  : t("quickCheck.sourceRemote")}
+              </span>
+            </div>
+            <pre className="quick-check__regex">{result.regex}</pre>
+            {result.status === "match" && sourceRefName && (
+              <div className="quick-check__links">
+                <button
+                  className="quick-check__link"
+                  onClick={() => handleOpenInApp(result.filePath)}
+                  type="button"
+                >
+                  {t("quickCheck.openInApp")}
+                </button>
+                <a
+                  className="quick-check__link"
+                  href={buildGitHubFileLink({
+                    filePath: result.filePath,
+                    repository,
+                    refName: sourceRefName,
+                  })}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {t("quickCheck.openInGitHub")}
+                </a>
+              </div>
+            )}
+            {result.errorMessage && (
+              <div className="text-muted text-sm">{result.errorMessage}</div>
+            )}
+          </div>
+        ))}
+
+        {smsByTemplateState && smsByTemplateState.results.length === 0 && (
+          <div className="text-muted text-sm">{t("quickCheck.noFormats")}</div>
+        )}
+
+        {smsByTemplateState?.results.map((result) => (
+          <div className="quick-check__result" key={result.filePath}>
+            <div className="quick-check__result-header">
+              <span className="text-mono text-sm">{result.fileName}</span>
+              <span
+                className={`badge ${
+                  result.status === "match" ? "badge--success" : "badge--info"
+                }`}
+              >
+                {result.status === "match"
+                  ? t("quickCheck.resultMatch")
+                  : t("quickCheck.resultNoMatch")}
+              </span>
+              <span className="badge badge--info">
+                {t("quickCheck.smsMatchesInFormat", {
+                  matched: result.matchedExamples,
+                  total: result.totalExamples,
+                })}
+              </span>
+              <span className="badge badge--info">
+                {result.source === "draft"
+                  ? t("quickCheck.sourceDraft")
+                  : t("quickCheck.sourceRemote")}
+              </span>
+            </div>
+            {result.firstMatchedExample && (
+              <pre className="quick-check__regex">
+                {result.firstMatchedExample}
+              </pre>
+            )}
+            {result.status === "match" && sourceRefName && (
+              <div className="quick-check__links">
+                <button
+                  className="quick-check__link"
+                  onClick={() => handleOpenInApp(result.filePath)}
+                  type="button"
+                >
+                  {t("quickCheck.openInApp")}
+                </button>
+                <a
+                  className="quick-check__link"
+                  href={buildGitHubFileLink({
+                    filePath: result.filePath,
+                    repository,
+                    refName: sourceRefName,
+                  })}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {t("quickCheck.openInGitHub")}
+                </a>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="modal__actions">
+        <button className="btn" onClick={onClose}>
+          {t("app.close")}
+        </button>
+        <button
+          className="btn btn--primary"
+          disabled={isChecking}
+          onClick={() => void runQuickCheck()}
+        >
+          {isChecking ? (
+            <>
+              <span className="spinner" />
+              {t("quickCheck.running")}
+            </>
+          ) : (
+            t("quickCheck.run")
+          )}
+        </button>
+      </div>
+    </ModalDialog>
   );
 }

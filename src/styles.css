@@ -1131,10 +1131,15 @@
   box-shadow: var(--shadow-md);
 }
 
+.modal__header {
+  display: flex;
+  margin-bottom: var(--space-md);
+}
+
 .modal__title {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: var(--space-md);
+  margin: 0;
 }
 
 .modal__actions {

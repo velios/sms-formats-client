@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ModalDialog } from "@/components/ModalDialog";
 import { parseFormatFile } from "@/domain/format";
 import { fetchFileContent } from "@/domain/github";
 import type { BankInfo, RepoRef, ValidationIssue } from "@/domain/types";
@@ -155,86 +156,76 @@ export function ValidationPanel({
   const warnings = issues.filter((i) => i.level === "warning");
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-labelledby={dialogTitleId}
-        aria-modal="true"
-        className="modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        style={{ minWidth: 500 }}
-      >
-        <div className="modal__title" id={dialogTitleId}>
-          {t("validation.title")}
+    <ModalDialog
+      onClose={onClose}
+      style={{ minWidth: 500 }}
+      title={t("validation.title")}
+      titleId={dialogTitleId}
+    >
+      {running ? (
+        <div
+          aria-live="polite"
+          className="flex items-center gap-sm"
+          role="status"
+        >
+          <span className="spinner" />
+          <span>{t("app.loading")}</span>
         </div>
-
-        {running ? (
-          <div
-            aria-live="polite"
-            className="flex items-center gap-sm"
-            role="status"
-          >
-            <span className="spinner" />
-            <span>{t("app.loading")}</span>
-          </div>
-        ) : ran ? (
-          <div aria-live="polite" className="flex-col gap-md" role="status">
-            {/* Summary */}
-            <div className="flex gap-sm">
-              {errors.length === 0 && warnings.length === 0 ? (
-                <span className="badge badge--success">
-                  {t("validation.valid")}
-                </span>
-              ) : (
-                <>
-                  {errors.length > 0 && (
-                    <span className="badge badge--error">
-                      {t("validation.errors", { count: errors.length })}
-                    </span>
-                  )}
-                  {warnings.length > 0 && (
-                    <span className="badge badge--warning">
-                      {t("validation.warnings", { count: warnings.length })}
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Issue list */}
-            <div
-              className="issue-list"
-              style={{ maxHeight: 400, overflowY: "auto" }}
-            >
-              {issues.map((issue, i) => (
-                <div
-                  className={`issue-item ${issue.level === "error" ? "issue-item--error" : "issue-item--warning"}`}
-                  key={i}
-                >
-                  <span className="text-mono text-sm" style={{ minWidth: 100 }}>
-                    {issue.filePath.split("/").pop()}
+      ) : ran ? (
+        <div aria-live="polite" className="flex-col gap-md" role="status">
+          <div className="flex gap-sm">
+            {errors.length === 0 && warnings.length === 0 ? (
+              <span className="badge badge--success">
+                {t("validation.valid")}
+              </span>
+            ) : (
+              <>
+                {errors.length > 0 && (
+                  <span className="badge badge--error">
+                    {t("validation.errors", { count: errors.length })}
                   </span>
-                  <span className="text-sm">{issue.message}</span>
-                </div>
-              ))}
-            </div>
+                )}
+                {warnings.length > 0 && (
+                  <span className="badge badge--warning">
+                    {t("validation.warnings", { count: warnings.length })}
+                  </span>
+                )}
+              </>
+            )}
           </div>
-        ) : null}
 
-        <div className="modal__actions">
-          <button className="btn" onClick={onClose}>
-            {t("app.close")}
-          </button>
-          {!running && ran && (
-            <button
-              className="btn btn--primary"
-              onClick={() => void runValidation()}
-            >
-              {t("app.retry")}
-            </button>
-          )}
+          <div
+            className="issue-list"
+            style={{ maxHeight: 400, overflowY: "auto" }}
+          >
+            {issues.map((issue, i) => (
+              <div
+                className={`issue-item ${issue.level === "error" ? "issue-item--error" : "issue-item--warning"}`}
+                key={i}
+              >
+                <span className="text-mono text-sm" style={{ minWidth: 100 }}>
+                  {issue.filePath.split("/").pop()}
+                </span>
+                <span className="text-sm">{issue.message}</span>
+              </div>
+            ))}
+          </div>
         </div>
+      ) : null}
+
+      <div className="modal__actions">
+        <button className="btn" onClick={onClose}>
+          {t("app.close")}
+        </button>
+        {!running && ran && (
+          <button
+            className="btn btn--primary"
+            onClick={() => void runValidation()}
+          >
+            {t("app.retry")}
+          </button>
+        )}
       </div>
-    </div>
+    </ModalDialog>
   );
 }

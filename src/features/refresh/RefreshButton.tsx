@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ModalDialog } from "@/components/ModalDialog";
 import {
   fetchBranchSha,
   fetchFileContent,
@@ -157,28 +158,21 @@ export function RefreshButton({ bankPath }: Props) {
 
       {/* Confirm dialog */}
       {showConfirm && (
-        <div className="modal-overlay" onClick={() => setShowConfirm(false)}>
-          <div
-            aria-labelledby={confirmTitleId}
-            aria-modal="true"
-            className="modal"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-          >
-            <div className="modal__title" id={confirmTitleId}>
-              {t("refresh.confirmTitle")}
-            </div>
-            <p className="text-muted text-sm">{t("refresh.confirmMessage")}</p>
-            <div className="modal__actions">
-              <button className="btn" onClick={() => setShowConfirm(false)}>
-                {t("app.cancel")}
-              </button>
-              <button className="btn btn--primary" onClick={doRefresh}>
-                {t("app.confirm")}
-              </button>
-            </div>
+        <ModalDialog
+          onClose={() => setShowConfirm(false)}
+          title={t("refresh.confirmTitle")}
+          titleId={confirmTitleId}
+        >
+          <p className="text-muted text-sm">{t("refresh.confirmMessage")}</p>
+          <div className="modal__actions">
+            <button className="btn" onClick={() => setShowConfirm(false)}>
+              {t("app.cancel")}
+            </button>
+            <button className="btn btn--primary" onClick={doRefresh}>
+              {t("app.confirm")}
+            </button>
           </div>
-        </div>
+        </ModalDialog>
       )}
 
       {/* Merge results */}

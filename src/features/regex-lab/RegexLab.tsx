@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { ModalDialog } from "@/components/ModalDialog";
 import type {
   RegexExplanation,
   RegexMatchResult,
@@ -980,71 +981,65 @@ function ColumnPickerModal({
   }, [lang, search]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-labelledby={titleId}
-        aria-modal="true"
-        className="modal regex-column-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-      >
-        <div className="modal__title" id={titleId}>
-          {t("columns.selectForGroup", { index: groupIndex })}
-        </div>
-        <input
-          autoFocus
-          className="input"
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("columns.search")}
-          value={search}
-        />
-        <div className="regex-column-modal__list">
-          {filteredColumns.map((column) => {
-            const isUsedByOtherGroup = usedBaseNames.has(column.name);
-            const isCurrent = currentBaseName === column.name;
-            const isDisabled = isUsedByOtherGroup && !isCurrent;
-            return (
-              <button
-                className={`regex-column-modal__item ${isCurrent ? "regex-column-modal__item--selected" : ""}`.trim()}
-                disabled={isDisabled}
-                key={column.name}
-                onClick={() =>
-                  onSelectColumn(
-                    column.parameterized
-                      ? `${column.name}#${column.paramHint ?? ""}`
-                      : column.name
-                  )
-                }
-                type="button"
-              >
-                <span className="font-medium text-mono">{column.name}</span>
-                <span className="text-muted text-sm">
-                  {column.description[lang] ?? column.description.en}
+    <ModalDialog
+      className="regex-column-modal"
+      onClose={onClose}
+      title={t("columns.selectForGroup", { index: groupIndex })}
+      titleId={titleId}
+    >
+      <input
+        autoFocus
+        className="input"
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={t("columns.search")}
+        value={search}
+      />
+      <div className="regex-column-modal__list">
+        {filteredColumns.map((column) => {
+          const isUsedByOtherGroup = usedBaseNames.has(column.name);
+          const isCurrent = currentBaseName === column.name;
+          const isDisabled = isUsedByOtherGroup && !isCurrent;
+          return (
+            <button
+              className={`regex-column-modal__item ${isCurrent ? "regex-column-modal__item--selected" : ""}`.trim()}
+              disabled={isDisabled}
+              key={column.name}
+              onClick={() =>
+                onSelectColumn(
+                  column.parameterized
+                    ? `${column.name}#${column.paramHint ?? ""}`
+                    : column.name
+                )
+              }
+              type="button"
+            >
+              <span className="font-medium text-mono">{column.name}</span>
+              <span className="text-muted text-sm">
+                {column.description[lang] ?? column.description.en}
+              </span>
+              {column.parameterized && (
+                <span className="badge badge--info text-sm">
+                  {t("columns.param")}
                 </span>
-                {column.parameterized && (
-                  <span className="badge badge--info text-sm">
-                    {t("columns.param")}
-                  </span>
-                )}
-                {isDisabled && (
-                  <span className="badge badge--warning text-sm">
-                    {t("columns.alreadyUsed")}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          {filteredColumns.length === 0 && (
-            <div className="p-md text-muted text-sm">—</div>
-          )}
-        </div>
-        <div className="modal__actions">
-          <button className="btn" onClick={onClose}>
-            {t("app.cancel")}
-          </button>
-        </div>
+              )}
+              {isDisabled && (
+                <span className="badge badge--warning text-sm">
+                  {t("columns.alreadyUsed")}
+                </span>
+              )}
+            </button>
+          );
+        })}
+        {filteredColumns.length === 0 && (
+          <div className="p-md text-muted text-sm">—</div>
+        )}
       </div>
-    </div>
+      <div className="modal__actions">
+        <button className="btn" onClick={onClose}>
+          {t("app.cancel")}
+        </button>
+      </div>
+    </ModalDialog>
   );
 }
 
