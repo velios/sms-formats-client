@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
+import { PullRequestLabels } from "@/components/PullRequestLabels";
 import { config } from "@/config";
 import { buildBankWorkspacePath } from "@/domain/bank-route";
+import type { PullRequestLabel } from "@/domain/types";
 import {
   useAvailableSourceRepos,
   useOpenPRs,
@@ -15,6 +17,15 @@ type OpenMenu = "repo" | "source" | null;
 
 interface Props {
   allowRepoSwitch?: boolean;
+}
+
+interface OpenPullRequestItem {
+  number: number;
+  title: string;
+  headRef: string;
+  headSha: string;
+  approvedCount: number;
+  labels: PullRequestLabel[];
 }
 
 function collectChangedBankPaths(paths: string[]): string[] {
@@ -33,17 +44,7 @@ function collectChangedBankPaths(paths: string[]): string[] {
   );
 }
 
-function sortPRs(
-  prs:
-    | Array<{
-        number: number;
-        title: string;
-        headRef: string;
-        headSha: string;
-        approvedCount: number;
-      }>
-    | undefined
-) {
+function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => {
     if (a.approvedCount !== b.approvedCount) {
       return b.approvedCount - a.approvedCount;
@@ -52,16 +53,7 @@ function sortPRs(
   });
 }
 
-function filterPRs(
-  prs: Array<{
-    number: number;
-    title: string;
-    headRef: string;
-    headSha: string;
-    approvedCount: number;
-  }>,
-  query: string
-) {
+function filterPRs(prs: OpenPullRequestItem[], query: string) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
     return prs;
@@ -89,13 +81,20 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const { data: availableRepos = [], isFetching: isReposFetching } =
     useAvailableSourceRepos(openMenu === "repo" && allowRepoSwitch);
   const { data: openPRs = [], isFetching: isPRsFetching } = useOpenPRs(
-    openMenu === "source"
+    openMenu === "source" || sourceRef?.type === "pr"
   );
 
   const sortedPRs = useMemo(() => sortPRs(openPRs), [openPRs]);
   const filteredPRs = useMemo(
     () => filterPRs(sortedPRs, sourceQuery),
     [sortedPRs, sourceQuery]
+  );
+  const activePullRequest = useMemo(
+    () =>
+      sourceRef?.type === "pr" && sourceRef.prNumber
+        ? (sortedPRs.find((pr) => pr.number === sourceRef.prNumber) ?? null)
+        : null,
+    [sortedPRs, sourceRef]
   );
 
   const repositoryUrl = `https://github.com/${repository.owner}/${repository.repo}`;
@@ -248,6 +247,10 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
             >
               ↗
             </a>
+            <PullRequestLabels
+              className="source-nav__pr-labels"
+              labels={activePullRequest?.labels ?? []}
+            />
 
             {openMenu === "source" && (
               <div className="source-nav__dropdown" style={{ minWidth: 420 }}>

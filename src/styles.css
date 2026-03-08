@@ -274,9 +274,18 @@
     margin-left: 2px;
   }
 
+  .source-nav__pr-labels {
+    max-width: min(280px, 32vw);
+  }
+
   .app-main {
     @apply flex-1 overflow-hidden p-6;
     min-height: 0;
+  }
+
+  .dashboard-pr-labels {
+    flex: 0 1 220px;
+    justify-content: flex-end;
   }
 
   .home-hub {
@@ -509,6 +518,58 @@
   .badge--interactive:focus-visible {
     outline: 2px solid var(--c-border-focus);
     outline-offset: 1px;
+  }
+
+  .pr-labels {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .pr-labels--expanded {
+    flex-wrap: wrap;
+  }
+
+  .pr-label-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 180px;
+    min-width: 0;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: inset 0 0 0 1px rgb(15 23 42 / 12%);
+  }
+
+  .pr-label-chip--button {
+    cursor: pointer;
+    border: 0;
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease;
+    font: inherit;
+  }
+
+  .pr-label-chip--button:hover {
+    transform: translateY(-1px);
+    box-shadow: inset 0 0 0 1px rgb(15 23 42 / 20%);
+  }
+
+  .pr-label-chip--button:focus-visible {
+    outline: 2px solid var(--c-border-focus);
+    outline-offset: 1px;
+  }
+
+  .pr-label-chip--counter {
+    background: var(--c-bg-elevated);
+    color: var(--c-text-muted);
   }
 
   /* ─── Autocomplete / Dropdown ─── */

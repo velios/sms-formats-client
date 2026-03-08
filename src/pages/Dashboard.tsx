@@ -9,10 +9,11 @@ import {
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ModalDialog } from "@/components/ModalDialog";
+import { PullRequestLabels } from "@/components/PullRequestLabels";
 import { config } from "@/config";
 import { buildBankWorkspacePath } from "@/domain/bank-route";
 import { fetchPullRequestValidationDetails } from "@/domain/github";
-import type { BankInfo } from "@/domain/types";
+import type { BankInfo, PullRequestLabel } from "@/domain/types";
 import { useOpenPRs, useRepoTree, useSwitchSource } from "@/hooks/useGitHub";
 import { useDraftStore, useSourceStore } from "@/store";
 
@@ -31,6 +32,7 @@ interface OpenPullRequestItem {
   failedValidationCount: number;
   validationErrors: string[];
   validationUrl: string | null;
+  labels: PullRequestLabel[];
 }
 
 interface ValidationDetailsModalState {
@@ -480,6 +482,10 @@ export function Dashboard() {
                       <span className="truncate text-sm">{pr.title}</span>
                       <span className="text-dim text-xs">{pr.headRef}</span>
                     </div>
+                    <PullRequestLabels
+                      className="dashboard-pr-labels"
+                      labels={pr.labels}
+                    />
                     <span className="badge badge--info">
                       ✓ {pr.approvedCount}
                     </span>

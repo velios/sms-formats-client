@@ -35,6 +35,11 @@ export interface RepoRef {
   repo: string;
 }
 
+export interface PullRequestLabel {
+  name: string;
+  color: string;
+}
+
 export interface FileEntry {
   path: string;
   sha: string;

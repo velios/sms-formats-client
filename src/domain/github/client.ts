@@ -1,7 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { config } from "@/config";
 import { isSmsGameIssue } from "@/domain/sms-game/issue-import";
-import type { BankInfo, FileEntry, RepoRef } from "../types";
+import type { BankInfo, FileEntry, PullRequestLabel, RepoRef } from "../types";
 import { decodeBase64Utf8, encodeBase64Utf8 } from "./encoding";
 
 const defaultRepoRef: RepoRef = {
@@ -819,6 +819,7 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
     failedValidationCount: number;
     validationErrors: string[];
     validationUrl: string | null;
+    labels: PullRequestLabel[];
   }[]
 > {
   async function fetchApprovedCount(prNumber: number, repo: RepoRef) {
@@ -864,6 +865,21 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
         failedValidationCount: validation.failedValidationCount,
         validationErrors: validation.validationErrors,
         validationUrl: validation.validationUrl,
+        labels: (pr.labels ?? [])
+          .flatMap((label) => {
+            if (typeof label === "string" || !label.name) {
+              return [];
+            }
+            return [
+              {
+                name: label.name,
+                color: label.color ?? "d1d9e0",
+              },
+            ];
+          })
+          .sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+          ),
       };
     })
   );
