@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { config } from "@/config";
 import { useFileContent } from "@/hooks/useGitHub";
@@ -28,43 +28,32 @@ export function SendersEditor({ bankPath }: Props) {
   const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
   const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
   const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
-  const saveLabel = t("app.save");
-  const resetLabel = t("app.reset");
   const isModified = draft ? draft.content !== draft.remoteContent : false;
+  const canUndo = draftStore.canUndo(filePath);
+  const canRedo = draftStore.canRedo(filePath);
+  const canResetFile = isModified;
 
   const [value, setValue] = useState(currentContent);
-  const saveDisabled = value === currentContent;
-  const resetDisabled = !isModified;
+  const lastAppliedValueRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (lastAppliedValueRef.current === currentContent) {
+      return;
+    }
+    lastAppliedValueRef.current = currentContent;
     setValue(currentContent);
   }, [currentContent]);
 
   useEffect(() => {
-    if (remoteContent !== undefined && !draft) {
-      draftStore.setDraft(filePath, remoteContent, baseSha, remoteContent);
+    if (remoteContent !== undefined) {
+      draftStore.ensureDraft(filePath, remoteContent, baseSha, remoteContent);
     }
-  }, [remoteContent, baseSha, draft, draftStore.setDraft, filePath]); // eslint-disable-line
-
-  const saveDraft = (content: string) => {
-    if (content === remoteBaseline) {
-      draftStore.removeDraft(filePath);
-      return;
-    }
-    draftStore.setDraft(filePath, content, baseSha, remoteBaseline);
-  };
+  }, [remoteContent, baseSha, draftStore, filePath]);
 
   const handleChange = (newValue: string) => {
+    lastAppliedValueRef.current = newValue;
     setValue(newValue);
-  };
-
-  const handleSave = () => {
-    saveDraft(value);
-  };
-
-  const handleReset = () => {
-    setValue(remoteBaseline);
-    saveDraft(remoteBaseline);
+    draftStore.applyUserEdit(filePath, newValue, baseSha, remoteBaseline);
   };
 
   if (isLoading) {
@@ -78,12 +67,12 @@ export function SendersEditor({ bankPath }: Props) {
 
   return (
     <div className="format-editor">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-sm">
+      <div className="format-editor__toolbar">
+        <div className="format-editor__file-info">
           <span className="font-medium text-mono">{fileName}</span>
           <a
             aria-label={t("bank.openFormatInRepo")}
-            className="format-row-link"
+            className="btn btn--ghost btn--sm"
             href={formatRepoUrl}
             onClick={(e) => e.stopPropagation()}
             rel="noreferrer"
@@ -98,20 +87,33 @@ export function SendersEditor({ bankPath }: Props) {
             </span>
           )}
         </div>
-        <div className="flex gap-sm">
+        <div className="format-editor__history">
           <button
-            className="btn bank-actions__btn"
-            disabled={resetDisabled}
-            onClick={handleReset}
+            aria-label={t("editor.undo")}
+            className="btn btn--ghost btn--sm"
+            disabled={!canUndo}
+            onClick={() => draftStore.undo(filePath)}
+            type="button"
           >
-            {resetLabel}
+            ↶ {t("editor.undo")}
           </button>
           <button
-            className="btn btn--primary bank-actions__btn"
-            disabled={saveDisabled}
-            onClick={handleSave}
+            aria-label={t("editor.redo")}
+            className="btn btn--ghost btn--sm"
+            disabled={!canRedo}
+            onClick={() => draftStore.redo(filePath)}
+            type="button"
           >
-            {saveLabel}
+            ↷ {t("editor.redo")}
+          </button>
+          <button
+            aria-label={t("editor.resetFileToSource")}
+            className="btn btn--ghost btn--sm"
+            disabled={!canResetFile}
+            onClick={() => draftStore.resetFileToRemote(filePath)}
+            type="button"
+          >
+            ⟲ {t("editor.resetFileToSource")}
           </button>
         </div>
       </div>

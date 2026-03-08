@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { config } from "@/config";
 import { parseFormatFile, serializeFormat } from "@/domain/format";
@@ -22,22 +22,6 @@ interface Props {
   }) => void;
 }
 
-function computeSaveDisabled(params: {
-  mode: EditorMode;
-  structuredRawCandidate: string | null;
-  currentContent: string;
-  rawContent: string;
-}): boolean {
-  const { mode, structuredRawCandidate, currentContent, rawContent } = params;
-  if (mode === "raw") {
-    return rawContent === currentContent;
-  }
-  if (!structuredRawCandidate) {
-    return true;
-  }
-  return structuredRawCandidate === currentContent;
-}
-
 function isRegexValid(value: string): boolean {
   try {
     // eslint-disable-next-line no-new
@@ -48,30 +32,12 @@ function isRegexValid(value: string): boolean {
   }
 }
 
-function buildRawFromStructured(
+function serializeStructuredDraft(
   regex: string,
   columns: string[],
   examples: string[]
-): string | null {
-  const normalizedRegex = regex.trim();
-  if (!(normalizedRegex && isRegexValid(normalizedRegex))) {
-    return null;
-  }
-
-  const normalizedColumns = columns.map((c) => c.trim());
-  if (normalizedColumns.length === 0 || normalizedColumns.some((c) => !c)) {
-    return null;
-  }
-
-  const normalizedExamples = examples.map((e) => e.trimEnd());
-  if (
-    normalizedExamples.length === 0 ||
-    normalizedExamples.some((e) => !e.trim())
-  ) {
-    return null;
-  }
-
-  return serializeFormat(regex, normalizedColumns, normalizedExamples);
+): string {
+  return serializeFormat(regex, columns, examples);
 }
 
 export function FormatEditor({
@@ -107,8 +73,8 @@ export function FormatEditor({
   const [rawContent, setRawContent] = useState("");
   const [mode, setMode] = useState<EditorMode>("structured");
   const [parseErrors, setParseErrors] = useState<string[]>([]);
-  const [initialContent, setInitialContent] = useState<string | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
+  const lastAppliedContentRef = useRef<string | null>(null);
 
   const parseRawToStructured = useCallback(
     (raw: string, preserveActiveIndex: boolean) => {
@@ -139,104 +105,72 @@ export function FormatEditor({
     [filePath, t]
   );
 
-  const saveDraft = useCallback(
-    (content: string) => {
-      if (content === remoteBaseline) {
-        draftStore.removeDraft(filePath);
-        return;
-      }
-      draftStore.setDraft(filePath, content, baseSha, remoteBaseline);
-    },
-    [draftStore, filePath, baseSha, remoteBaseline]
-  );
-
-  const syncRawFromStructured = useCallback(
+  const syncStructuredDraft = useCallback(
     (nextRegex: string, nextColumns: string[], nextExamples: string[]) => {
-      const syncedRaw = buildRawFromStructured(
+      const syncedRaw = serializeStructuredDraft(
         nextRegex,
         nextColumns,
         nextExamples
       );
-      if (!syncedRaw) {
-        return;
-      }
       setRawContent(syncedRaw);
-      setParseErrors([]);
+      setParseErrors(
+        nextRegex.trim() && !isRegexValid(nextRegex)
+          ? [t("editor.invalidRegex")]
+          : []
+      );
+      lastAppliedContentRef.current = syncedRaw;
+      draftStore.applyUserEdit(filePath, syncedRaw, baseSha, remoteBaseline);
     },
-    []
+    [baseSha, draftStore, filePath, remoteBaseline, t]
   );
 
-  const structuredRawCandidate = useMemo(
-    () => buildRawFromStructured(regex, columns, examples),
-    [regex, columns, examples]
-  );
-
-  // Initialize editor state once per opened file.
   useEffect(() => {
-    if (!hasLoadedInitial || initialContent !== null) {
+    if (!hasLoadedInitial) {
       return;
     }
-    setInitialContent(currentContent);
+    if (lastAppliedContentRef.current === currentContent) {
+      return;
+    }
+    lastAppliedContentRef.current = currentContent;
     setRawContent(currentContent);
     parseRawToStructured(currentContent, false);
-  }, [hasLoadedInitial, initialContent, currentContent, parseRawToStructured]);
+  }, [currentContent, hasLoadedInitial, parseRawToStructured]);
 
-  // Seed draft store from remote on first load for existing files.
   useEffect(() => {
-    if (remoteContent !== undefined && !draft) {
-      draftStore.setDraft(filePath, remoteContent, baseSha, remoteContent);
+    if (remoteContent !== undefined) {
+      draftStore.ensureDraft(filePath, remoteContent, baseSha, remoteContent);
     }
-  }, [remoteContent, draft, draftStore, filePath, baseSha]);
-
-  const handleSaveRaw = () => {
-    saveDraft(rawContent);
-    parseRawToStructured(rawContent, true);
-  };
-
-  const handleSaveStructured = () => {
-    if (!structuredRawCandidate) {
-      return;
-    }
-    setRawContent(structuredRawCandidate);
-    saveDraft(structuredRawCandidate);
-    setParseErrors([]);
-  };
-
-  const handleReset = () => {
-    if (initialContent == null) {
-      return;
-    }
-    setRawContent(remoteBaseline);
-    saveDraft(remoteBaseline);
-    parseRawToStructured(remoteBaseline, false);
-  };
+  }, [remoteContent, draftStore, filePath, baseSha]);
 
   const handleRawChange = (value: string) => {
     setRawContent(value);
     parseRawToStructured(value, true);
+    lastAppliedContentRef.current = value;
+    draftStore.applyUserEdit(filePath, value, baseSha, remoteBaseline);
   };
 
   const handleRegexChange = (value: string) => {
     setRegex(value);
-    syncRawFromStructured(value, columns, examples);
+    syncStructuredDraft(value, columns, examples);
   };
 
   const handleColumnsChange = (newCols: string[]) => {
     setColumns(newCols);
-    syncRawFromStructured(regex, newCols, examples);
+    syncStructuredDraft(regex, newCols, examples);
   };
 
   const handleExampleChange = (index: number, value: string) => {
     const newExamples = [...examples];
     newExamples[index] = value;
     setExamples(newExamples);
-    syncRawFromStructured(regex, columns, newExamples);
+    syncStructuredDraft(regex, columns, newExamples);
   };
 
   const handleAddExample = () => {
     const newExamples = [...examples, ""];
     setExamples(newExamples);
     setActiveExampleIndex(newExamples.length - 1);
+    syncStructuredDraft(regex, columns, newExamples);
   };
 
   const handleRemoveExample = (index: number) => {
@@ -245,7 +179,7 @@ export function FormatEditor({
     }
     const newExamples = examples.filter((_, i) => i !== index);
     setExamples(newExamples);
-    syncRawFromStructured(regex, columns, newExamples);
+    syncStructuredDraft(regex, columns, newExamples);
     if (activeExampleIndex >= newExamples.length) {
       setActiveExampleIndex(newExamples.length - 1);
     }
@@ -266,17 +200,9 @@ export function FormatEditor({
   const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
   const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
   const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
-  const saveLabel = t("app.save");
-  const resetLabel = t("app.reset");
-  const handleSave =
-    mode === "structured" ? handleSaveStructured : handleSaveRaw;
-  const saveDisabled = computeSaveDisabled({
-    mode,
-    structuredRawCandidate,
-    currentContent,
-    rawContent,
-  });
-  const resetDisabled = !isModified;
+  const canUndo = draftStore.canUndo(filePath);
+  const canRedo = draftStore.canRedo(filePath);
+  const canResetFile = isModified;
 
   const handleRename = () => {
     const currentDraft = draftStore.getDraft(filePath);
@@ -366,20 +292,33 @@ export function FormatEditor({
             </span>
           )}
         </div>
-        <div className="flex gap-sm">
+        <div className="format-editor__history">
           <button
-            className="btn bank-actions__btn"
-            disabled={initialContent == null || resetDisabled}
-            onClick={handleReset}
+            aria-label={t("editor.undo")}
+            className="btn btn--ghost btn--sm"
+            disabled={!canUndo}
+            onClick={() => draftStore.undo(filePath)}
+            type="button"
           >
-            {resetLabel}
+            ↶ {t("editor.undo")}
           </button>
           <button
-            className="btn btn--primary bank-actions__btn"
-            disabled={saveDisabled}
-            onClick={handleSave}
+            aria-label={t("editor.redo")}
+            className="btn btn--ghost btn--sm"
+            disabled={!canRedo}
+            onClick={() => draftStore.redo(filePath)}
+            type="button"
           >
-            {saveLabel}
+            ↷ {t("editor.redo")}
+          </button>
+          <button
+            aria-label={t("editor.resetFileToSource")}
+            className="btn btn--ghost btn--sm"
+            disabled={!canResetFile}
+            onClick={() => draftStore.resetFileToRemote(filePath)}
+            type="button"
+          >
+            ⟲ {t("editor.resetFileToSource")}
           </button>
         </div>
       </div>

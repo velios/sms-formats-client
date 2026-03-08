@@ -38,7 +38,6 @@ import {
   type QuickCheckMode,
   QuickCheckPanel,
 } from "@/features/quick-check/QuickCheckPanel";
-import { RefreshButton } from "@/features/refresh/RefreshButton";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
 import { useSwitchRepository, useSwitchSource } from "@/hooks/useGitHub";
@@ -695,14 +694,15 @@ function renderWorkspaceContent(params: {
 }
 
 function BankActionsPanel(params: {
-  bankPath: string;
   onApprovePullRequest: () => void;
   onOpenValidation: () => void;
   onPublish: () => void;
+  onResetToSource: () => void;
   onOpenSmsByTemplate: () => void;
   onOpenTemplateBySms: () => void;
   approvePullRequestError: string | null;
   approvePullRequestLabel: string;
+  canResetToSource: boolean;
   publishError: string | null;
   publishActionLabel: string;
   isPublishing: boolean;
@@ -712,14 +712,15 @@ function BankActionsPanel(params: {
   t: (key: string) => string;
 }): ReactNode {
   const {
-    bankPath,
     onApprovePullRequest,
     onOpenValidation,
     onPublish,
+    onResetToSource,
     onOpenSmsByTemplate,
     onOpenTemplateBySms,
     approvePullRequestError,
     approvePullRequestLabel,
+    canResetToSource,
     publishError,
     publishActionLabel,
     isPublishing,
@@ -770,7 +771,13 @@ function BankActionsPanel(params: {
       >
         {t("quickCheck.openSmsByTemplate")}
       </button>
-      <RefreshButton bankPath={bankPath} />
+      <button
+        className="btn bank-actions__btn w-full"
+        disabled={!canResetToSource}
+        onClick={onResetToSource}
+      >
+        {t("bank.resetToSource")}
+      </button>
     </div>
   );
 }
@@ -1515,6 +1522,7 @@ export function BankWorkspace() {
     () => banks.find((b) => b.folderPath === bankPath),
     [banks, bankPath]
   );
+  const tree = useSourceStore((s) => s.tree);
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [showSenders, setShowSenders] = useState(false);
@@ -1766,6 +1774,29 @@ export function BankWorkspace() {
     !localSendersChanged && sourceChangedFilesInBank.has(sendersPath);
   const sendersMissing =
     !!bank && !bank.hasSenders && !draftStore.getDraft(sendersPath);
+  const canResetToSource = localChangedFilesInBank.size > 0;
+  const handleResetToSource = useCallback(() => {
+    draftStore.resetBankToRemote(bankPath);
+
+    const hasRemoteBank = tree.some(
+      (entry) =>
+        entry.path === bankPath || entry.path.startsWith(`${bankPath}/`)
+    );
+    if (!hasRemoteBank) {
+      const hasRemainingDrafts = Array.from(
+        useDraftStore.getState().drafts.keys()
+      ).some((path) => path.startsWith(`${bankPath}/`));
+      if (!hasRemainingDrafts) {
+        setBanks(
+          useSourceStore
+            .getState()
+            .banks.filter((item) => item.folderPath !== bankPath)
+        );
+        setSelectedFile(null);
+        setShowSenders(false);
+      }
+    }
+  }, [bankPath, draftStore, setBanks, tree]);
   const canApprovePullRequest = usePullRequestApprovalPermission({
     repository,
     sourceRef,
@@ -1879,7 +1910,7 @@ export function BankWorkspace() {
         <BankActionsPanel
           approvePullRequestError={approvePullRequestError}
           approvePullRequestLabel={approvePullRequestLabel}
-          bankPath={bankPath}
+          canResetToSource={canResetToSource}
           isApprovingPullRequest={isApprovingPullRequest}
           isPublishing={isPublishingQuickUpdate}
           isPullRequestApproved={isPullRequestApproved}
@@ -1896,6 +1927,7 @@ export function BankWorkspace() {
           }}
           onOpenValidation={() => setShowValidation(true)}
           onPublish={handlePublishAction}
+          onResetToSource={handleResetToSource}
           publishActionLabel={publishActionLabel}
           publishError={publishError}
           showApprovePullRequestButton={showApprovePullRequestButton}

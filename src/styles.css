@@ -686,6 +686,10 @@
     min-height: 38px;
     font-size: 13px;
     padding: 6px 12px;
+    justify-content: flex-start;
+    line-height: 1.3;
+    text-align: left;
+    white-space: normal;
   }
 
   .formats-panel {
@@ -716,8 +720,8 @@
   .format-editor__toolbar {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--space-sm);
-    height: 52px;
     min-height: 52px;
     flex-shrink: 0;
   }
@@ -732,6 +736,13 @@
   }
 
   .mode-tabs--inline {
+    flex-shrink: 0;
+  }
+
+  .format-editor__history {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
     flex-shrink: 0;
   }
 

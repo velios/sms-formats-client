@@ -1,3 +1,4 @@
+import { createTravels, type Travels } from "travels";
 import { create } from "zustand";
 import { config } from "@/config";
 import type {
@@ -58,8 +59,24 @@ interface DraftEntry {
   timestamp: number;
 }
 
+interface DraftHistoryState {
+  content: string;
+}
+
 interface DraftState {
   drafts: Map<string, DraftEntry>;
+  ensureDraft: (
+    filePath: string,
+    content: string,
+    baseSha: string,
+    remoteContent: string
+  ) => void;
+  applyUserEdit: (
+    filePath: string,
+    content: string,
+    baseSha: string,
+    remoteContent: string
+  ) => void;
   setDraft: (
     filePath: string,
     content: string,
@@ -69,6 +86,12 @@ interface DraftState {
   getDraft: (filePath: string) => DraftEntry | undefined;
   removeDraft: (filePath: string) => void;
   renameDraft: (oldFilePath: string, newFilePath: string) => void;
+  undo: (filePath: string) => void;
+  redo: (filePath: string) => void;
+  canUndo: (filePath: string) => boolean;
+  canRedo: (filePath: string) => boolean;
+  resetFileToRemote: (filePath: string) => void;
+  resetBankToRemote: (bankPath: string) => void;
   hasDrafts: () => boolean;
   getChangedFiles: () => DraftEntry[];
   clearAll: () => void;
@@ -79,36 +102,175 @@ function makeDraftSourceKey(sourceRef: SourceRef, repository: RepoRef): string {
   return `${repository.owner}/${repository.repo}:${sourceRef.type}:${sourceRef.name}`;
 }
 
+const draftHistoryByPath = new Map<string, Travels<DraftHistoryState>>();
+
+function createDraftEntry(params: {
+  filePath: string;
+  content: string;
+  baseSha: string;
+  remoteContent: string;
+}): DraftEntry {
+  const { filePath, content, baseSha, remoteContent } = params;
+  return {
+    filePath,
+    baseSha,
+    content,
+    remoteContent,
+    timestamp: Date.now(),
+  };
+}
+
+function getDraftHistory(filePath: string) {
+  return draftHistoryByPath.get(filePath);
+}
+
+function ensureDraftHistory(filePath: string, content: string) {
+  const existing = draftHistoryByPath.get(filePath);
+  if (existing) {
+    return existing;
+  }
+  const history = createTravels<DraftHistoryState>(
+    { content },
+    { maxHistory: 200 }
+  );
+  draftHistoryByPath.set(filePath, history);
+  return history;
+}
+
+function resetDraftHistory(filePath: string, content: string) {
+  draftHistoryByPath.set(
+    filePath,
+    createTravels<DraftHistoryState>({ content }, { maxHistory: 200 })
+  );
+}
+
+function deletePersistedDraft(filePath: string) {
+  const sourceState = useSourceStore.getState();
+  const sourceRef = sourceState.sourceRef;
+  if (!sourceRef) {
+    return;
+  }
+  deleteDraft(makeDraftSourceKey(sourceRef, sourceState.repository), filePath);
+}
+
+function persistDraftEntry(entry: DraftEntry) {
+  const sourceState = useSourceStore.getState();
+  const sourceRef = sourceState.sourceRef;
+  if (!sourceRef) {
+    return;
+  }
+  const bankPath = entry.filePath.split("/").slice(0, 2).join("/");
+  saveDraft({
+    sourceRef: makeDraftSourceKey(sourceRef, sourceState.repository),
+    bankPath,
+    filePath: entry.filePath,
+    baseSha: entry.baseSha,
+    content: entry.content,
+    timestamp: entry.timestamp,
+  });
+}
+
+function syncEntryContentFromHistory(entry: DraftEntry, filePath: string) {
+  const history = getDraftHistory(filePath);
+  if (!history) {
+    return entry;
+  }
+  return createDraftEntry({
+    filePath: entry.filePath,
+    content: history.getState().content,
+    baseSha: entry.baseSha,
+    remoteContent: entry.remoteContent,
+  });
+}
+
 export const useDraftStore = create<DraftState>((set, get) => ({
   drafts: new Map(),
+
+  ensureDraft: (filePath, content, baseSha, remoteContent) => {
+    const state = get();
+    const existing = state.drafts.get(filePath);
+    if (existing) {
+      if (
+        existing.baseSha === baseSha &&
+        existing.remoteContent === remoteContent
+      ) {
+        ensureDraftHistory(filePath, existing.content);
+        return;
+      }
+      const nextDrafts = new Map(state.drafts);
+      const nextEntry = createDraftEntry({
+        filePath,
+        content: existing.content,
+        baseSha,
+        remoteContent,
+      });
+      nextDrafts.set(filePath, nextEntry);
+      set({ drafts: nextDrafts });
+      ensureDraftHistory(filePath, nextEntry.content);
+      persistDraftEntry(nextEntry);
+      return;
+    }
+
+    const entry = createDraftEntry({
+      filePath,
+      content,
+      baseSha,
+      remoteContent,
+    });
+    const nextDrafts = new Map(state.drafts);
+    nextDrafts.set(filePath, entry);
+    set({ drafts: nextDrafts });
+    resetDraftHistory(filePath, content);
+    persistDraftEntry(entry);
+  },
+
+  applyUserEdit: (filePath, content, baseSha, remoteContent) => {
+    const state = get();
+    const existing = state.drafts.get(filePath);
+    const currentEntry =
+      existing ??
+      createDraftEntry({
+        filePath,
+        content: remoteContent,
+        baseSha,
+        remoteContent,
+      });
+    const history = ensureDraftHistory(filePath, currentEntry.content);
+    if (history.getState().content === content) {
+      if (existing) {
+        return;
+      }
+    } else {
+      history.setState((draft) => {
+        draft.content = content;
+      });
+    }
+
+    const nextEntry = createDraftEntry({
+      filePath,
+      content: history.getState().content,
+      baseSha,
+      remoteContent,
+    });
+    const nextDrafts = new Map(state.drafts);
+    nextDrafts.set(filePath, nextEntry);
+    set({ drafts: nextDrafts });
+    persistDraftEntry(nextEntry);
+  },
 
   setDraft: (filePath, content, baseSha, remoteContent) => {
     const state = get();
     const newDrafts = new Map(state.drafts);
-    const entry: DraftEntry = {
+    const entry = createDraftEntry({
       filePath,
-      baseSha,
       content,
+      baseSha,
       remoteContent,
-      timestamp: Date.now(),
-    };
+    });
     newDrafts.set(filePath, entry);
     set({ drafts: newDrafts });
-
-    // Persist to IndexedDB
-    const sourceState = useSourceStore.getState();
-    const sourceRef = sourceState.sourceRef;
-    if (sourceRef) {
-      const bankPath = filePath.split("/").slice(0, 2).join("/");
-      saveDraft({
-        sourceRef: makeDraftSourceKey(sourceRef, sourceState.repository),
-        bankPath,
-        filePath,
-        baseSha,
-        content,
-        timestamp: entry.timestamp,
-      });
-    }
+    resetDraftHistory(filePath, content);
+    persistDraftEntry(entry);
   },
 
   getDraft: (filePath) => get().drafts.get(filePath),
@@ -117,15 +279,8 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     const newDrafts = new Map(get().drafts);
     newDrafts.delete(filePath);
     set({ drafts: newDrafts });
-
-    const sourceState = useSourceStore.getState();
-    const sourceRef = sourceState.sourceRef;
-    if (sourceRef) {
-      deleteDraft(
-        makeDraftSourceKey(sourceRef, sourceState.repository),
-        filePath
-      );
-    }
+    draftHistoryByPath.delete(filePath);
+    deletePersistedDraft(filePath);
   },
 
   renameDraft: (oldFilePath, newFilePath) => {
@@ -137,28 +292,85 @@ export const useDraftStore = create<DraftState>((set, get) => ({
 
     const newDrafts = new Map(state.drafts);
     newDrafts.delete(oldFilePath);
-    const newEntry: DraftEntry = {
-      ...oldEntry,
+    const newEntry = createDraftEntry({
       filePath: newFilePath,
-      timestamp: Date.now(),
-    };
+      content: oldEntry.content,
+      baseSha: oldEntry.baseSha,
+      remoteContent: oldEntry.remoteContent,
+    });
     newDrafts.set(newFilePath, newEntry);
     set({ drafts: newDrafts });
+    const history = draftHistoryByPath.get(oldFilePath);
+    if (history) {
+      draftHistoryByPath.set(newFilePath, history);
+      draftHistoryByPath.delete(oldFilePath);
+    } else {
+      resetDraftHistory(newFilePath, newEntry.content);
+    }
+    deletePersistedDraft(oldFilePath);
+    persistDraftEntry(newEntry);
+  },
 
-    const sourceState = useSourceStore.getState();
-    const sourceRef = sourceState.sourceRef;
-    if (sourceRef) {
-      const sourceKey = makeDraftSourceKey(sourceRef, sourceState.repository);
-      deleteDraft(sourceKey, oldFilePath);
-      const bankPath = newFilePath.split("/").slice(0, 2).join("/");
-      saveDraft({
-        sourceRef: sourceKey,
-        bankPath,
-        filePath: newFilePath,
-        baseSha: newEntry.baseSha,
-        content: newEntry.content,
-        timestamp: newEntry.timestamp,
-      });
+  undo: (filePath) => {
+    const entry = get().drafts.get(filePath);
+    const history = getDraftHistory(filePath);
+    if (!(entry && history?.canBack())) {
+      return;
+    }
+    history.back();
+    const nextDrafts = new Map(get().drafts);
+    const nextEntry = syncEntryContentFromHistory(entry, filePath);
+    nextDrafts.set(filePath, nextEntry);
+    set({ drafts: nextDrafts });
+    persistDraftEntry(nextEntry);
+  },
+
+  redo: (filePath) => {
+    const entry = get().drafts.get(filePath);
+    const history = getDraftHistory(filePath);
+    if (!(entry && history?.canForward())) {
+      return;
+    }
+    history.forward();
+    const nextDrafts = new Map(get().drafts);
+    const nextEntry = syncEntryContentFromHistory(entry, filePath);
+    nextDrafts.set(filePath, nextEntry);
+    set({ drafts: nextDrafts });
+    persistDraftEntry(nextEntry);
+  },
+
+  canUndo: (filePath) => getDraftHistory(filePath)?.canBack() ?? false,
+
+  canRedo: (filePath) => getDraftHistory(filePath)?.canForward() ?? false,
+
+  resetFileToRemote: (filePath) => {
+    const entry = get().drafts.get(filePath);
+    if (!entry) {
+      return;
+    }
+    if (entry.remoteContent === "") {
+      get().removeDraft(filePath);
+      return;
+    }
+    const nextDrafts = new Map(get().drafts);
+    const nextEntry = createDraftEntry({
+      filePath,
+      content: entry.remoteContent,
+      baseSha: entry.baseSha,
+      remoteContent: entry.remoteContent,
+    });
+    nextDrafts.set(filePath, nextEntry);
+    set({ drafts: nextDrafts });
+    resetDraftHistory(filePath, entry.remoteContent);
+    persistDraftEntry(nextEntry);
+  },
+
+  resetBankToRemote: (bankPath) => {
+    const filePaths = Array.from(get().drafts.keys()).filter((filePath) =>
+      filePath.startsWith(`${bankPath}/`)
+    );
+    for (const filePath of filePaths) {
+      get().resetFileToRemote(filePath);
     }
   },
 
@@ -182,7 +394,10 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     return result;
   },
 
-  clearAll: () => set({ drafts: new Map() }),
+  clearAll: () => {
+    draftHistoryByPath.clear();
+    set({ drafts: new Map() });
+  },
 
   restoreFromDB: async (sourceRef: string) => {
     const dbDrafts = await loadAllDrafts(sourceRef);
