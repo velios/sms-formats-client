@@ -217,13 +217,11 @@ export type PublishStep =
 interface PublishState {
   step: PublishStep;
   token: string | null;
-  forkOwner: string | null;
   prUrl: string | null;
   error: string | null;
   validationIssues: ValidationIssue[];
   setStep: (s: PublishStep) => void;
   setToken: (t: string | null) => void;
-  setForkOwner: (o: string | null) => void;
   setPrUrl: (u: string | null) => void;
   setError: (e: string | null) => void;
   setValidationIssues: (issues: ValidationIssue[]) => void;
@@ -233,13 +231,11 @@ interface PublishState {
 export const usePublishStore = create<PublishState>((set) => ({
   step: "idle",
   token: null,
-  forkOwner: null,
   prUrl: null,
   error: null,
   validationIssues: [],
   setStep: (step) => set({ step }),
   setToken: (token) => set({ token }),
-  setForkOwner: (forkOwner) => set({ forkOwner }),
   setPrUrl: (prUrl) => set({ prUrl }),
   setError: (error) => set({ error, step: "error" }),
   setValidationIssues: (validationIssues) => set({ validationIssues }),

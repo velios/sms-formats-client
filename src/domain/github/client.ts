@@ -21,7 +21,6 @@ const PR_APPROVAL_SIGNATURE = "From Zenmoney SMS Formats Client";
 
 interface PullRequestApprovalPermissionEntry {
   canApprove: boolean;
-  checkedAt: number;
 }
 
 interface ValidatorCheckOutput {
@@ -58,14 +57,6 @@ interface ValidatorFailureResult {
 
 function resolveRepo(repoRef?: RepoRef): RepoRef {
   return repoRef ?? defaultRepoRef;
-}
-
-export function getDefaultRepo(): RepoRef {
-  return { ...defaultRepoRef };
-}
-
-export function getSourceRepo(): RepoRef {
-  return { ...sourceRepoRef };
 }
 
 function countApprovedReviews(
@@ -730,7 +721,6 @@ export function setCachedPullRequestApprovalPermission(
   const cache = readPullRequestApprovalPermissionCache();
   cache[slug] = {
     canApprove,
-    checkedAt: Date.now(),
   };
   writePullRequestApprovalPermissionCache(cache);
 }
@@ -922,36 +912,6 @@ export async function fetchPullRequestHead(
   return {
     headRef: pr.data.head.ref,
     headSha: pr.data.head.sha,
-  };
-}
-
-export async function fetchPullRequestDetails(
-  prNumber: number,
-  repoRef?: RepoRef
-): Promise<{
-  number: number;
-  title: string;
-  url: string;
-  headRef: string;
-  headSha: string;
-  headOwner: string;
-  headRepo: string;
-}> {
-  const repo = resolveRepo(repoRef);
-  const pr = await publicOctokit.pulls.get({
-    owner: repo.owner,
-    repo: repo.repo,
-    pull_number: prNumber,
-  });
-
-  return {
-    number: pr.data.number,
-    title: pr.data.title,
-    url: pr.data.html_url,
-    headRef: pr.data.head.ref,
-    headSha: pr.data.head.sha,
-    headOwner: pr.data.head.repo?.owner?.login ?? repo.owner,
-    headRepo: pr.data.head.repo?.name ?? repo.repo,
   };
 }
 

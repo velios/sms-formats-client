@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -17,7 +16,6 @@ import { useSourceStore, useUIStore } from "@/store";
 
 export function AppHeader() {
   const { t, i18n } = useTranslation();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
   const githubTokenInputId = useId();
@@ -105,7 +103,6 @@ export function AppHeader() {
       await validateToken(token);
       setGitHubUserToken(token);
       setSavedGitHubToken(token);
-      await queryClient.invalidateQueries();
       setGithubTokenModalOpen(false);
     } catch (error) {
       setGithubTokenError(
@@ -116,12 +113,11 @@ export function AppHeader() {
     }
   };
 
-  const handleResetGitHubToken = async () => {
+  const handleResetGitHubToken = () => {
     setGitHubUserToken(null);
     setSavedGitHubToken("");
     setGithubTokenInput("");
     setGithubTokenError(null);
-    await queryClient.invalidateQueries();
   };
 
   return (

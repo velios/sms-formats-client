@@ -11,7 +11,6 @@ import {
   fetchBranchSha,
   getCachedPullRequestApprovalPermission,
   updatePullRequestHead,
-  validateToken,
 } from "@/domain/github";
 import type { BankInfo, RepoRef } from "@/domain/types";
 import { validateBankLevel } from "@/domain/validation";
@@ -32,7 +31,6 @@ interface ChangedFile {
 interface PublishStoreLike {
   setStep: (step: PublishStep) => void;
   setToken: (token: string | null) => void;
-  setForkOwner: (owner: string | null) => void;
   setValidationIssues: (issues: ReturnType<typeof validateBankLevel>) => void;
   setError: (error: string | null) => void;
   setPrUrl: (url: string | null) => void;
@@ -211,7 +209,6 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   const [prTitle, setPrTitle] = useState(
     t("publish.prTitleDefault", { bank: bankName })
   );
-  const [showTokenInput, _setShowTokenInput] = useState(true);
 
   // Get changed files for this bank
   const changedFiles = draftStore
@@ -254,13 +251,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
 
     try {
       publishStore.setStep("validating");
-      const username = await validateToken(trimmedToken);
       publishStore.setToken(trimmedToken);
-      publishStore.setForkOwner(username);
-
-      if (storeInSession) {
-        sessionStorage.setItem("sms-formats-token", trimmedToken);
-      }
 
       const bank = banks.find((b) => b.folderPath === bankPath);
       const validationError = runPublishValidation({
@@ -305,6 +296,11 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
               changedFiles,
               repository,
             });
+
+      if (storeInSession) {
+        sessionStorage.setItem("sms-formats-token", trimmedToken);
+      }
+
       publishStore.setPrUrl(prUrl);
       publishStore.setStep("done");
     } catch (e) {
@@ -361,7 +357,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
         )}
       </div>
 
-      {showTokenInput && step === "idle" && (
+      {step === "idle" && (
         <div className="mb-md flex-col gap-md">
           <div className="flex-col gap-xs">
             <label className="text-muted text-sm" htmlFor={tokenInputId}>

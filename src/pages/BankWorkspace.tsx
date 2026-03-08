@@ -1038,15 +1038,22 @@ function renameDraftFormat(params: {
 
 function usePullRequestChangedFiles(params: {
   repository: { owner: string; repo: string };
+  sourceChangedFiles: string[];
   sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
 }) {
-  const { repository, sourceRef } = params;
+  const { repository, sourceChangedFiles, sourceRef } = params;
   const [prChangedFiles, setPrChangedFiles] = useState<string[]>([]);
   const [isPrChangedFilesReady, setIsPrChangedFilesReady] = useState(false);
 
   useEffect(() => {
     if (!(sourceRef?.type === "pr" && sourceRef.prNumber)) {
       setPrChangedFiles([]);
+      setIsPrChangedFilesReady(true);
+      return;
+    }
+
+    if (sourceChangedFiles.length > 0) {
+      setPrChangedFiles(sourceChangedFiles);
       setIsPrChangedFilesReady(true);
       return;
     }
@@ -1073,7 +1080,7 @@ function usePullRequestChangedFiles(params: {
     return () => {
       cancelled = true;
     };
-  }, [repository, sourceRef?.prNumber, sourceRef?.type]);
+  }, [repository, sourceChangedFiles, sourceRef?.prNumber, sourceRef?.type]);
 
   return {
     isPrChangedFilesReady,
@@ -1524,6 +1531,7 @@ export function BankWorkspace() {
   const sendersPath = `${bankPath}/senders.txt`;
   const { prChangedFiles, isPrChangedFilesReady } = usePullRequestChangedFiles({
     repository,
+    sourceChangedFiles,
     sourceRef,
   });
 
@@ -1545,7 +1553,7 @@ export function BankWorkspace() {
     [draftStore, draftStore.drafts]
   );
   const effectiveSourceChangedFiles = useMemo(
-    () => Array.from(new Set([...sourceChangedFiles, ...prChangedFiles])),
+    () => (sourceChangedFiles.length > 0 ? sourceChangedFiles : prChangedFiles),
     [prChangedFiles, sourceChangedFiles]
   );
   const localChangedFilesInBank = useMemo(
