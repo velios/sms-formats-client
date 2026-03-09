@@ -60,12 +60,14 @@ const regexLabHeaderActionsClassName = "flex flex-wrap items-center gap-2";
 const regexLabPanelBodyClassName = "p-4";
 const regexLabTabListClassName =
   "flex gap-0 border-b border-[color:var(--c-border)]";
+const regexLabHeaderButtonClassName =
+  "border-[color:transparent] text-[color:var(--c-text-muted)] shadow-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)] focus-visible:ring-[color:var(--c-border-focus)]";
 const regexLabTabClassName = (isActive: boolean) =>
   cn(
-    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid bg-transparent px-4 py-2 text-[13px] transition-all duration-150",
+    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid px-4 py-2 text-[13px] font-medium transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
     isActive
-      ? "border-b-[color:var(--c-accent)] text-[color:var(--c-accent)]"
-      : "border-b-transparent text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-text)]"
+      ? "border-b-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-1px_0_var(--c-accent-soft)]"
+      : "border-b-transparent text-[color:var(--c-text-muted)] hover:border-b-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
   );
 const regexTokenToneClassMap: Record<string, string> = {
   anchor: "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
@@ -317,6 +319,7 @@ export function RegexLab({
           <span>{t("editor.regex")}</span>
           <div className={regexLabHeaderActionsClassName}>
             <Button
+              className={regexLabHeaderButtonClassName}
               onClick={onOpenSmsByTemplate}
               size="sm"
               type="button"
@@ -367,6 +370,7 @@ export function RegexLab({
             </div>
             <div className={regexLabHeaderActionsClassName}>
               <Button
+                className={regexLabHeaderButtonClassName}
                 onClick={onOpenTemplateBySms}
                 size="sm"
                 type="button"
@@ -374,7 +378,12 @@ export function RegexLab({
               >
                 {t("quickCheck.openTemplateBySms")}
               </Button>
-              <Button asChild size="sm" variant="ghost">
+              <Button
+                asChild
+                className={regexLabHeaderButtonClassName}
+                size="sm"
+                variant="ghost"
+              >
                 <a
                   href={regex101Url}
                   rel="noopener noreferrer"
