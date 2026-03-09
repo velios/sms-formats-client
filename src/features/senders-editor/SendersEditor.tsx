@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { config } from "@/config";
@@ -62,7 +63,7 @@ export function SendersEditor({ bankPath }: Props) {
   if (isLoading) {
     return (
       <div className="flex items-center gap-2">
-        <span className="spinner" />
+        <Spinner />
         <span>{t("app.loading")}</span>
       </div>
     );
@@ -72,10 +73,10 @@ export function SendersEditor({ bankPath }: Props) {
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
       <div className="flex min-h-[52px] shrink-0 flex-wrap items-center gap-2">
         <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
-          <span className="font-medium text-mono">{fileName}</span>
+          <span className="font-medium font-mono">{fileName}</span>
           <Button
-            asChild
             aria-label={t("bank.openFormatInRepo")}
+            asChild
             size="sm"
             title={t("bank.openFormatInRepo")}
             variant="ghost"
@@ -128,7 +129,7 @@ export function SendersEditor({ bankPath }: Props) {
       </div>
       <div className="overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
         <div className="p-4">
-          <div className="mb-2 text-xs text-[color:var(--c-text-muted)]">
+          <div className="mb-2 text-[color:var(--c-text-muted)] text-xs">
             {t("editor.sendersHint")}
           </div>
           <Textarea

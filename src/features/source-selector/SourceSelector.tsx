@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PullRequestLabels } from "@/components/PullRequestLabels";
@@ -62,7 +62,7 @@ const sourceNavOptionClassName = (isActive: boolean) =>
 
 const sourceNavLabelClassName = (isHash = false) =>
   cn(
-    "max-w-[360px] overflow-hidden bg-transparent p-0 text-left text-[color:var(--c-text)] text-ellipsis whitespace-nowrap hover:text-[color:var(--c-accent)]",
+    "max-w-[360px] overflow-hidden text-ellipsis whitespace-nowrap bg-transparent p-0 text-left text-[color:var(--c-text)] hover:text-[color:var(--c-accent)]",
     isHash &&
       'font-[ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation_Mono","Courier_New",monospace] text-xs tracking-[0.04em]'
   );
@@ -101,8 +101,7 @@ function getPreferredChangedFilePath(
   const bankPaths = paths.filter((path) => path.startsWith(`${bankPath}/`));
   return (
     bankPaths.find(
-      (path) =>
-        path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
+      (path) => path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
     ) ??
     bankPaths[0] ??
     null
@@ -182,22 +181,6 @@ function createDiscardDraftsGuard(
   return () => confirmSourceSwitch({ confirmMessage, draftStore });
 }
 
-const sourceSelectorItemClassName = "relative flex min-w-0 items-center gap-1";
-const sourceSelectorLabelClassName =
-  "max-w-[360px] cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent p-0 text-left text-[color:var(--c-text)] hover:text-[color:var(--c-accent)]";
-const sourceSelectorHashLabelClassName = "font-mono text-xs tracking-[0.04em]";
-const sourceSelectorExternalLinkClassName =
-  "ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
-const sourceSelectorDropdownClassName =
-  "absolute top-[calc(100%+6px)] left-0 z-[120] max-h-[min(420px,calc(100vh-120px))] overflow-y-auto rounded-[var(--radius-md)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] shadow-[var(--shadow-md)]";
-const sourceSelectorOptionClassName = (isActive: boolean) =>
-  cn(
-    "flex w-full items-center gap-2 border-0 bg-transparent px-3 py-2 text-left text-[13px] text-inherit",
-    isActive
-      ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
-      : "hover:bg-[color:var(--c-bg-hover)]"
-  );
-
 async function selectRepository(params: {
   closeMenu: () => void;
   confirmDiscardDrafts: ConfirmDiscardHandler;
@@ -258,7 +241,8 @@ async function selectPullRequest(params: {
     switchSource,
   } = params;
   const isCurrentPullRequest =
-    currentSource?.type === "pr" && currentSource.prNumber === pullRequest.number;
+    currentSource?.type === "pr" &&
+    currentSource.prNumber === pullRequest.number;
   if (isCurrentPullRequest) {
     const preferredChangedPaths =
       localChangedFiles.length > 0
@@ -356,9 +340,6 @@ function RepositoryDropdown(props: {
   if (!isOpen) {
     return null;
   }
-  const localDraftsTitle = t("source.unsavedDraftsInPr", {
-    defaultValue: "You have unsaved local changes in this PR",
-  });
 
   return (
     <div className={sourceNavDropdownClassName} style={{ minWidth: 320 }}>
@@ -418,7 +399,7 @@ function SourceDropdown(props: {
 
   return (
     <div className={sourceNavDropdownClassName} style={{ minWidth: 420 }}>
-      <div className="border-b border-[color:var(--c-border)] p-2">
+      <div className="border-[color:var(--c-border)] border-b p-2">
         <Input
           aria-label={t("source.searchPR")}
           onChange={(event) => onSourceQueryChange(event.target.value)}
@@ -459,7 +440,7 @@ function SourceDropdown(props: {
               onClick={() => onPullRequestSelect(pr)}
               type="button"
             >
-              <span className="text-xs text-[color:var(--c-text-muted)]">
+              <span className="text-[color:var(--c-text-muted)] text-xs">
                 #{pr.number}
               </span>
               <span className="truncate text-sm">{pr.title}</span>
@@ -517,7 +498,7 @@ function CommitDropdown(props: {
               onClick={() => onCommitSelect(commit.sha)}
               type="button"
             >
-              <span className='min-w-[44px] text-xs text-[color:var(--c-text-muted)] font-[ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation_Mono","Courier_New",monospace]'>
+              <span className='min-w-[44px] font-[ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation_Mono","Courier_New",monospace] text-[color:var(--c-text-muted)] text-xs'>
                 {getShortSha(commit.sha)}
               </span>
               <span className="truncate text-sm">

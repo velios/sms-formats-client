@@ -205,12 +205,12 @@ export function ValidationPanel({
               <div
                 className={
                   issue.level === "error"
-                    ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-xs text-[color:var(--c-error)]"
-                    : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-xs text-[color:var(--c-warning)]"
+                    ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-[color:var(--c-error)] text-xs"
+                    : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-[color:var(--c-warning)] text-xs"
                 }
                 key={i}
               >
-                <span className="text-mono text-sm" style={{ minWidth: 100 }}>
+                <span className="font-mono text-sm" style={{ minWidth: 100 }}>
                   {issue.filePath.split("/").pop()}
                 </span>
                 <span className="text-sm">{issue.message}</span>

@@ -63,12 +63,6 @@ export interface PublishPreflight {
   warnings: ValidationIssue[];
 }
 
-export interface MergeResult {
-  path: string;
-  status: "clean" | "conflict" | "unchanged";
-  content: string;
-}
-
 // ─── Column reference ───
 
 export interface ColumnDef {

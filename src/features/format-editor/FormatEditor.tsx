@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { config } from "@/config";
@@ -273,7 +274,7 @@ export function FormatEditor({
   if (isLoading) {
     return (
       <div className="flex items-center gap-2">
-        <span className="spinner" />
+        <Spinner />
         <span>{t("app.loading")}</span>
       </div>
     );
@@ -300,7 +301,7 @@ export function FormatEditor({
           </button>
         </div>
         <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
-          <span className="font-medium text-mono">{fileName}</span>
+          <span className="font-medium font-mono">{fileName}</span>
           <Button
             disabled={!canRenameFile}
             onClick={handleRename}
@@ -311,8 +312,8 @@ export function FormatEditor({
             {t("editor.renameFormat")}
           </Button>
           <Button
-            asChild
             aria-label={t("bank.openFormatInRepo")}
+            asChild
             size="sm"
             title={t("bank.openFormatInRepo")}
             variant="ghost"
@@ -387,7 +388,7 @@ export function FormatEditor({
 
       {/* Parse errors */}
       {renameError && (
-        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-xs text-[color:var(--c-warning)]">
+        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-[color:var(--c-warning)] text-xs">
           {renameError}
         </div>
       )}
@@ -395,7 +396,7 @@ export function FormatEditor({
         <div className="flex flex-col gap-1">
           {parseErrors.map((err, i) => (
             <div
-              className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-xs text-[color:var(--c-warning)]"
+              className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-[color:var(--c-warning)] text-xs"
               key={i}
             >
               {err}
@@ -425,7 +426,7 @@ export function FormatEditor({
 
       {mode === "raw" && (
         <div className="overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
-          <div className="border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.5px] text-[color:var(--c-text-muted)]">
+          <div className="border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-elevated)] px-4 py-2 font-semibold text-[13px] text-[color:var(--c-text-muted)] uppercase tracking-[0.5px]">
             {t("editor.raw")}
           </div>
           <div className="p-4">

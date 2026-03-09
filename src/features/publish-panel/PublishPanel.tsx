@@ -18,8 +18,8 @@ import {
 } from "@/domain/github";
 import type { BankInfo, RepoRef } from "@/domain/types";
 import { validateBankLevel } from "@/domain/validation";
-import type { PublishStep } from "@/store";
 import { cn } from "@/lib/utils";
+import type { PublishStep } from "@/store";
 import { useDraftStore, usePublishStore, useSourceStore } from "@/store";
 
 interface Props {
@@ -387,18 +387,18 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
             {t("publish.scopeCheck", { bank: bankName })}
           </span>
         </div>
-        <div className="text-sm text-[color:var(--c-text-muted)]">
+        <div className="text-[color:var(--c-text-muted)] text-sm">
           {changedFiles.length} file(s) changed
         </div>
 
         {isMultiBank && (
-          <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]">
+          <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
             {t("validation.multiBankPublish")}
           </div>
         )}
 
         {changedFiles.length === 0 && (
-          <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-xs text-[color:var(--c-warning)]">
+          <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-[color:var(--c-warning)] text-xs">
             No changes to publish for this bank
           </div>
         )}
@@ -408,7 +408,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
         <div className="mb-4 flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label
-              className="text-xs text-[color:var(--c-text-muted)]"
+              className="text-[color:var(--c-text-muted)] text-xs"
               htmlFor={tokenInputId}
             >
               {t("publish.tokenLabel")}
@@ -421,7 +421,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
               type="password"
               value={token}
             />
-            <span className="text-xs text-[color:var(--c-text-dim)]">
+            <span className="text-[color:var(--c-text-dim)] text-xs">
               {t("publish.tokenHint")}
             </span>
           </div>
@@ -437,7 +437,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
 
           <div className="flex flex-col gap-1">
             <label
-              className="text-xs text-[color:var(--c-text-muted)]"
+              className="text-[color:var(--c-text-muted)] text-xs"
               htmlFor={prTitleInputId}
             >
               {t("publish.prTitle")}
@@ -500,7 +500,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       {step === "error" && publishStore.error && (
         <div
           aria-live="assertive"
-          className="mb-4 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]"
+          className="mb-4 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs"
           role="alert"
         >
           {publishStore.error}
@@ -516,12 +516,12 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
             <div
               className={
                 issue.level === "error"
-                  ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-xs text-[color:var(--c-error)]"
-                  : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-xs text-[color:var(--c-warning)]"
+                  ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-[color:var(--c-error)] text-xs"
+                  : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-[color:var(--c-warning)] text-xs"
               }
               key={i}
             >
-              <span className="text-mono text-sm">
+              <span className="font-mono text-sm">
                 {issue.filePath.split("/").pop()}
               </span>
               <span className="text-sm">{issue.message}</span>
@@ -602,7 +602,7 @@ function PublishStepItem({ label, status }: { label: string; status: string }) {
 
   return (
     <div className={cls}>
-      {status === "active" && <span className="spinner" />}
+      {status === "active" && <Spinner />}
       {status === "done" && "✓"}
       {status === "error" && "✗"}
       {status === "pending" && "○"}

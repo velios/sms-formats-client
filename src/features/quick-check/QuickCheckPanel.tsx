@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { parseFormatFile, testRegex } from "@/domain/format";
@@ -639,7 +640,7 @@ export function QuickCheckPanel({
       {mode === "template-by-sms" ? (
         <div className="flex flex-col gap-1">
           <label
-            className="text-xs text-[color:var(--c-text-muted)]"
+            className="text-[color:var(--c-text-muted)] text-xs"
             htmlFor={inputId}
           >
             {t("quickCheck.smsLabel")}
@@ -651,11 +652,11 @@ export function QuickCheckPanel({
             placeholder={t("quickCheck.smsPlaceholder")}
             value={smsText}
           />
-          <div className="text-xs text-[color:var(--c-text-dim)]">
+          <div className="text-[color:var(--c-text-dim)] text-xs">
             {t("quickCheck.scopeInfo", { count: formatPaths.length })}
           </div>
           {activeFormatContext && (
-            <div className="text-xs text-[color:var(--c-text-dim)]">
+            <div className="text-[color:var(--c-text-dim)] text-xs">
               {t("quickCheck.activeSmsSource", {
                 file: extractFormatFileName(activeFormatContext.filePath),
                 index: activeFormatContext.activeExampleIndex + 1,
@@ -666,7 +667,7 @@ export function QuickCheckPanel({
       ) : (
         <div className="flex flex-col gap-1">
           <label
-            className="text-xs text-[color:var(--c-text-muted)]"
+            className="text-[color:var(--c-text-muted)] text-xs"
             htmlFor={inputId}
           >
             {t("quickCheck.templateRegexLabel")}
@@ -678,11 +679,11 @@ export function QuickCheckPanel({
             placeholder={t("quickCheck.templateRegexPlaceholder")}
             value={templateRegex}
           />
-          <div className="text-xs text-[color:var(--c-text-dim)]">
+          <div className="text-[color:var(--c-text-dim)] text-xs">
             {t("quickCheck.scopeInfo", { count: formatPaths.length })}
           </div>
           {activeFormatContext && (
-            <div className="text-xs text-[color:var(--c-text-dim)]">
+            <div className="text-[color:var(--c-text-dim)] text-xs">
               {t("quickCheck.activeTemplateSource", {
                 file: extractFormatFileName(activeFormatContext.filePath),
               })}
@@ -694,7 +695,7 @@ export function QuickCheckPanel({
       {errorMessage && (
         <div
           aria-live="assertive"
-          className="mt-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]"
+          className="mt-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs"
           role="alert"
         >
           {errorMessage}
@@ -702,7 +703,11 @@ export function QuickCheckPanel({
       )}
 
       {templateBySmsState && (
-        <div aria-live="polite" className="mt-4 flex flex-wrap gap-1" role="status">
+        <div
+          aria-live="polite"
+          className="mt-4 flex flex-wrap gap-1"
+          role="status"
+        >
           <StatusBadge variant="info">
             {t("quickCheck.summaryChecked", {
               checked: templateBySmsState.summary.checkedRegexes,
@@ -739,7 +744,11 @@ export function QuickCheckPanel({
       )}
 
       {smsByTemplateState && (
-        <div aria-live="polite" className="mt-4 flex flex-wrap gap-1" role="status">
+        <div
+          aria-live="polite"
+          className="mt-4 flex flex-wrap gap-1"
+          role="status"
+        >
           <StatusBadge variant="info">
             {t("quickCheck.summaryCheckedSms", {
               checked: smsByTemplateState.summary.checkedSmsCount,
@@ -777,7 +786,7 @@ export function QuickCheckPanel({
 
       <div className="mt-4 flex max-h-[420px] flex-col gap-2 overflow-y-auto">
         {templateBySmsState && templateBySmsState.results.length === 0 && (
-          <div className="text-sm text-[color:var(--c-text-muted)]">
+          <div className="text-[color:var(--c-text-muted)] text-sm">
             {t("quickCheck.noRegexes")}
           </div>
         )}
@@ -788,7 +797,7 @@ export function QuickCheckPanel({
             key={result.filePath}
           >
             <div className="mb-1 flex items-center gap-1">
-              <span className="text-mono text-sm">{result.fileName}</span>
+              <span className="font-mono text-sm">{result.fileName}</span>
               <StatusBadge
                 variant={
                   result.status === "match"
@@ -810,20 +819,20 @@ export function QuickCheckPanel({
                   : t("quickCheck.sourceRemote")}
               </StatusBadge>
             </div>
-            <pre className="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-6 text-[color:var(--c-text)]">
+            <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[color:var(--c-text)] text-xs leading-6">
               {result.regex}
             </pre>
             {result.status === "match" && sourceRefName && (
               <div className="mt-1 flex items-center gap-2">
                 <button
-                  className="border-0 bg-transparent p-0 text-xs text-[color:var(--c-accent)] hover:underline"
+                  className="border-0 bg-transparent p-0 text-[color:var(--c-accent)] text-xs hover:underline"
                   onClick={() => handleOpenInApp(result.filePath)}
                   type="button"
                 >
                   {t("quickCheck.openInApp")}
                 </button>
                 <a
-                  className="text-xs text-[color:var(--c-accent)] no-underline hover:underline"
+                  className="text-[color:var(--c-accent)] text-xs no-underline hover:underline"
                   href={buildGitHubFileLink({
                     filePath: result.filePath,
                     repository,
@@ -837,7 +846,7 @@ export function QuickCheckPanel({
               </div>
             )}
             {result.errorMessage && (
-              <div className="text-sm text-[color:var(--c-text-muted)]">
+              <div className="text-[color:var(--c-text-muted)] text-sm">
                 {result.errorMessage}
               </div>
             )}
@@ -845,7 +854,7 @@ export function QuickCheckPanel({
         ))}
 
         {smsByTemplateState && smsByTemplateState.results.length === 0 && (
-          <div className="text-sm text-[color:var(--c-text-muted)]">
+          <div className="text-[color:var(--c-text-muted)] text-sm">
             {t("quickCheck.noFormats")}
           </div>
         )}
@@ -856,8 +865,10 @@ export function QuickCheckPanel({
             key={result.filePath}
           >
             <div className="mb-1 flex items-center gap-1">
-              <span className="text-mono text-sm">{result.fileName}</span>
-              <StatusBadge variant={result.status === "match" ? "success" : "info"}>
+              <span className="font-mono text-sm">{result.fileName}</span>
+              <StatusBadge
+                variant={result.status === "match" ? "success" : "info"}
+              >
                 {result.status === "match"
                   ? t("quickCheck.resultMatch")
                   : t("quickCheck.resultNoMatch")}
@@ -875,21 +886,21 @@ export function QuickCheckPanel({
               </StatusBadge>
             </div>
             {result.firstMatchedExample && (
-              <pre className="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-6 text-[color:var(--c-text)]">
+              <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[color:var(--c-text)] text-xs leading-6">
                 {result.firstMatchedExample}
               </pre>
             )}
             {result.status === "match" && sourceRefName && (
               <div className="mt-1 flex items-center gap-2">
                 <button
-                  className="border-0 bg-transparent p-0 text-xs text-[color:var(--c-accent)] hover:underline"
+                  className="border-0 bg-transparent p-0 text-[color:var(--c-accent)] text-xs hover:underline"
                   onClick={() => handleOpenInApp(result.filePath)}
                   type="button"
                 >
                   {t("quickCheck.openInApp")}
                 </button>
                 <a
-                  className="text-xs text-[color:var(--c-accent)] no-underline hover:underline"
+                  className="text-[color:var(--c-accent)] text-xs no-underline hover:underline"
                   href={buildGitHubFileLink({
                     filePath: result.filePath,
                     repository,
@@ -918,7 +929,7 @@ export function QuickCheckPanel({
         >
           {isChecking ? (
             <>
-              <span className="spinner" />
+              <Spinner />
               {t("quickCheck.running")}
             </>
           ) : (

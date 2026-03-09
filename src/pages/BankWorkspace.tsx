@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
 import {
@@ -652,9 +653,6 @@ function buildSearchIndexingMeta(params: {
   };
 }
 
-const workspacePanelClassName =
-  "flex min-h-0 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
-
 const workspacePanelHeaderClassName =
   "flex items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold tracking-[0.5px] text-[color:var(--c-text-muted)] uppercase";
 
@@ -679,7 +677,7 @@ const workspaceFileRowClassName = (params: {
       ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
       : "hover:bg-[color:var(--c-bg-hover)]",
     params.isDeleted &&
-      "opacity-80 line-through decoration-current decoration-1"
+      "line-through decoration-1 decoration-current opacity-80"
   );
 
 const workspaceExternalLinkClassName =
@@ -779,10 +777,12 @@ function BankActionsPanel(params: {
         type="button"
         variant="primary"
       >
-        {isPublishing ? <span className="spinner" /> : null}
+        {isPublishing ? <Spinner /> : null}
         {publishActionLabel}
       </Button>
-      {publishError && <StatusBadge variant="error">{publishError}</StatusBadge>}
+      {publishError && (
+        <StatusBadge variant="error">{publishError}</StatusBadge>
+      )}
       {showApprovePullRequestButton && (
         <Button
           className={workspaceActionButtonClassName}
@@ -915,7 +915,7 @@ function FormatsPanel(params: {
       <div className={workspacePanelHeaderClassName}>
         <span>
           {t("bank.files")}{" "}
-          <span className="text-xs text-[color:var(--c-text-muted)]">
+          <span className="text-[color:var(--c-text-muted)] text-xs">
             ({totalFilesCount})
           </span>
         </span>
@@ -943,7 +943,7 @@ function FormatsPanel(params: {
           {t("bank.recentFiles")}
         </button>
       </div>
-      <div className="border-b border-[color:var(--c-border)] p-2">
+      <div className="border-[color:var(--c-border)] border-b p-2">
         <Input
           aria-label={t("bank.searchFile")}
           className="h-7 px-2 py-1 text-xs"
@@ -952,7 +952,7 @@ function FormatsPanel(params: {
           value={formatSearch}
         />
         {showSearchIndexStatus && (
-          <div className="mt-1.5 text-xs text-[color:var(--c-text-muted)]">
+          <div className="mt-1.5 text-[color:var(--c-text-muted)] text-xs">
             {searchIndexingLabel}
           </div>
         )}
@@ -1000,7 +1000,7 @@ function FormatsPanel(params: {
               role="button"
               tabIndex={0}
             >
-              <span className="truncate text-mono text-sm">{displayName}</span>
+              <span className="truncate font-mono text-sm">{displayName}</span>
               {isLocalChanged && (
                 <StatusBadge className="text-xs" variant="modified">
                   ●
@@ -1029,7 +1029,7 @@ function FormatsPanel(params: {
           );
         })}
         {showNoResults && (
-          <div className="p-4 text-xs text-[color:var(--c-text-muted)]">
+          <div className="p-4 text-[color:var(--c-text-muted)] text-xs">
             {t("bank.noResults")}
           </div>
         )}
@@ -1960,7 +1960,7 @@ export function BankWorkspace() {
   if (isRouteSyncInFlight || routeSyncPending) {
     return (
       <div className="flex items-center gap-2">
-        <span className="spinner" />
+        <Spinner />
         <span>{t("app.loading")}</span>
       </div>
     );
