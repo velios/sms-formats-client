@@ -28,7 +28,7 @@ Open this guide when the task involves:
 
 ## Practical Rules For The Agent
 
-- Treat `design/app.pen` as the source of truth for intended screen structure.
+- Treat `design/app.pen` as the source of truth for intended screen structure and as the only working Pencil file for this repository.
 - Before editing UI code, identify which product surface is affected and map it to the corresponding code entry point.
 - Prefer existing components and patterns before inventing new UI building blocks.
 - Keep user-facing flows and internal developer flows clearly separated where the design notes require it.
@@ -38,7 +38,7 @@ Open this guide when the task involves:
 ## Minimal Workflow
 
 1. Determine whether the task is about screen structure, flow, or components.
-2. Read only the relevant files from `design/`.
+2. Read only the relevant files from `design/` and open `design/app.pen` if the task affects Pencil artifacts.
 3. Map the affected design artifact to the implementation entry point.
 4. Make the code change using existing patterns where possible.
 5. Verify that the resulting screen, flow, and component usage still match the documented design intent.

@@ -1,6 +1,7 @@
 # Design Workspace
 
 This repository keeps the Pencil design source in `design/app.pen`.
+Open and edit this file directly in Pencil. Do not maintain a separate working `.pen` file outside `design/`.
 
 Supporting files for the design workflow live in `design/`:
 

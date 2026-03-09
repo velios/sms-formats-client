@@ -9,6 +9,9 @@ Primary source of truth for behavior:
 - `openspec/changes/add-sms-formats-editor/tasks.md`
 - `openspec/changes/add-sms-formats-editor/specs/sms-formats-editor/spec.md`
 
+Primary source of truth for UI structure and screen design:
+- `design/app.pen`
+
 ## 2. Non-Negotiable Constraints
 - Frontend-only architecture (no custom backend service).
 - Bun + TypeScript + Vite stack.
@@ -23,6 +26,7 @@ You own concrete visual language, component composition, interaction micro-decis
 
 Rules:
 - Functional behaviors from OpenSpec are mandatory.
+- `design/app.pen` is the current editable Pencil document and must stay aligned with implemented UI structure changes.
 - Visual implementation freedom is intentional.
 - If your runtime has an interface-design skill available, apply it for UI decisions.
 
