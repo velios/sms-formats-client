@@ -1,69 +1,71 @@
-# AGENTS.md — sms-formats-client
+# AGENTS.md
 
-## Scope
-- This file defines mandatory working rules for agents in this repository.
-- Priority: keep the project publish-ready, lint-clean, and free from secret leaks.
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-## Stack & Commands
-- Install deps: `bun install`
-- Tests only: `bun test`
-- Full gate: `bun run verify`
-- Common local commands:
-  - `bun run dev`
-  - `bun run build`
-  - `bun run preview`
-  - `bun run typecheck`
-  - `bun run lint`
-  - `bun run format`
-  - `bun run check:secrets`
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-## Commit Gate (Mandatory)
-- Before every commit, run `bun run verify`.
-- If `bun run verify` fails, commit is forbidden until all checks are fixed.
-- Do not bypass checks with temporary disables.
+## 1. Think Before Coding
 
-## Security / No Leaks
-- Never commit secrets, tokens, private keys, passwords, or `.env` values.
-- Keep credentials only in local env/config outside git.
-- Treat `check-secrets` inside `bun run verify` as mandatory.
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-## Ultracite / Biome Rules (Mandatory)
-- Lint baseline is `ultracite/biome/core` from `biome.jsonc`.
-- Do not add inline suppressions (`biome-ignore ...`) without explicit user approval.
-- Do not relax global rules to pass checks; fix code instead.
-- Prefer `bunx ultracite fix` for safe autofixes, then resolve remaining issues manually.
-- Critical rule focus for this codebase:
-  - `lint/complexity/noExcessiveCognitiveComplexity` must stay enabled for source code.
-  - Keep functions/components small; extract helpers instead of adding suppressions.
-  - Respect style/correctness rules reported by ultracite (format, unused vars, consistent type defs, etc.).
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
 
-## Code Style Defaults
-- TypeScript strict-first: avoid `any`, avoid non-null assertions unless unavoidable.
-- Keep React components focused; move heavy branching/logic to pure helpers.
-- Prefer readable, explicit code over clever/compact constructs.
+## 2. Simplicity First
 
-## Repository Map (Agent Context)
-- `src/domain` — pure logic (parser/regex/validation/github integration helpers)
-- `src/features` — UI feature modules
-- `src/pages` — top-level screens
-- `src/store` — Zustand state and persistence
-- `src/i18n` — translations (`ru`, `en`)
-- `ansible` — VPS deploy automation
-- `docs` — human docs and deploy notes
-- `openspec` — spec history and current capability specs
+**Minimum code that solves the problem. Nothing speculative.**
 
-## Temporary i18n Rule
-- During active development, update only `src/i18n/ru.json`.
-- Do not update `src/i18n/en.json` unless the user explicitly asks for it.
-- This rule is temporary and remains in force until explicitly canceled by the user.
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
 
-## Path Conventions (Docs & Examples)
-- Do not use developer-specific absolute local paths in docs/examples (for example `/Users/...`).
-- Always use project-root-relative paths (for example `docs/...`, `src/...`, `openspec/...`).
-- If an absolute path is required by runtime context, explain why and prefer a relative alternative in documentation text.
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-## Publish Readiness Checklist
-- `bun run verify` passes.
-- Working tree is clean or intentionally scoped for commit.
-- No secret leaks in tracked files/history checks.
-- Lint/format state is canonical (no pending ultracite diagnostics).
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+## Project-Specific Guidelines
+
+- Speak with user in Russian
+- This project does not require preserving backward compatibility at the code level. After aligning the solution with the user, breaking changes are allowed. Do not leave code paths, compatibility layers, or other artifacts that imply the old solution still exists. Rewrite code as if the new behavior had always been the intended one, and bring the surrounding codebase to a consistent state.
+- For UI, UX, and screen-structure tasks, consult `design/notes/agent-design-guide.md`.
