@@ -9,6 +9,9 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
 import {
   type BankRouteSource,
@@ -41,6 +44,7 @@ import {
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
 import { useSwitchRepository, useSwitchSource } from "@/hooks/useGitHub";
+import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
 const RECENT_FILES_KEY = "sms-formats-recent-formats";
@@ -648,6 +652,42 @@ function buildSearchIndexingMeta(params: {
   };
 }
 
+const workspacePanelClassName =
+  "flex min-h-0 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
+
+const workspacePanelHeaderClassName =
+  "flex items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold tracking-[0.5px] text-[color:var(--c-text-muted)] uppercase";
+
+const workspaceTabsClassName =
+  "flex gap-0 border-b border-[color:var(--c-border)]";
+
+const workspaceTabClassName = (isActive: boolean) =>
+  cn(
+    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid bg-transparent px-4 py-2 font-sans text-[13px] transition-all duration-150",
+    isActive
+      ? "border-b-[color:var(--c-accent)] text-[color:var(--c-accent)]"
+      : "border-b-transparent text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-text)]"
+  );
+
+const workspaceFileRowClassName = (params: {
+  isDeleted: boolean;
+  isSelected: boolean;
+}) =>
+  cn(
+    "flex cursor-pointer items-center gap-2 px-3 py-2 text-[13px]",
+    params.isSelected
+      ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
+      : "hover:bg-[color:var(--c-bg-hover)]",
+    params.isDeleted &&
+      "opacity-80 line-through decoration-current decoration-1"
+  );
+
+const workspaceExternalLinkClassName =
+  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
+
+const workspaceActionButtonClassName =
+  "min-h-[38px] w-full justify-start whitespace-normal px-3 py-1.5 text-left text-[13px] leading-[1.3]";
+
 function renderWorkspaceContent(params: {
   showSenders: boolean;
   bankPath: string;
@@ -687,7 +727,7 @@ function renderWorkspaceContent(params: {
     );
   }
   return (
-    <div className="flex h-full items-center justify-center text-muted">
+    <div className="flex h-full items-center justify-center text-[color:var(--c-text-muted)]">
       {t("bank.files")}: {t("bank.noResults")}
     </div>
   );
@@ -731,53 +771,65 @@ function BankActionsPanel(params: {
   } = params;
 
   return (
-    <div className="bank-actions flex-col">
-      <button
-        className="btn btn--primary bank-actions__btn w-full"
+    <div className="flex flex-col gap-1.5">
+      <Button
+        className={workspaceActionButtonClassName}
         disabled={isPublishing}
         onClick={onPublish}
+        type="button"
+        variant="primary"
       >
         {isPublishing ? <span className="spinner" /> : null}
         {publishActionLabel}
-      </button>
-      {publishError && <div className="badge badge--error">{publishError}</div>}
+      </Button>
+      {publishError && <StatusBadge variant="error">{publishError}</StatusBadge>}
       {showApprovePullRequestButton && (
-        <button
-          className={`btn bank-actions__btn w-full ${isPullRequestApproved ? "btn--success" : ""}`}
+        <Button
+          className={workspaceActionButtonClassName}
           disabled={isApprovingPullRequest || isPullRequestApproved}
           onClick={onApprovePullRequest}
+          type="button"
+          variant={isPullRequestApproved ? "success" : "default"}
         >
           {approvePullRequestLabel}
-        </button>
+        </Button>
       )}
       {approvePullRequestError && (
-        <div className="badge badge--error">{approvePullRequestError}</div>
+        <StatusBadge variant="error">{approvePullRequestError}</StatusBadge>
       )}
-      <button
-        className="btn bank-actions__btn w-full"
+      <Button
+        className={workspaceActionButtonClassName}
         onClick={onOpenValidation}
+        type="button"
+        variant="default"
       >
         {t("editor.validation")}
-      </button>
-      <button
-        className="btn bank-actions__btn w-full"
+      </Button>
+      <Button
+        className={workspaceActionButtonClassName}
         onClick={onOpenTemplateBySms}
+        type="button"
+        variant="default"
       >
         {t("quickCheck.openTemplateBySms")}
-      </button>
-      <button
-        className="btn bank-actions__btn w-full"
+      </Button>
+      <Button
+        className={workspaceActionButtonClassName}
         onClick={onOpenSmsByTemplate}
+        type="button"
+        variant="default"
       >
         {t("quickCheck.openSmsByTemplate")}
-      </button>
-      <button
-        className="btn bank-actions__btn w-full"
+      </Button>
+      <Button
+        className={workspaceActionButtonClassName}
         disabled={!canResetToSource}
         onClick={onResetToSource}
+        type="button"
+        variant="default"
       >
         {t("bank.resetToSource")}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -859,55 +911,53 @@ function FormatsPanel(params: {
   const showNoResults = filesForRender.length === 0;
 
   return (
-    <div className="panel formats-panel">
-      <div className="panel__header">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
+      <div className={workspacePanelHeaderClassName}>
         <span>
           {t("bank.files")}{" "}
-          <span className="text-muted text-sm">({totalFilesCount})</span>
+          <span className="text-xs text-[color:var(--c-text-muted)]">
+            ({totalFilesCount})
+          </span>
         </span>
-        <button
+        <Button
           aria-label={t("bank.createFormat")}
-          className="btn btn--ghost btn--sm"
           onClick={() => setShowCreateFormat(true)}
+          size="sm"
+          type="button"
+          variant="ghost"
         >
           +
-        </button>
+        </Button>
       </div>
-      <div className="tabs">
+      <div className={workspaceTabsClassName}>
         <button
-          className={`tab ${formatTab === "all" ? "tab--active" : ""}`}
+          className={workspaceTabClassName(formatTab === "all")}
           onClick={() => setFormatTab("all")}
         >
           {t("bank.allFiles")}
         </button>
         <button
-          className={`tab ${formatTab === "recent" ? "tab--active" : ""}`}
+          className={workspaceTabClassName(formatTab === "recent")}
           onClick={() => setFormatTab("recent")}
         >
           {t("bank.recentFiles")}
         </button>
       </div>
-      <div
-        style={{
-          padding: "8px",
-          borderBottom: "1px solid var(--c-border)",
-        }}
-      >
-        <input
+      <div className="border-b border-[color:var(--c-border)] p-2">
+        <Input
           aria-label={t("bank.searchFile")}
-          className="input"
+          className="h-7 px-2 py-1 text-xs"
           onChange={(e) => setFormatSearch(e.target.value)}
           placeholder={t("bank.searchFile")}
-          style={{ fontSize: 12, padding: "4px 8px" }}
           value={formatSearch}
         />
         {showSearchIndexStatus && (
-          <div className="text-muted text-sm" style={{ marginTop: 6 }}>
+          <div className="mt-1.5 text-xs text-[color:var(--c-text-muted)]">
             {searchIndexingLabel}
           </div>
         )}
       </div>
-      <div className="formats-panel__list">
+      <div className="min-h-0 overflow-y-auto">
         {filesForRender.map((path) => {
           const isSenders = path === sendersPath;
           const displayName = isSenders
@@ -925,7 +975,10 @@ function FormatsPanel(params: {
           const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
           return (
             <div
-              className={`autocomplete__item ${isSelected ? "autocomplete__item--active" : ""} ${isDeleted ? "autocomplete__item--deleted" : ""}`}
+              className={workspaceFileRowClassName({
+                isDeleted,
+                isSelected,
+              })}
               key={path}
               onClick={() => {
                 if (isSenders) {
@@ -949,17 +1002,21 @@ function FormatsPanel(params: {
             >
               <span className="truncate text-mono text-sm">{displayName}</span>
               {isLocalChanged && (
-                <span className="badge badge--modified text-sm">●</span>
+                <StatusBadge className="text-xs" variant="modified">
+                  ●
+                </StatusBadge>
               )}
               {isSourceChanged && (
-                <span className="badge badge--warning text-sm">●</span>
+                <StatusBadge className="text-xs" variant="warning">
+                  ●
+                </StatusBadge>
               )}
               {isSenders && sendersMissing && (
-                <span className="badge badge--warning">!</span>
+                <StatusBadge variant="warning">!</StatusBadge>
               )}
               <a
                 aria-label={`${t("bank.openFormatInRepo")}: ${displayName}`}
-                className="format-row-link"
+                className={cn(workspaceExternalLinkClassName, "ml-auto")}
                 href={repoUrl}
                 onClick={(e) => e.stopPropagation()}
                 rel="noreferrer"
@@ -972,7 +1029,9 @@ function FormatsPanel(params: {
           );
         })}
         {showNoResults && (
-          <div className="p-md text-muted text-sm">{t("bank.noResults")}</div>
+          <div className="p-4 text-xs text-[color:var(--c-text-muted)]">
+            {t("bank.noResults")}
+          </div>
         )}
       </div>
     </div>
@@ -1900,7 +1959,7 @@ export function BankWorkspace() {
 
   if (isRouteSyncInFlight || routeSyncPending) {
     return (
-      <div className="flex items-center gap-sm">
+      <div className="flex items-center gap-2">
         <span className="spinner" />
         <span>{t("app.loading")}</span>
       </div>
@@ -1909,8 +1968,8 @@ export function BankWorkspace() {
 
   if (!bank && allFormatFiles.length === 0) {
     return (
-      <div className="flex-col gap-md">
-        <div className="text-muted">
+      <div className="flex flex-col gap-4">
+        <div className="text-[color:var(--c-text-muted)]">
           {t("bank.noResults")}: {bankPath}
         </div>
       </div>
@@ -1934,16 +1993,16 @@ export function BankWorkspace() {
     });
 
   return (
-    <div className="grid-sidebar">
+    <div className="grid h-full min-h-0 grid-cols-[280px_1fr] gap-6">
       {/* ─── Sidebar ─── */}
-      <div className="bank-workspace__sidebar flex-col gap-md">
-        <div className="flex items-center gap-sm">
+      <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
+        <div className="flex items-center gap-2">
           <h2 className="truncate font-semibold" style={{ fontSize: 16 }}>
             {displayName}
           </h2>
           <a
             aria-label={t("bank.openBankFolderInRepo")}
-            className="format-row-link"
+            className={workspaceExternalLinkClassName}
             href={bankRepoUrl}
             rel="noreferrer"
             target="_blank"
@@ -2010,7 +2069,7 @@ export function BankWorkspace() {
       </div>
 
       {/* ─── Main content ─── */}
-      <div className="bank-workspace__content flex-col gap-md">
+      <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
         {renderWorkspaceContent({
           showSenders,
           bankPath,

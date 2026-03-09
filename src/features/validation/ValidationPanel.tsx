@@ -160,8 +160,8 @@ export function ValidationPanel({
 
   return (
     <ModalDialog
+      className="sm:max-w-[500px]"
       onClose={onClose}
-      style={{ minWidth: 500 }}
       title={t("validation.title")}
       titleId={dialogTitleId}
     >
@@ -175,8 +175,8 @@ export function ValidationPanel({
           <span>{t("app.loading")}</span>
         </div>
       ) : ran ? (
-        <div aria-live="polite" className="flex-col gap-md" role="status">
-          <div className="flex gap-sm">
+        <div aria-live="polite" className="flex flex-col gap-4" role="status">
+          <div className="flex gap-2">
             {errors.length === 0 && warnings.length === 0 ? (
               <StatusBadge variant="success">
                 {t("validation.valid")}
@@ -198,12 +198,16 @@ export function ValidationPanel({
           </div>
 
           <div
-            className="issue-list"
+            className="flex max-h-[400px] flex-col gap-1 overflow-y-auto"
             style={{ maxHeight: 400, overflowY: "auto" }}
           >
             {issues.map((issue, i) => (
               <div
-                className={`issue-item ${issue.level === "error" ? "issue-item--error" : "issue-item--warning"}`}
+                className={
+                  issue.level === "error"
+                    ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-xs text-[color:var(--c-error)]"
+                    : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-xs text-[color:var(--c-warning)]"
+                }
                 key={i}
               >
                 <span className="text-mono text-sm" style={{ minWidth: 100 }}>
@@ -216,7 +220,7 @@ export function ValidationPanel({
         </div>
       ) : null}
 
-      <div className="modal__actions">
+      <div className="mt-6 flex justify-end gap-2">
         <Button onClick={onClose} type="button">
           {t("app.close")}
         </Button>

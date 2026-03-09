@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { ColumnDef } from "@/domain/types";
 import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
+import { cn } from "@/lib/utils";
 
 interface Props {
   columns: string[];
@@ -87,53 +91,60 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
   };
 
   return (
-    <div className="panel">
-      <div className="panel__header">
+    <div className="overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
+      <div className="flex items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.5px] text-[color:var(--c-text-muted)]">
         <span>{t("editor.columns")}</span>
-        <div className="flex gap-xs">
-          <button
-            className="btn btn--ghost btn--sm"
+        <div className="flex gap-1">
+          <Button
             onClick={handleTextEditOpen}
+            size="sm"
+            type="button"
+            variant="ghost"
           >
             {t("columns.textEdit")}
-          </button>
-          <button
-            className="btn btn--ghost btn--sm"
+          </Button>
+          <Button
             onClick={() => setShowAdd(!showAdd)}
+            size="sm"
+            type="button"
+            variant="ghost"
           >
             + {t("columns.add")}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="panel__body">
+      <div className="p-4">
         {textEditMode ? (
-          <div className="flex-col gap-sm">
-            <input
-              className="input input--mono"
+          <div className="flex flex-col gap-2">
+            <Input
+              className="font-mono"
               onChange={(e) => setTextValue(e.target.value)}
               placeholder="column1;column2;column3"
               value={textValue}
             />
-            <div className="flex gap-sm">
-              <button
-                className="btn btn--primary btn--sm"
+            <div className="flex gap-2">
+              <Button
                 onClick={handleTextEditApply}
+                size="sm"
+                type="button"
+                variant="primary"
               >
                 {t("app.save")}
-              </button>
-              <button
-                className="btn btn--sm"
+              </Button>
+              <Button
                 onClick={() => setTextEditMode(false)}
+                size="sm"
+                type="button"
               >
                 {t("app.cancel")}
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <>
             {/* Column list with drag-and-drop */}
-            <div className="mb-md flex-col gap-xs">
+            <div className="mb-4 flex flex-col gap-1">
               {columns.map((col, i) => {
                 const parts = col.split("#");
                 const baseName = parts[0]!;
@@ -144,7 +155,7 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
 
                 return (
                   <div
-                    className="column-item"
+                    className="flex items-center gap-2 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-3 py-2"
                     draggable
                     key={`${col}-${i}`}
                     onDragEnd={handleDragEnd}
@@ -158,41 +169,48 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
                       ⠿
                     </span>
                     <span
-                      className={`column-item__name ${isValid ? "" : "text-muted"}`}
+                      className={cn(
+                        "font-medium text-[color:var(--c-text)]",
+                        !isValid && "text-[color:var(--c-text-muted)]"
+                      )}
                     >
                       {baseName}
                     </span>
                     {colDef?.parameterized && (
-                      <input
-                        className="input input--mono"
+                      <Input
+                        className="h-7 w-[120px] px-1.5 py-1 text-xs font-mono"
                         onChange={(e) => handleParamChange(i, e.target.value)}
                         placeholder={colDef.paramHint ?? t("columns.param")}
-                        style={{ width: 120, padding: "2px 6px", fontSize: 12 }}
                         value={param ?? ""}
                       />
                     )}
                     {!isValid && (
-                      <span className="badge badge--warning text-sm">?</span>
+                      <StatusBadge className="text-xs" variant="warning">
+                        ?
+                      </StatusBadge>
                     )}
-                    <button
+                    <Button
                       aria-label={t("editor.removeExample")}
-                      className="column-item__remove"
                       onClick={() => handleRemoveColumn(i)}
+                      size="icon-xs"
                       type="button"
+                      variant="ghost"
                     >
                       ×
-                    </button>
+                    </Button>
                   </div>
                 );
               })}
               {columns.length === 0 && (
-                <div className="text-muted text-sm">{t("bank.noResults")}</div>
+                <div className="text-sm text-[color:var(--c-text-muted)]">
+                  {t("bank.noResults")}
+                </div>
               )}
             </div>
 
             {/* Serialized preview */}
             <div
-              className="text-dim text-mono text-sm"
+              className="font-mono text-sm text-[color:var(--c-text-dim)]"
               style={{ wordBreak: "break-all" }}
             >
               {columns.join(";")}
@@ -203,24 +221,23 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
         {/* Add column dropdown */}
         {showAdd && (
           <div
-            className="mt-md"
+            className="mt-4 border-t border-[color:var(--c-border)] pt-2"
             style={{
-              borderTop: "1px solid var(--c-border)",
-              paddingTop: "var(--space-sm)",
+              maxHeight: 280,
             }}
           >
-            <input
+            <Input
               autoFocus
-              className="input mb-sm"
+              className="mb-2"
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t("columns.search")}
               value={searchQuery}
             />
-            <div style={{ maxHeight: 200, overflowY: "auto" }}>
+            <div className="max-h-[200px] overflow-y-auto">
               {filteredColumns.map((col) => (
                 <button
                   aria-label={col.name}
-                  className="autocomplete__item"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-[color:var(--c-bg-hover)]"
                   key={col.name}
                   onClick={() => handleAddColumn(col)}
                   type="button"
@@ -228,11 +245,13 @@ export function ColumnsBuilder({ columns, onChange }: Props) {
                   <span className="font-medium text-mono text-sm">
                     {col.name}
                   </span>
-                  <span className="text-muted text-sm">
+                  <span className="text-sm text-[color:var(--c-text-muted)]">
                     {col.description[lang] ?? col.description.en}
                   </span>
                   {col.parameterized && (
-                    <span className="badge badge--info text-sm">param</span>
+                    <StatusBadge className="text-xs" variant="info">
+                      param
+                    </StatusBadge>
                   )}
                 </button>
               ))}

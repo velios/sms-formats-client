@@ -504,7 +504,8 @@
                       "fill": "#8A8A8A",
                       "content": "/",
                       "fontFamily": "Inter",
-                      "fontSize": 12
+                      "fontSize": 12,
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "text",
@@ -523,7 +524,8 @@
                       "fill": "#8A8A8A",
                       "content": "↗",
                       "fontFamily": "Inter",
-                      "fontSize": 11
+                      "fontSize": 11,
+                      "fontWeight": "normal"
                     }
                   ]
                 },
@@ -665,7 +667,8 @@
                               "fill": "#6C6C6C",
                               "content": "Недавние PR",
                               "fontFamily": "Inter",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -705,7 +708,8 @@
                                   "fill": "#6C6C6C",
                                   "content": "#261\nОбновить форматы банка СберБанк-ru\nsms-formats-editor/сбербанк-ru-1772917110702",
                                   "fontFamily": "Inter",
-                                  "fontSize": 11
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
                                 },
                                 {
                                   "type": "frame",
@@ -778,7 +782,8 @@
                                           "fill": "#8A8A8A",
                                           "content": "↗",
                                           "fontFamily": "Inter",
-                                          "fontSize": 9
+                                          "fontSize": 9,
+                                          "fontWeight": "normal"
                                         }
                                       ]
                                     }
@@ -807,7 +812,8 @@
                                   "fill": "#6C6C6C",
                                   "content": "#211\n[T-Банк-ru] add 1553 format changes\ntbank-1553-format-changes",
                                   "fontFamily": "Inter",
-                                  "fontSize": 11
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
                                 },
                                 {
                                   "type": "frame",
@@ -880,7 +886,8 @@
                                           "fill": "#8A8A8A",
                                           "content": "↗",
                                           "fontFamily": "Inter",
-                                          "fontSize": 9
+                                          "fontSize": 9,
+                                          "fontWeight": "normal"
                                         }
                                       ]
                                     }
@@ -909,7 +916,8 @@
                                   "fill": "#6C6C6C",
                                   "content": "#208\nUpdate Перевод на накоп счет Михаил К Баланс_Т-Банк\npatch-2",
                                   "fontFamily": "Inter",
-                                  "fontSize": 11
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
                                 },
                                 {
                                   "type": "frame",
@@ -982,7 +990,8 @@
                                           "fill": "#8A8A8A",
                                           "content": "↗",
                                           "fontFamily": "Inter",
-                                          "fontSize": 9
+                                          "fontSize": 9,
+                                          "fontWeight": "normal"
                                         }
                                       ]
                                     }
@@ -1011,7 +1020,8 @@
                                   "fill": "#6C6C6C",
                                   "content": "#159\n[Vietcombank-vn] create format draft\ncompany-15723",
                                   "fontFamily": "Inter",
-                                  "fontSize": 11
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
                                 },
                                 {
                                   "type": "frame",
@@ -1084,7 +1094,8 @@
                                           "fill": "#8A8A8A",
                                           "content": "↗",
                                           "fontFamily": "Inter",
-                                          "fontSize": 9
+                                          "fontSize": 9,
+                                          "fontWeight": "normal"
                                         }
                                       ]
                                     }
@@ -1113,7 +1124,8 @@
                                   "fill": "#6C6C6C",
                                   "content": "#128\n[T-Банк-ru] create format\ncompany-4902",
                                   "fontFamily": "Inter",
-                                  "fontSize": 11
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
                                 },
                                 {
                                   "type": "frame",
@@ -1186,7 +1198,8 @@
                                           "fill": "#8A8A8A",
                                           "content": "↗",
                                           "fontFamily": "Inter",
-                                          "fontSize": 9
+                                          "fontSize": 9,
+                                          "fontWeight": "normal"
                                         }
                                       ]
                                     }
@@ -1215,7 +1228,8 @@
                                   "fill": "#6C6C6C",
                                   "content": "#51\n[ПУМБ-ua] create format\ncompany-15170",
                                   "fontFamily": "Inter",
-                                  "fontSize": 11
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
                                 },
                                 {
                                   "type": "frame",
@@ -1288,7 +1302,8 @@
                                           "fill": "#8A8A8A",
                                           "content": "↗",
                                           "fontFamily": "Inter",
-                                          "fontSize": 9
+                                          "fontSize": 9,
+                                          "fontWeight": "normal"
                                         }
                                       ]
                                     }
@@ -1317,7 +1332,8 @@
                                   "fill": "#6C6C6C",
                                   "content": "#49\n[CберБанк-ru] create format\ncompany-4624",
                                   "fontFamily": "Inter",
-                                  "fontSize": 11
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
                                 },
                                 {
                                   "type": "frame",
@@ -1390,7 +1406,8 @@
                                           "fill": "#8A8A8A",
                                           "content": "↗",
                                           "fontFamily": "Inter",
-                                          "fontSize": 9
+                                          "fontSize": 9,
+                                          "fontWeight": "normal"
                                         }
                                       ]
                                     }
@@ -1469,7 +1486,8 @@
                               "fill": "#6C6C6C",
                               "content": "Недавние банки",
                               "fontFamily": "Inter",
-                              "fontSize": 12
+                              "fontSize": 12,
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -1512,7 +1530,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "Поиск банка...",
                                   "fontFamily": "Inter",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             }
@@ -1564,7 +1583,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1599,7 +1619,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1634,7 +1655,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1669,7 +1691,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1704,7 +1727,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1739,7 +1763,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1774,7 +1799,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1809,7 +1835,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1844,7 +1871,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -1879,7 +1907,8 @@
                                   "fill": "#8A8A8A",
                                   "content": "↗",
                                   "fontFamily": "Inter",
-                                  "fontSize": 10
+                                  "fontSize": 10,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             }
@@ -2411,7 +2440,8 @@
                                   "fill": "#6C6C6C",
                                   "content": "Recent files",
                                   "fontFamily": "Inter",
-                                  "fontSize": 12
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
                                 }
                               ]
                             },
@@ -3040,7 +3070,8 @@
                                       "fill": "#333333",
                                       "content": "(?i)(?:pokupka|purchase)\\s+na\\s+summu\\s+(\\d+[.,]\\d{2})\\s+RUB",
                                       "fontFamily": "JetBrains Mono",
-                                      "fontSize": 12
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
                                     }
                                   ]
                                 }
@@ -3462,7 +3493,8 @@
                                       "fill": "#6C6C6C",
                                       "content": "(?i) enables case-insensitive matching for the whole pattern.",
                                       "fontFamily": "Inter",
-                                      "fontSize": 11
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
                                     },
                                     {
                                       "type": "text",
@@ -3471,7 +3503,8 @@
                                       "fill": "#6C6C6C",
                                       "content": "(?:pokupka|purchase) matches Russian transliteration or English wording.",
                                       "fontFamily": "Inter",
-                                      "fontSize": 11
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
                                     },
                                     {
                                       "type": "text",
@@ -3480,7 +3513,8 @@
                                       "fill": "#6C6C6C",
                                       "content": "(\\d+[.,]\\d{2}) captures the numeric amount into the first capture group.",
                                       "fontFamily": "Inter",
-                                      "fontSize": 11
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
                                     }
                                   ]
                                 }

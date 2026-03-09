@@ -53,9 +53,28 @@ const tokenDecorations = EditorView.decorations.compute(
   (state) => buildDecorations(state.field(tokenDecoField), state.doc.length)
 );
 
+const regexTokenDecorationClassMap: Record<string, string> = {
+  anchor: "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
+  group: "rounded-[2px] border border-[#77c790] bg-[#b9f0c8] px-[1px] font-semibold text-[#0f4c2a]",
+  quantifier:
+    "rounded-[2px] border border-[#7fb2ea] bg-[#bcdcff] px-[1px] font-semibold text-[#1b4b78]",
+  alternation:
+    "rounded-[2px] border border-[#e28d8d] bg-[#ffc7c7] px-[1px] font-semibold text-[#7d1d1d]",
+  escape:
+    "rounded-[2px] border border-[#ac8fe8] bg-[#dbcaff] px-[1px] font-semibold text-[#3f2a82]",
+  charclass:
+    "rounded-[2px] border border-[#8dbce8] bg-[#c8e5ff] px-[1px] font-semibold text-[#1b4f86]",
+  meta: "rounded-[2px] border border-[#97bde8] bg-[#cfe3ff] px-[1px] font-semibold text-[#1f4f80]",
+  literal:
+    "rounded-[2px] border border-[#bdc8d3] bg-[#e9eff6] px-[1px] font-semibold text-[#2a3e54]",
+};
+
 function getTokenDecoClass(type: string, active: boolean): string {
-  const base = `regex-token regex-token--${type}`;
-  return active ? `${base} regex-token--active` : base;
+  const base =
+    regexTokenDecorationClassMap[type] ?? regexTokenDecorationClassMap.literal!;
+  return active
+    ? `${base} outline outline-2 outline-[#125a96] outline-offset-[-1px]`
+    : base;
 }
 
 /* ─── Click-on-token via Compartment ─── */
@@ -276,17 +295,21 @@ export function UnifiedRegexEditor({
   }, []);
 
   return (
-    <div className="regex-input-wrap">
-      <span className="regex-input-wrap__slash">/</span>
-      <div className="regex-input-wrap__editor">
+    <div className="flex items-stretch overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]">
+      <span className="select-none px-1.5 pb-2 pt-2 text-[15px] text-[color:var(--c-text-dim)] font-[var(--font-mono)]">
+        /
+      </span>
+      <div className="relative min-w-0 flex-1">
         <div
-          className="unified-regex-cm"
+          className="w-full"
           onMouseLeave={handleMouseLeave}
           onMouseMove={handleMouseMove}
           ref={containerRef}
         />
       </div>
-      <span className="regex-input-wrap__flags">/</span>
+      <span className="select-none px-3 pb-2 pt-2 text-sm text-[color:var(--c-text-dim)] font-[var(--font-mono)]">
+        /
+      </span>
     </div>
   );
 }

@@ -25,6 +25,7 @@
     "refresh": "Refresh",
     "switchTo": "Switch",
     "currentSource": "Current source: {{source}}",
+    "unsavedDraftsInPr": "You have unsaved local changes in this PR",
     "switchDiscardConfirm": "You have unsaved changes that are not part of a PR commit yet. Switching repository, source, or commit will permanently discard them. Continue?",
     "commitWithoutMessage": "No commit message",
     "noCommits": "No commits found"

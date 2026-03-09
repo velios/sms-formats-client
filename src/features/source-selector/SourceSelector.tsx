@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PullRequestLabels } from "@/components/PullRequestLabels";
+import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
 import { buildBankWorkspacePath } from "@/domain/bank-route";
 import type { PullRequestLabel, RepoRef, SourceRef } from "@/domain/types";
@@ -13,6 +16,7 @@ import {
   useSwitchSource,
 } from "@/hooks/useGitHub";
 import { confirmSourceSwitch } from "@/lib/source-switch";
+import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
 type OpenMenu = "repo" | "source" | "commit" | null;
@@ -45,6 +49,27 @@ type SwitchSourceHandler = ReturnType<typeof useSwitchSource>;
 type SwitchRepositoryHandler = ReturnType<typeof useSwitchRepository>;
 type ConfirmDiscardHandler = () => boolean;
 
+const sourceNavDropdownClassName =
+  "absolute top-[calc(100%+6px)] left-0 z-[120] max-h-[min(420px,calc(100vh-120px))] overflow-y-auto rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] shadow-[var(--shadow-md)]";
+
+const sourceNavOptionClassName = (isActive: boolean) =>
+  cn(
+    "flex w-full items-center gap-2 bg-transparent px-3 py-2 text-left transition-colors",
+    isActive
+      ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
+      : "hover:bg-[color:var(--c-bg-hover)]"
+  );
+
+const sourceNavLabelClassName = (isHash = false) =>
+  cn(
+    "max-w-[360px] overflow-hidden bg-transparent p-0 text-left text-[color:var(--c-text)] text-ellipsis whitespace-nowrap hover:text-[color:var(--c-accent)]",
+    isHash &&
+      'font-[ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation_Mono","Courier_New",monospace] text-xs tracking-[0.04em]'
+  );
+
+const sourceNavExternalLinkClassName =
+  "ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
+
 function collectChangedBankPaths(paths: string[]): string[] {
   const banks = new Set<string>();
   for (const path of paths) {
@@ -58,6 +83,53 @@ function collectChangedBankPaths(paths: string[]): string[] {
   }
   return Array.from(banks).sort((a, b) =>
     a.localeCompare(b, undefined, { sensitivity: "base" })
+  );
+}
+
+function getSingleChangedBankPath(paths: string[]): string | null {
+  const bankPaths = collectChangedBankPaths(paths);
+  if (bankPaths.length !== 1) {
+    return null;
+  }
+  return bankPaths[0] ?? null;
+}
+
+function getPreferredChangedFilePath(
+  paths: string[],
+  bankPath: string
+): string | null {
+  const bankPaths = paths.filter((path) => path.startsWith(`${bankPath}/`));
+  return (
+    bankPaths.find(
+      (path) =>
+        path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
+    ) ??
+    bankPaths[0] ??
+    null
+  );
+}
+
+function navigateToPullRequestWorkspace(params: {
+  changedPaths: string[];
+  navigate: ReturnType<typeof useNavigate>;
+  prNumber: number;
+  repository: RepoRef;
+  sourceSha: string;
+}): void {
+  const { changedPaths, navigate, prNumber, repository, sourceSha } = params;
+  const bankPath = getSingleChangedBankPath(changedPaths);
+  if (!bankPath) {
+    navigate("/workspace");
+    return;
+  }
+
+  navigate(
+    buildBankWorkspacePath({
+      bankPath,
+      filePath: getPreferredChangedFilePath(changedPaths, bankPath),
+      repository,
+      source: { type: "pr", prNumber, sha: sourceSha },
+    })
   );
 }
 
@@ -110,6 +182,22 @@ function createDiscardDraftsGuard(
   return () => confirmSourceSwitch({ confirmMessage, draftStore });
 }
 
+const sourceSelectorItemClassName = "relative flex min-w-0 items-center gap-1";
+const sourceSelectorLabelClassName =
+  "max-w-[360px] cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent p-0 text-left text-[color:var(--c-text)] hover:text-[color:var(--c-accent)]";
+const sourceSelectorHashLabelClassName = "font-mono text-xs tracking-[0.04em]";
+const sourceSelectorExternalLinkClassName =
+  "ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
+const sourceSelectorDropdownClassName =
+  "absolute top-[calc(100%+6px)] left-0 z-[120] max-h-[min(420px,calc(100vh-120px))] overflow-y-auto rounded-[var(--radius-md)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] shadow-[var(--shadow-md)]";
+const sourceSelectorOptionClassName = (isActive: boolean) =>
+  cn(
+    "flex w-full items-center gap-2 border-0 bg-transparent px-3 py-2 text-left text-[13px] text-inherit",
+    isActive
+      ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
+      : "hover:bg-[color:var(--c-bg-hover)]"
+  );
+
 async function selectRepository(params: {
   closeMenu: () => void;
   confirmDiscardDrafts: ConfirmDiscardHandler;
@@ -152,6 +240,8 @@ async function selectMainSource(params: {
 async function selectPullRequest(params: {
   closeMenu: () => void;
   confirmDiscardDrafts: ConfirmDiscardHandler;
+  currentSource: SourceRef | null;
+  localChangedFiles: string[];
   navigate: ReturnType<typeof useNavigate>;
   pullRequest: OpenPullRequestItem;
   repository: RepoRef;
@@ -160,11 +250,31 @@ async function selectPullRequest(params: {
   const {
     closeMenu,
     confirmDiscardDrafts,
+    currentSource,
+    localChangedFiles,
     navigate,
     pullRequest,
     repository,
     switchSource,
   } = params;
+  const isCurrentPullRequest =
+    currentSource?.type === "pr" && currentSource.prNumber === pullRequest.number;
+  if (isCurrentPullRequest) {
+    const preferredChangedPaths =
+      localChangedFiles.length > 0
+        ? localChangedFiles
+        : useSourceStore.getState().sourceChangedFiles;
+    closeMenu();
+    navigateToPullRequestWorkspace({
+      changedPaths: preferredChangedPaths,
+      navigate,
+      prNumber: pullRequest.number,
+      repository,
+      sourceSha: currentSource.sha,
+    });
+    return;
+  }
+
   if (!confirmDiscardDrafts()) {
     return;
   }
@@ -175,30 +285,14 @@ async function selectPullRequest(params: {
     pullRequest.number,
     pullRequest.headSha
   );
-  const changedBankPaths = collectChangedBankPaths(
-    useSourceStore.getState().sourceChangedFiles
-  );
   closeMenu();
-
-  if (changedBankPaths.length === 1) {
-    const [bankPath] = changedBankPaths;
-    if (bankPath) {
-      navigate(
-        buildBankWorkspacePath({
-          bankPath,
-          repository,
-          source: {
-            type: "pr",
-            prNumber: pullRequest.number,
-            sha: pullRequest.headSha,
-          },
-        })
-      );
-      return;
-    }
-  }
-
-  navigate("/workspace");
+  navigateToPullRequestWorkspace({
+    changedPaths: useSourceStore.getState().sourceChangedFiles,
+    navigate,
+    prNumber: pullRequest.number,
+    repository,
+    sourceSha: pullRequest.headSha,
+  });
 }
 
 async function selectPullRequestCommit(params: {
@@ -256,24 +350,29 @@ function RepositoryDropdown(props: {
   isOpen: boolean;
   onSelect: (repoSlug: string) => void;
   options: RepoRef[];
-  t: (key: string) => string;
+  t: TFunction;
 }) {
   const { currentRepoSlug, isFetching, isOpen, onSelect, options, t } = props;
   if (!isOpen) {
     return null;
   }
+  const localDraftsTitle = t("source.unsavedDraftsInPr", {
+    defaultValue: "You have unsaved local changes in this PR",
+  });
 
   return (
-    <div className="source-nav__dropdown" style={{ minWidth: 320 }}>
+    <div className={sourceNavDropdownClassName} style={{ minWidth: 320 }}>
       {isFetching && (
-        <div className="source-nav__empty">{t("app.loading")}</div>
+        <div className="px-3 py-2 text-[13px] text-[color:var(--c-text-muted)]">
+          {t("app.loading")}
+        </div>
       )}
       {!isFetching &&
         options.map((repoOption) => {
           const repoSlug = `${repoOption.owner}/${repoOption.repo}`;
           return (
             <button
-              className={`source-nav__option ${repoSlug === currentRepoSlug ? "source-nav__option--active" : ""}`}
+              className={sourceNavOptionClassName(repoSlug === currentRepoSlug)}
               key={repoSlug}
               onClick={() => onSelect(repoSlug)}
               type="button"
@@ -288,6 +387,7 @@ function RepositoryDropdown(props: {
 
 function SourceDropdown(props: {
   currentSource: SourceRef | null;
+  hasActivePullRequestDrafts: boolean;
   isFetching: boolean;
   isOpen: boolean;
   onMainSelect: () => void;
@@ -295,10 +395,11 @@ function SourceDropdown(props: {
   onPullRequestSelect: (pr: OpenPullRequestItem) => void;
   pullRequests: OpenPullRequestItem[];
   sourceQuery: string;
-  t: (key: string) => string;
+  t: TFunction;
 }) {
   const {
     currentSource,
+    hasActivePullRequestDrafts,
     isFetching,
     isOpen,
     onMainSelect,
@@ -311,20 +412,25 @@ function SourceDropdown(props: {
   if (!isOpen) {
     return null;
   }
+  const localDraftsTitle = t("source.unsavedDraftsInPr", {
+    defaultValue: "You have unsaved local changes in this PR",
+  });
 
   return (
-    <div className="source-nav__dropdown" style={{ minWidth: 420 }}>
-      <div className="source-nav__search-wrap">
-        <input
+    <div className={sourceNavDropdownClassName} style={{ minWidth: 420 }}>
+      <div className="border-b border-[color:var(--c-border)] p-2">
+        <Input
           aria-label={t("source.searchPR")}
-          className="input"
           onChange={(event) => onSourceQueryChange(event.target.value)}
           placeholder={t("source.searchPR")}
           value={sourceQuery}
         />
       </div>
       <button
-        className={`source-nav__option ${currentSource?.type === "branch" && currentSource.name === config.defaultBranch ? "source-nav__option--active" : ""}`}
+        className={sourceNavOptionClassName(
+          currentSource?.type === "branch" &&
+            currentSource.name === config.defaultBranch
+        )}
         onClick={onMainSelect}
         type="button"
       >
@@ -332,25 +438,49 @@ function SourceDropdown(props: {
       </button>
 
       {isFetching && (
-        <div className="source-nav__empty">{t("app.loading")}</div>
+        <div className="px-3 py-2 text-[13px] text-[color:var(--c-text-muted)]">
+          {t("app.loading")}
+        </div>
       )}
 
       {!isFetching &&
-        pullRequests.map((pr) => (
-          <button
-            className={`source-nav__option ${currentSource?.type === "pr" && currentSource.prNumber === pr.number ? "source-nav__option--active" : ""}`}
-            key={pr.number}
-            onClick={() => onPullRequestSelect(pr)}
-            type="button"
-          >
-            <span className="text-muted text-sm">#{pr.number}</span>
-            <span className="truncate text-sm">{pr.title}</span>
-            <span className="badge badge--info">✓ {pr.approvedCount}</span>
-          </button>
-        ))}
+        pullRequests.map((pr) => {
+          const hasLocalDrafts =
+            hasActivePullRequestDrafts &&
+            currentSource?.type === "pr" &&
+            currentSource.prNumber === pr.number;
+          return (
+            <button
+              className={sourceNavOptionClassName(
+                currentSource?.type === "pr" &&
+                  currentSource.prNumber === pr.number
+              )}
+              key={pr.number}
+              onClick={() => onPullRequestSelect(pr)}
+              type="button"
+            >
+              <span className="text-xs text-[color:var(--c-text-muted)]">
+                #{pr.number}
+              </span>
+              <span className="truncate text-sm">{pr.title}</span>
+              {hasLocalDrafts && (
+                <StatusBadge
+                  aria-label={localDraftsTitle}
+                  title={localDraftsTitle}
+                  variant="modified"
+                >
+                  ●
+                </StatusBadge>
+              )}
+              <StatusBadge variant="info">✓ {pr.approvedCount}</StatusBadge>
+            </button>
+          );
+        })}
 
       {!isFetching && pullRequests.length === 0 && (
-        <div className="source-nav__empty">{t("bank.noResults")}</div>
+        <div className="px-3 py-2 text-[13px] text-[color:var(--c-text-muted)]">
+          {t("bank.noResults")}
+        </div>
       )}
     </div>
   );
@@ -362,7 +492,7 @@ function CommitDropdown(props: {
   isFetching: boolean;
   isOpen: boolean;
   onCommitSelect: (sha: string) => void;
-  t: (key: string) => string;
+  t: TFunction;
 }) {
   const { commits, currentSha, isFetching, isOpen, onCommitSelect, t } = props;
   if (!isOpen) {
@@ -370,9 +500,11 @@ function CommitDropdown(props: {
   }
 
   return (
-    <div className="source-nav__dropdown" style={{ minWidth: 420 }}>
+    <div className={sourceNavDropdownClassName} style={{ minWidth: 420 }}>
       {isFetching && (
-        <div className="source-nav__empty">{t("app.loading")}</div>
+        <div className="px-3 py-2 text-[13px] text-[color:var(--c-text-muted)]">
+          {t("app.loading")}
+        </div>
       )}
 
       {!isFetching &&
@@ -380,12 +512,12 @@ function CommitDropdown(props: {
           const isActive = commit.sha === currentSha;
           return (
             <button
-              className={`source-nav__option ${isActive ? "source-nav__option--active" : ""}`}
+              className={sourceNavOptionClassName(isActive)}
               key={commit.sha}
               onClick={() => onCommitSelect(commit.sha)}
               type="button"
             >
-              <span className="source-nav__commit-sha">
+              <span className='min-w-[44px] text-xs text-[color:var(--c-text-muted)] font-[ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation_Mono","Courier_New",monospace]'>
                 {getShortSha(commit.sha)}
               </span>
               <span className="truncate text-sm">
@@ -396,7 +528,9 @@ function CommitDropdown(props: {
         })}
 
       {!isFetching && commits.length === 0 && (
-        <div className="source-nav__empty">{t("source.noCommits")}</div>
+        <div className="px-3 py-2 text-[13px] text-[color:var(--c-text-muted)]">
+          {t("source.noCommits")}
+        </div>
       )}
     </div>
   );
@@ -412,6 +546,11 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const repository = useSourceStore((s) => s.repository);
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const draftStore = useDraftStore();
+  const localChangedFiles = useMemo(
+    () => draftStore.getChangedFiles().map((item) => item.filePath),
+    [draftStore, draftStore.drafts]
+  );
+  const hasActivePullRequestDrafts = localChangedFiles.length > 0;
   const switchSource = useSwitchSource();
   const switchRepository = useSwitchRepository();
   const isHome = location.pathname === "/";
@@ -473,11 +612,11 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
   );
 
   return (
-    <div className="source-nav" ref={ref}>
+    <div className="relative flex min-w-0 items-center gap-2" ref={ref}>
       {allowRepoSwitch && (
-        <div className="source-nav__item">
+        <div className="relative flex min-w-0 items-center gap-1">
           <button
-            className="source-nav__label"
+            className={sourceNavLabelClassName()}
             onClick={() =>
               setOpenMenu((current) => (current === "repo" ? null : "repo"))
             }
@@ -488,7 +627,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
           </button>
           <a
             aria-label={currentRepoSlug}
-            className="format-row-link source-nav__external"
+            className={sourceNavExternalLinkClassName}
             href={repositoryUrl}
             rel="noreferrer"
             target="_blank"
@@ -517,10 +656,10 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
 
       {!isHome && (
         <>
-          <span className="source-nav__separator">/</span>
-          <div className="source-nav__item">
+          <span className="text-[color:var(--c-text-dim)]">/</span>
+          <div className="relative flex min-w-0 items-center gap-1">
             <button
-              className="source-nav__label"
+              className={sourceNavLabelClassName()}
               onClick={() =>
                 setOpenMenu((current) =>
                   current === "source" ? null : "source"
@@ -533,7 +672,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
             </button>
             <a
               aria-label={sourceLabel}
-              className="format-row-link source-nav__external"
+              className={sourceNavExternalLinkClassName}
               href={sourceUrl}
               rel="noreferrer"
               target="_blank"
@@ -543,6 +682,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
             </a>
             <SourceDropdown
               currentSource={sourceRef}
+              hasActivePullRequestDrafts={hasActivePullRequestDrafts}
               isFetching={isPRsFetching}
               isOpen={openMenu === "source"}
               onMainSelect={() => {
@@ -557,6 +697,8 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                 void selectPullRequest({
                   closeMenu,
                   confirmDiscardDrafts,
+                  currentSource: sourceRef,
+                  localChangedFiles,
                   navigate,
                   pullRequest,
                   repository,
@@ -572,10 +714,10 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
 
           {sourceRef?.type === "pr" && (
             <>
-              <span className="source-nav__separator">/</span>
-              <div className="source-nav__item">
+              <span className="text-[color:var(--c-text-dim)]">/</span>
+              <div className="relative flex min-w-0 items-center gap-1">
                 <button
-                  className="source-nav__label source-nav__label--hash"
+                  className={sourceNavLabelClassName(true)}
                   onClick={() =>
                     setOpenMenu((current) =>
                       current === "commit" ? null : "commit"
@@ -587,7 +729,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                   {getShortSha(sourceRef.sha)}
                 </button>
                 <PullRequestLabels
-                  className="source-nav__pr-labels"
+                  className="ml-2 max-w-[min(280px,32vw)]"
                   labels={activePullRequest?.labels ?? []}
                   neutralLabels={buildPullRequestNeutralLabels(
                     activePullRequest

@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Textarea } from "@/components/ui/textarea";
 import { config } from "@/config";
 import { parseFormatFile, serializeFormat } from "@/domain/format";
 import { RegexLab } from "@/features/regex-lab/RegexLab";
 import { useFileContent } from "@/hooks/useGitHub";
+import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
 type EditorMode = "structured" | "raw";
@@ -39,6 +43,14 @@ function serializeStructuredDraft(
 ): string {
   return serializeFormat(regex, columns, examples);
 }
+
+const formatEditorModeTabClassName = (isActive: boolean) =>
+  cn(
+    "rounded-[5px] border px-3 py-1.5 text-[13px] transition-colors",
+    isActive
+      ? "border-[color:var(--c-accent)] bg-[color:var(--c-accent-soft)] text-[color:var(--c-accent)]"
+      : "border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-text)]"
+  );
 
 export function FormatEditor({
   filePath,
@@ -260,7 +272,7 @@ export function FormatEditor({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-sm">
+      <div className="flex items-center gap-2">
         <span className="spinner" />
         <span>{t("app.loading")}</span>
       </div>
@@ -268,74 +280,82 @@ export function FormatEditor({
   }
 
   return (
-    <div className="format-editor">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
       {/* Compact header: mode tabs + file name + actions */}
-      <div className="format-editor__toolbar">
-        <div className="mode-tabs mode-tabs--inline">
+      <div className="flex min-h-[52px] shrink-0 flex-wrap items-center gap-2">
+        <div className="shrink-0 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-1">
           <button
-            className={`mode-tab ${mode === "structured" ? "mode-tab--active" : ""}`}
+            className={formatEditorModeTabClassName(mode === "structured")}
             onClick={() => setMode("structured")}
+            type="button"
           >
             {t("editor.structured")}
           </button>
           <button
-            className={`mode-tab ${mode === "raw" ? "mode-tab--active" : ""}`}
+            className={formatEditorModeTabClassName(mode === "raw")}
             onClick={() => setMode("raw")}
+            type="button"
           >
             {t("editor.raw")}
           </button>
         </div>
-        <div className="format-editor__file-info">
+        <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
           <span className="font-medium text-mono">{fileName}</span>
-          <button
-            className="btn btn--ghost btn--sm"
+          <Button
             disabled={!canRenameFile}
             onClick={handleRename}
+            size="sm"
+            type="button"
+            variant="ghost"
           >
             {t("editor.renameFormat")}
-          </button>
-          <a
+          </Button>
+          <Button
+            asChild
             aria-label={t("bank.openFormatInRepo")}
-            className="btn btn--ghost btn--sm"
-            href={formatRepoUrl}
-            onClick={(e) => e.stopPropagation()}
-            rel="noreferrer"
-            target="_blank"
+            size="sm"
             title={t("bank.openFormatInRepo")}
+            variant="ghost"
           >
-            ↗
-          </a>
+            <a
+              href={formatRepoUrl}
+              onClick={(e) => e.stopPropagation()}
+              rel="noreferrer"
+              target="_blank"
+            >
+              ↗
+            </a>
+          </Button>
           {isModified && (
-            <span className="badge badge--modified">
-              {t("editor.modified")}
-            </span>
+            <StatusBadge variant="modified">{t("editor.modified")}</StatusBadge>
           )}
           {isDeleted && (
-            <span className="badge badge--modified">{t("editor.deleted")}</span>
+            <StatusBadge variant="modified">{t("editor.deleted")}</StatusBadge>
           )}
         </div>
-        <div className="format-editor__history">
-          <button
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
             aria-label={t("editor.undo")}
-            className="btn btn--ghost btn--sm"
             disabled={!canUndo}
             onClick={() => draftStore.undo(filePath)}
+            size="sm"
             type="button"
+            variant="ghost"
           >
             ↶ {t("editor.undo")}
-          </button>
-          <button
+          </Button>
+          <Button
             aria-label={t("editor.redo")}
-            className="btn btn--ghost btn--sm"
             disabled={!canRedo}
             onClick={() => draftStore.redo(filePath)}
+            size="sm"
             type="button"
+            variant="ghost"
           >
             ↷ {t("editor.redo")}
-          </button>
-          <button
+          </Button>
+          <Button
             aria-label={t("editor.deleteFormat")}
-            className="btn btn--ghost btn--sm"
             disabled={!canDeleteFile}
             onClick={() => {
               if (
@@ -346,30 +366,38 @@ export function FormatEditor({
               }
               draftStore.markDeleted(filePath);
             }}
+            size="sm"
             type="button"
+            variant="ghost"
           >
             ✕ {t("editor.deleteFormat")}
-          </button>
-          <button
+          </Button>
+          <Button
             aria-label={t("editor.resetFileToSource")}
-            className="btn btn--ghost btn--sm"
             disabled={!canResetFile}
             onClick={() => draftStore.resetFileToRemote(filePath)}
+            size="sm"
             type="button"
+            variant="ghost"
           >
             ⟲ {t("editor.resetFileToSource")}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Parse errors */}
       {renameError && (
-        <div className="issue-item issue-item--warning">{renameError}</div>
+        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-xs text-[color:var(--c-warning)]">
+          {renameError}
+        </div>
       )}
       {parseErrors.length > 0 && (
-        <div className="issue-list">
+        <div className="flex flex-col gap-1">
           {parseErrors.map((err, i) => (
-            <div className="issue-item issue-item--warning" key={i}>
+            <div
+              className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-xs text-[color:var(--c-warning)]"
+              key={i}
+            >
               {err}
             </div>
           ))}
@@ -396,11 +424,13 @@ export function FormatEditor({
       )}
 
       {mode === "raw" && (
-        <div className="panel">
-          <div className="panel__header">{t("editor.raw")}</div>
-          <div className="panel__body">
-            <textarea
-              className="textarea"
+        <div className="overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
+          <div className="border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.5px] text-[color:var(--c-text-muted)]">
+            {t("editor.raw")}
+          </div>
+          <div className="p-4">
+            <Textarea
+              className="min-h-[20rem] font-mono"
               onChange={(e) => handleRawChange(e.target.value)}
               readOnly={isDeleted}
               rows={20}

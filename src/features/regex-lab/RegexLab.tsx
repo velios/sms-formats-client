@@ -8,6 +8,9 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type {
   RegexExplanation,
   RegexMatchResult,
@@ -23,6 +26,7 @@ import {
 } from "@/domain/format";
 import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { QuickReference } from "@/features/quick-reference/QuickReference";
+import { cn } from "@/lib/utils";
 import { UnifiedRegexEditor } from "./UnifiedRegexEditor";
 
 interface Props {
@@ -47,6 +51,60 @@ interface PatternSelection {
 }
 
 type RightPaneTab = "explanation" | "quickref";
+
+const regexLabPanelClassName =
+  "overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
+const regexLabPanelHeaderClassName =
+  "flex items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.5px] text-[color:var(--c-text-muted)]";
+const regexLabHeaderActionsClassName = "flex flex-wrap items-center gap-2";
+const regexLabPanelBodyClassName = "p-4";
+const regexLabTabListClassName =
+  "flex gap-0 border-b border-[color:var(--c-border)]";
+const regexLabTabClassName = (isActive: boolean) =>
+  cn(
+    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid bg-transparent px-4 py-2 text-[13px] transition-all duration-150",
+    isActive
+      ? "border-b-[color:var(--c-accent)] text-[color:var(--c-accent)]"
+      : "border-b-transparent text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-text)]"
+  );
+const regexTokenToneClassMap: Record<string, string> = {
+  anchor: "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
+  group: "rounded-[2px] border border-[#77c790] bg-[#b9f0c8] px-[1px] font-semibold text-[#0f4c2a]",
+  quantifier:
+    "rounded-[2px] border border-[#7fb2ea] bg-[#bcdcff] px-[1px] font-semibold text-[#1b4b78]",
+  alternation:
+    "rounded-[2px] border border-[#e28d8d] bg-[#ffc7c7] px-[1px] font-semibold text-[#7d1d1d]",
+  escape:
+    "rounded-[2px] border border-[#ac8fe8] bg-[#dbcaff] px-[1px] font-semibold text-[#3f2a82]",
+  charclass:
+    "rounded-[2px] border border-[#8dbce8] bg-[#c8e5ff] px-[1px] font-semibold text-[#1b4f86]",
+  meta: "rounded-[2px] border border-[#97bde8] bg-[#cfe3ff] px-[1px] font-semibold text-[#1f4f80]",
+  literal:
+    "rounded-[2px] border border-[#bdc8d3] bg-[#e9eff6] px-[1px] font-semibold text-[#2a3e54]",
+};
+const patternBlockToneClassMap: Record<string, string> = {
+  anchor: "border-[#ecd39b] bg-[#fff4d6] text-[#5f3b00]",
+  group: "border-[#bde0c7] bg-[#e7faec] text-[#0f4c2a]",
+  quantifier: "border-[#b8d5f3] bg-[#e6f3ff] text-[#1b4b78]",
+  alternation: "border-[#efc0c0] bg-[#ffeaea] text-[#7d1d1d]",
+  escape: "border-[#cdbcf1] bg-[#f1eaff] text-[#3f2a82]",
+  charclass: "border-[#c1daf1] bg-[#e9f4ff] text-[#1b4f86]",
+  meta: "border-[#c6daf1] bg-[#ebf4ff] text-[#1f4f80]",
+  literal: "border-[#d2dbe5] bg-[#f3f6fa] text-[#2a3e54]",
+};
+
+const matchHighlightBaseClass =
+  "rounded-[2px] bg-[color:var(--c-group-0)] shadow-[inset_0_-2px_0_var(--c-group-border-0)] transition-colors";
+const matchHighlightHoverClass = "bg-[color:var(--c-accent-soft)]";
+const matchHighlightRangeActiveClass =
+  "outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]";
+const matchHighlightGroupClassMap = [
+  "bg-[color:var(--c-group-1)] shadow-[inset_0_-2px_0_var(--c-group-border-1)]",
+  "bg-[color:var(--c-group-2)] shadow-[inset_0_-2px_0_var(--c-group-border-2)]",
+  "bg-[color:var(--c-group-3)] shadow-[inset_0_-2px_0_var(--c-group-border-3)]",
+  "bg-[color:var(--c-group-4)] shadow-[inset_0_-2px_0_var(--c-group-border-4)]",
+  "bg-[color:var(--c-group-5)] shadow-[inset_0_-2px_0_var(--c-group-border-5)]",
+];
 
 export function RegexLab({
   regex,
@@ -252,22 +310,23 @@ export function RegexLab({
   );
 
   return (
-    <div className="regex-lab">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       {/* REGULAR EXPRESSION — unified regex editor */}
-      <div className="panel">
-        <div className="panel__header">
+      <div className={regexLabPanelClassName}>
+        <div className={regexLabPanelHeaderClassName}>
           <span>{t("editor.regex")}</span>
-          <div className="regex-lab__header-actions">
-            <button
-              className="btn btn--ghost btn--sm"
+          <div className={regexLabHeaderActionsClassName}>
+            <Button
               onClick={onOpenSmsByTemplate}
+              size="sm"
               type="button"
+              variant="ghost"
             >
               {t("quickCheck.openSmsByTemplate")}
-            </button>
+            </Button>
           </div>
         </div>
-        <div className="panel__body">
+        <div className="p-4">
           <UnifiedRegexEditor
             activeTokenIndex={activePatternTokenIndex}
             canHighlight={explanation.canHighlightPattern}
@@ -282,8 +341,7 @@ export function RegexLab({
           />
           {matchResult.error && (
             <div
-              className="issue-item issue-item--error"
-              style={{ marginTop: 8 }}
+              className="mt-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]"
             >
               {matchResult.error}
             </div>
@@ -291,44 +349,47 @@ export function RegexLab({
         </div>
       </div>
 
-      <div className="regex-workspace">
-        <div className="panel regex-workspace__test">
-          <div className="panel__header">
-            <div className="flex items-center gap-sm">
+      <div className="grid min-h-0 flex-1 gap-4 [grid-template-rows:auto_minmax(0,1fr)]">
+        <div className={cn(regexLabPanelClassName, "flex flex-col")}>
+          <div className={regexLabPanelHeaderClassName}>
+            <div className="flex items-center gap-2">
               {t("editor.testString")}
-              <button
+              <Button
                 aria-label={t("editor.addExample")}
-                className="btn btn--ghost btn--sm"
                 disabled={readOnly}
                 onClick={onAddExample}
+                size="sm"
                 type="button"
+                variant="ghost"
               >
                 +
-              </button>
+              </Button>
             </div>
-            <div className="regex-lab__header-actions">
-              <button
-                className="btn btn--ghost btn--sm"
+            <div className={regexLabHeaderActionsClassName}>
+              <Button
                 onClick={onOpenTemplateBySms}
+                size="sm"
                 type="button"
+                variant="ghost"
               >
                 {t("quickCheck.openTemplateBySms")}
-              </button>
-              <a
-                className="btn btn--ghost btn--sm"
-                href={regex101Url}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                {t("editor.openInRegex101")}
-              </a>
+              </Button>
+              <Button asChild size="sm" variant="ghost">
+                <a
+                  href={regex101Url}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {t("editor.openInRegex101")}
+                </a>
+              </Button>
             </div>
           </div>
-          <div className="tabs regex-workspace__example-tabs">
+          <div className="flex flex-wrap border-b border-[color:var(--c-border)]">
             {examples.map((_, i) => (
               <div className="flex items-center" key={i}>
                 <button
-                  className={`tab ${i === activeExampleIndex ? "tab--active" : ""}`}
+                  className={regexLabTabClassName(i === activeExampleIndex)}
                   onClick={() => onActiveExampleChange(i)}
                   ref={(el) => {
                     if (el) {
@@ -342,42 +403,39 @@ export function RegexLab({
                   #{i + 1}
                   {regex && (
                     <span
-                      style={{
-                        marginLeft: 4,
-                        color: exampleMatchStates[i]?.matched
-                          ? "var(--c-success)"
-                          : "var(--c-error)",
-                      }}
+                      className={cn(
+                        "ml-1",
+                        exampleMatchStates[i]?.matched
+                          ? "text-[color:var(--c-success)]"
+                          : "text-[color:var(--c-error)]"
+                      )}
                     >
                       {exampleMatchStates[i]?.matched ? "✓" : "✗"}
                     </span>
                   )}
                 </button>
                 {examples.length > 1 && (
-                  <button
+                  <Button
                     aria-label={t("editor.removeExample")}
-                    className="btn btn--ghost btn--sm"
+                    className="px-1 py-0.5 text-[11px] text-[color:var(--c-text-dim)]"
                     disabled={readOnly}
                     onClick={(e) => {
                       e.stopPropagation();
                       onRemoveExample(i);
                     }}
-                    style={{
-                      padding: "2px 4px",
-                      fontSize: 11,
-                      color: "var(--c-text-dim)",
-                    }}
+                    size="sm"
                     title={t("editor.removeExample")}
                     type="button"
+                    variant="ghost"
                   >
                     ×
-                  </button>
+                  </Button>
                 )}
               </div>
             ))}
           </div>
 
-          <div className="panel__body">
+          <div className={regexLabPanelBodyClassName}>
             <MatchOverlayTextarea
               activeMatchRange={activeMatchRange}
               hoveredGroup={hoveredGroup}
@@ -391,9 +449,9 @@ export function RegexLab({
           </div>
         </div>
 
-        <div className="regex-workspace__details">
-          <div className="panel regex-workspace__details-panel">
-            <div className="panel__header">
+        <div className="grid min-h-0 gap-4 [grid-template-columns:minmax(320px,1fr)_minmax(320px,1fr)]">
+          <div className={cn(regexLabPanelClassName, "flex min-h-0 flex-col")}>
+            <div className={regexLabPanelHeaderClassName}>
               {t("editor.matchInfo").toUpperCase()}
             </div>
             <MatchInfoPanel
@@ -411,36 +469,45 @@ export function RegexLab({
             />
           </div>
 
-          <div className="panel regex-workspace__details-panel">
-            <div className="panel__header regex-workspace__tab-header">
-              <div className="tabs regex-workspace__tab-switcher">
+          <div className={cn(regexLabPanelClassName, "flex min-h-0 flex-col")}>
+            <div
+              className={cn(
+                regexLabPanelHeaderClassName,
+                "justify-start px-0 py-0"
+              )}
+            >
+              <div className={cn(regexLabTabListClassName, "w-full border-b-0")}>
                 <button
-                  className={`tab ${rightPaneTab === "explanation" ? "tab--active" : ""}`}
+                  className={regexLabTabClassName(
+                    rightPaneTab === "explanation"
+                  )}
                   onClick={() => setRightPaneTab("explanation")}
+                  type="button"
                 >
                   {t("editor.explanation").toUpperCase()}
                 </button>
                 <button
-                  className={`tab ${rightPaneTab === "quickref" ? "tab--active" : ""}`}
+                  className={regexLabTabClassName(rightPaneTab === "quickref")}
                   onClick={() => setRightPaneTab("quickref")}
+                  type="button"
                 >
                   QUICK REF
                 </button>
               </div>
             </div>
-            {rightPaneTab === "explanation" ? (
-              <ExplanationPanel
-                activePatternTokenIndex={activePatternTokenIndex}
-                explanation={explanation}
-                hasError={!!matchResult.error}
-                onPatternTokenActivate={handlePatternTokenActivate}
-                onPatternTokenHover={setHoveredPatternTokenIndex}
-              />
-            ) : (
-              <div className="regex-workspace__quickref">
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {rightPaneTab === "explanation" ? (
+                <ExplanationPanel
+                  activePatternTokenIndex={activePatternTokenIndex}
+                  explanation={explanation}
+                  hasError={!!matchResult.error}
+                  onPatternTokenActivate={handlePatternTokenActivate}
+                  onPatternTokenHover={setHoveredPatternTokenIndex}
+                />
+              ) : (
                 <QuickReference />
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -496,16 +563,16 @@ function MatchOverlayTextarea({
   }, []);
 
   return (
-    <div className="overlay-textarea">
+    <div className="relative overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]">
       <div
         aria-hidden="true"
-        className="overlay-textarea__highlights"
+        className="pointer-events-none absolute inset-0 overflow-auto px-3 py-2 text-[13px] leading-[1.6] text-[color:var(--c-text)] [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] min-h-[60px]"
         ref={highlightsRef}
       >
         {renderHighlightedText(segments)}
       </div>
       <textarea
-        className="overlay-textarea__input"
+        className="relative z-[1] min-h-[60px] w-full resize-y border-none bg-transparent px-3 py-2 text-[13px] leading-[1.6] text-transparent caret-[color:var(--c-text)] outline-none [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] selection:bg-[color:var(--c-accent-soft)]"
         onChange={(e) => onTextChange(e.target.value)}
         onScroll={(e) =>
           handleScroll(e.currentTarget.scrollTop, e.currentTarget.scrollLeft)
@@ -543,8 +610,8 @@ function resolveActivePatternTokenIndex(
 
 function buildMatchClass(hoveredGroup: number | null): string {
   return hoveredGroup === 0
-    ? "match-highlight match-highlight--hovered"
-    : "match-highlight";
+    ? `${matchHighlightBaseClass} ${matchHighlightHoverClass}`
+    : matchHighlightBaseClass;
 }
 
 function isSegmentInActiveRange(
@@ -643,7 +710,7 @@ function buildMatchSegments(
       segments.push({
         text: text.slice(cursor, groupStart),
         className:
-          `${buildMatchClass(hoveredGroup)} ${gapActive ? "match-highlight--range-active" : ""}`.trim(),
+          `${buildMatchClass(hoveredGroup)} ${gapActive ? matchHighlightRangeActiveClass : ""}`.trim(),
       });
     }
 
@@ -655,7 +722,7 @@ function buildMatchSegments(
     segments.push({
       text: text.slice(groupStart, groupEnd),
       className:
-        `${getGroupClass(group.index)} ${hoveredGroup === group.index ? "match-highlight--group-hovered" : ""} ${groupActive ? "match-highlight--range-active" : ""}`.trim(),
+        `${getGroupClass(group.index)} ${hoveredGroup === group.index ? "brightness-150" : ""} ${groupActive ? matchHighlightRangeActiveClass : ""}`.trim(),
       title: `Group ${group.index}`,
     });
     cursor = groupEnd;
@@ -670,7 +737,7 @@ function buildMatchSegments(
     segments.push({
       text: text.slice(cursor, boundedFullMatchEnd),
       className:
-        `${buildMatchClass(hoveredGroup)} ${tailActive ? "match-highlight--range-active" : ""}`.trim(),
+        `${buildMatchClass(hoveredGroup)} ${tailActive ? matchHighlightRangeActiveClass : ""}`.trim(),
     });
   }
 
@@ -701,8 +768,7 @@ function getGroupColor(groupIndex: number): string {
 }
 
 function getGroupClass(groupIndex: number): string {
-  const idx = ((groupIndex - 1) % 5) + 1;
-  return `match-highlight--group-${idx}`;
+  return matchHighlightGroupClassMap[(groupIndex - 1) % 5]!;
 }
 
 function MatchInfoPanel({
@@ -736,66 +802,55 @@ function MatchInfoPanel({
   const { t } = useTranslation();
 
   return (
-    <div className="panel__body">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
       {result.error ? (
-        <div className="issue-item issue-item--error">
+        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]">
           {t("editor.invalidRegex")}
         </div>
       ) : (
-        <div className="flex-col gap-sm">
+        <div className="flex flex-col gap-2">
           {result.matched ? (
             <div
-              className={`group-row flex items-center gap-sm ${hoveredGroup === 0 ? "group-row--hovered" : ""}`}
+              className={cn(
+                "flex items-center gap-2 rounded-[var(--radius-sm)] border border-transparent px-2 py-1",
+                hoveredGroup === 0 && "bg-[color:var(--c-accent-soft)]"
+              )}
               onMouseEnter={() => onGroupHover(0)}
               onMouseLeave={() => onGroupHover(null)}
             >
               <span
-                className="group-color-dot"
+                className="inline-block h-3 w-3 shrink-0 rounded-full"
                 style={{ background: "var(--c-group-border-0)" }}
               />
-              <span className="text-muted text-sm">
+              <span className="text-sm text-[color:var(--c-text-muted)]">
                 {t("editor.fullMatch")}:
               </span>
-              <span
-                className="text-mono text-sm"
-                style={{
-                  background: "var(--c-bg-input)",
-                  padding: "2px 6px",
-                  borderRadius: 3,
-                }}
-              >
+              <span className="rounded-[3px] bg-[color:var(--c-bg-input)] px-1.5 py-0.5 font-mono text-sm">
                 {result.fullMatch}
               </span>
             </div>
           ) : (
-            <div className="text-muted text-sm">{t("editor.noMatch")}</div>
+            <div className="text-sm text-[color:var(--c-text-muted)]">
+              {t("editor.noMatch")}
+            </div>
           )}
           {captureGroups.length > 0 && (
             <>
               {hasMissingColumnMappings && (
-                <div className="issue-item issue-item--error">
+                <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]">
                   {t("columns.missingMappings")}
                 </div>
               )}
-              <div
-                className="font-medium text-muted text-sm"
-                style={{ marginTop: 4 }}
-              >
+              <div className="mt-1 text-sm font-medium text-[color:var(--c-text-muted)]">
                 {t("editor.groups")}:
               </div>
-              <table
-                style={{
-                  width: "100%",
-                  fontSize: 12,
-                  borderCollapse: "collapse",
-                }}
-              >
+              <table className="w-full border-collapse text-xs">
                 <thead>
-                  <tr style={{ textAlign: "left", color: "var(--c-text-dim)" }}>
-                    <th style={{ padding: "3px 6px" }} />
-                    <th style={{ padding: "3px 6px" }}>#</th>
-                    <th style={{ padding: "3px 6px" }}>Value</th>
-                    <th style={{ padding: "3px 6px" }}>
+                  <tr className="text-left text-[color:var(--c-text-dim)]">
+                    <th className="px-1.5 py-[3px]" />
+                    <th className="px-1.5 py-[3px]">#</th>
+                    <th className="px-1.5 py-[3px]">Value</th>
+                    <th className="px-1.5 py-[3px]">
                       {t("editor.columns")}
                     </th>
                   </tr>
@@ -813,53 +868,57 @@ function MatchInfoPanel({
 
                     return (
                       <tr
-                        className={`group-row ${hoveredGroup === g.index ? "group-row--hovered" : ""} ${activeCaptureGroup === g.index ? "group-row--active" : ""}`}
+                        className={cn(
+                          "rounded-[var(--radius-sm)]",
+                          hoveredGroup === g.index &&
+                            "bg-[color:var(--c-accent-soft)]",
+                          activeCaptureGroup === g.index &&
+                            "outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]"
+                        )}
                         key={g.index}
                         onMouseEnter={() => onGroupHover(g.index)}
                         onMouseLeave={() => onGroupHover(null)}
                       >
-                        <td style={{ padding: "3px 6px" }}>
+                        <td className="px-1.5 py-[3px]">
                           <span
-                            className="group-color-dot"
+                            className="inline-block h-3 w-3 rounded-full"
                             style={{ background: getGroupColor(g.index) }}
                           />
                         </td>
-                        <td
-                          className="text-muted"
-                          style={{ padding: "3px 6px" }}
-                        >
+                        <td className="px-1.5 py-[3px] text-[color:var(--c-text-muted)]">
                           {g.index}
                         </td>
-                        <td
-                          className="text-mono"
-                          style={{ padding: "3px 6px" }}
-                        >
+                        <td className="px-1.5 py-[3px] font-mono">
                           {g.match?.value ?? "—"}
                         </td>
-                        <td style={{ padding: "3px 6px" }}>
-                          <div className="match-columns-cell">
-                            <button
-                              className={`btn btn--sm ${currentValue ? "" : "btn--danger"}`.trim()}
+                        <td className="px-1.5 py-[3px]">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              className="max-w-full"
                               disabled={readOnly}
                               onClick={() => onOpenColumnPicker(g.index)}
+                              size="sm"
+                              type="button"
+                              variant={currentValue ? "default" : "destructive"}
                             >
                               {currentValue || t("columns.select")}
-                            </button>
+                            </Button>
                             {currentValue && (
-                              <button
+                              <Button
                                 aria-label={t("app.close")}
-                                className="btn btn--ghost btn--sm"
                                 disabled={readOnly}
                                 onClick={() => onClearColumn(g.index)}
+                                size="sm"
                                 title={t("app.close")}
                                 type="button"
+                                variant="ghost"
                               >
                                 ×
-                              </button>
+                              </Button>
                             )}
                             {columnDef?.parameterized && (
-                              <input
-                                className="input input--mono match-columns-param-input"
+                              <Input
+                                className="h-8 w-[150px] font-mono text-xs"
                                 disabled={readOnly}
                                 onChange={(e) =>
                                   onColumnParamChange(g.index, e.target.value)
@@ -913,21 +972,26 @@ function ExplanationPanel({
   }, [activePatternTokenIndex]);
 
   return (
-    <div className="panel__body">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
       {hasError ? (
-        <div className="issue-item issue-item--error">
+        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]">
           {t("editor.invalidRegex")}
         </div>
       ) : explanation.patternTokens.length === 0 ? (
-        <div className="text-muted text-sm">—</div>
+        <div className="text-sm text-[color:var(--c-text-muted)]">—</div>
       ) : (
-        <div className="flex-col gap-xs">
-          <div className="font-medium text-muted text-sm">
+        <div className="flex flex-col gap-1">
+          <div className="text-sm font-medium text-[color:var(--c-text-muted)]">
             {t("editor.patternParts")}
           </div>
           {explanation.patternTokens.map((token, index) => (
             <div
-              className={`pattern-block ${getPatternBlockToneClass(token.type)} ${index === activePatternTokenIndex ? "pattern-block--active" : ""}`.trim()}
+              className={cn(
+                "flex cursor-pointer items-start gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors",
+                getPatternBlockToneClass(token.type),
+                index === activePatternTokenIndex &&
+                  "outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]"
+              )}
               key={`${token.start}-${token.end}-${index}`}
               onBlur={() => onPatternTokenHover(null)}
               onClick={() => onPatternTokenActivate(index)}
@@ -951,12 +1015,10 @@ function ExplanationPanel({
               role="button"
               tabIndex={0}
             >
-              <code
-                className={`text-mono ${getRegexTokenClass(token.type)}`.trim()}
-              >
+              <code className={cn("font-mono", getRegexTokenClass(token.type))}>
                 {token.raw}
               </code>
-              <span className="pattern-block__desc text-sm">
+              <span className="min-w-0 flex-1 text-sm">
                 {token.description}
               </span>
             </div>
@@ -1016,26 +1078,30 @@ function ColumnPickerModal({
 
   return (
     <ModalDialog
-      className="regex-column-modal"
+      className="flex max-h-[calc(100vh-40px)] flex-col sm:max-w-[760px]"
       onClose={onClose}
       title={t("columns.selectForGroup", { index: groupIndex })}
       titleId={titleId}
     >
-      <input
+      <Input
         autoFocus
-        className="input"
         onChange={(e) => setSearch(e.target.value)}
         placeholder={t("columns.search")}
         value={search}
       />
-      <div className="regex-column-modal__list">
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--c-border)]">
         {filteredColumns.map((column) => {
           const isUsedByOtherGroup = usedBaseNames.has(column.name);
           const isCurrent = currentBaseName === column.name;
           const isDisabled = isUsedByOtherGroup && !isCurrent;
           return (
             <button
-              className={`regex-column-modal__item ${isCurrent ? "regex-column-modal__item--selected" : ""}`.trim()}
+              className={cn(
+                "flex w-full items-center gap-2 border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] px-3 py-2 text-left last:border-b-0",
+                isCurrent && "bg-[color:var(--c-accent-soft)]",
+                !isDisabled && "hover:bg-[color:var(--c-bg-hover)]",
+                isDisabled && "cursor-not-allowed opacity-55"
+              )}
               disabled={isDisabled}
               key={column.name}
               onClick={() =>
@@ -1047,60 +1113,40 @@ function ColumnPickerModal({
               }
               type="button"
             >
-              <span className="font-medium text-mono">{column.name}</span>
-              <span className="text-muted text-sm">
+              <span className="font-mono font-medium">{column.name}</span>
+              <span className="text-sm text-[color:var(--c-text-muted)]">
                 {column.description[lang] ?? column.description.en}
               </span>
               {column.parameterized && (
-                <span className="badge badge--info text-sm">
+                <StatusBadge className="text-xs" variant="info">
                   {t("columns.param")}
-                </span>
+                </StatusBadge>
               )}
               {isDisabled && (
-                <span className="badge badge--warning text-sm">
+                <StatusBadge className="text-xs" variant="warning">
                   {t("columns.alreadyUsed")}
-                </span>
+                </StatusBadge>
               )}
             </button>
           );
         })}
         {filteredColumns.length === 0 && (
-          <div className="p-md text-muted text-sm">—</div>
+          <div className="p-4 text-sm text-[color:var(--c-text-muted)]">—</div>
         )}
       </div>
-      <div className="modal__actions">
-        <button className="btn" onClick={onClose}>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button onClick={onClose} type="button">
           {t("app.cancel")}
-        </button>
+        </Button>
       </div>
     </ModalDialog>
   );
 }
 
 function getRegexTokenClass(type: string): string {
-  const map: Record<string, string> = {
-    anchor: "regex-token regex-token--anchor",
-    group: "regex-token regex-token--group",
-    quantifier: "regex-token regex-token--quantifier",
-    alternation: "regex-token regex-token--alternation",
-    escape: "regex-token regex-token--escape",
-    charclass: "regex-token regex-token--charclass",
-    meta: "regex-token regex-token--meta",
-    literal: "regex-token regex-token--literal",
-  };
-  return map[type] ?? "regex-token regex-token--literal";
+  return regexTokenToneClassMap[type] ?? regexTokenToneClassMap.literal!;
 }
 
 function getPatternBlockToneClass(type: string): string {
-  const map: Record<string, string> = {
-    anchor: "pattern-block--tone-anchor",
-    group: "pattern-block--tone-group",
-    quantifier: "pattern-block--tone-quantifier",
-    alternation: "pattern-block--tone-alternation",
-    escape: "pattern-block--tone-escape",
-    charclass: "pattern-block--tone-charclass",
-    meta: "pattern-block--tone-meta",
-    literal: "pattern-block--tone-literal",
-  };
-  return map[type] ?? "pattern-block--tone-literal";
+  return patternBlockToneClassMap[type] ?? patternBlockToneClassMap.literal!;
 }

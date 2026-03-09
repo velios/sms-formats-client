@@ -69,9 +69,12 @@ export function CreateBankModal({ onClose }: Props) {
       title={t("bank.createBank")}
       titleId={dialogTitleId}
     >
-      <div className="flex-col gap-md">
-        <div className="flex-col gap-xs">
-          <label className="text-muted text-sm" htmlFor={bankNameInputId}>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label
+            className="text-xs text-[color:var(--c-text-muted)]"
+            htmlFor={bankNameInputId}
+          >
             {t("bank.bankName")} *
           </label>
           <Input
@@ -83,8 +86,11 @@ export function CreateBankModal({ onClose }: Props) {
           />
         </div>
 
-        <div className="flex-col gap-xs">
-          <label className="text-muted text-sm" htmlFor={bankIdInputId}>
+        <div className="flex flex-col gap-1">
+          <label
+            className="text-xs text-[color:var(--c-text-muted)]"
+            htmlFor={bankIdInputId}
+          >
             {t("bank.bankId")}
           </label>
           <Input
@@ -96,7 +102,7 @@ export function CreateBankModal({ onClose }: Props) {
         </div>
       </div>
 
-      <div className="modal__actions">
+      <div className="mt-6 flex justify-end gap-2">
         <Button onClick={onClose} type="button">
           {t("app.cancel")}
         </Button>

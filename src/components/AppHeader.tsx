@@ -126,23 +126,23 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="app-header">
-        <div
-          className="app-header__title"
+      <header className="flex h-[52px] shrink-0 items-center gap-4 border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] px-6 py-2">
+        <button
+          className="cursor-pointer whitespace-nowrap text-base font-semibold"
           onClick={() => navigate("/")}
-          style={{ cursor: "pointer" }}
+          type="button"
         >
           Zenmoney SMS Formats
-        </div>
+        </button>
 
         {isDeveloperMode && (
           <>
-            <span className="app-header__separator">/</span>
+            <span className="mr-0.5 text-[color:var(--c-text-dim)]">/</span>
             <SourceSelector allowRepoSwitch />
           </>
         )}
 
-        <div className="app-header__spacer" />
+        <div className="flex-1" />
 
         <StatusBadge
           title="Статус прав в репозитории"
@@ -172,13 +172,16 @@ export function AppHeader() {
 
       {githubTokenModalOpen && (
         <ModalDialog
+          className="sm:max-w-[520px]"
           onClose={() => setGithubTokenModalOpen(false)}
-          style={{ minWidth: 520 }}
           title={t("githubAuth.title")}
           titleId={githubTokenDialogTitleId}
         >
-          <div className="mb-md flex-col gap-sm">
-            <label className="text-muted text-sm" htmlFor={githubTokenInputId}>
+          <div className="mb-4 flex flex-col gap-2">
+            <label
+              className="text-xs text-[color:var(--c-text-muted)]"
+              htmlFor={githubTokenInputId}
+            >
               {t("githubAuth.tokenLabel")}
             </label>
             <Input
@@ -192,7 +195,7 @@ export function AppHeader() {
               type="password"
               value={githubTokenInput}
             />
-            <div className="text-muted text-sm">
+            <div className="text-sm text-[color:var(--c-text-muted)]">
               {t("githubAuth.tokenHint")}
             </div>
             {hasSavedGitHubToken && (
@@ -204,7 +207,7 @@ export function AppHeader() {
               <StatusBadge variant="error">{githubTokenError}</StatusBadge>
             )}
           </div>
-          <div className="modal__actions">
+          <div className="mt-6 flex justify-end gap-2">
             <Button
               disabled={!hasSavedGitHubToken || isSavingGitHubToken}
               onClick={() => void handleResetGitHubToken()}

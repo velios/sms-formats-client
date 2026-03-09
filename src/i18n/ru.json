@@ -38,6 +38,7 @@
     "validatorErrorsTitle": "Ошибки валидатора",
     "openValidatorChecks": "Открыть на GitHub",
     "validatorErrorsUnavailable": "Проверка валидатора не пройдена. Откройте checks в PR для деталей.",
+    "unsavedDraftsInPr": "Есть несохранённые локальные правки в этом PR",
     "switchDiscardConfirm": "Есть несохранённые изменения, не вошедшие в коммит PR. При переключении репозитория, источника или коммита они будут безвозвратно удалены. Продолжить?",
     "commitWithoutMessage": "Без сообщения коммита",
     "noCommits": "Коммиты не найдены"

@@ -20,6 +20,7 @@ import { fetchPullRequestValidationDetails } from "@/domain/github";
 import type { BankInfo, PullRequestLabel } from "@/domain/types";
 import { useOpenPRs, useRepoTree, useSwitchSource } from "@/hooks/useGitHub";
 import { confirmSourceSwitch } from "@/lib/source-switch";
+import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
 // ─── Recent banks persistence ───
@@ -118,6 +119,29 @@ function collectChangedBankPaths(paths: string[]): string[] {
   );
 }
 
+function getSingleChangedBankPath(paths: string[]): string | null {
+  const bankPaths = collectChangedBankPaths(paths);
+  if (bankPaths.length !== 1) {
+    return null;
+  }
+  return bankPaths[0] ?? null;
+}
+
+function getPreferredChangedFilePath(
+  paths: string[],
+  bankPath: string
+): string | null {
+  const bankPaths = paths.filter((path) => path.startsWith(`${bankPath}/`));
+  return (
+    bankPaths.find(
+      (path) =>
+        path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
+    ) ??
+    bankPaths[0] ??
+    null
+  );
+}
+
 function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => {
     const aHasValidationErrors = a.failedValidationCount > 0 ? 1 : 0;
@@ -131,6 +155,34 @@ function sortPRs(prs: OpenPullRequestItem[] | undefined) {
     return b.number - a.number;
   });
 }
+
+const dashboardPanelClassName =
+  "flex min-h-0 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
+
+const dashboardPanelHeaderClassName =
+  "flex items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold tracking-[0.5px] text-[color:var(--c-text-muted)] uppercase";
+
+const dashboardTabsClassName =
+  "flex gap-0 border-b border-[color:var(--c-border)]";
+
+const dashboardTabClassName = (isActive: boolean) =>
+  cn(
+    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid bg-transparent px-4 py-2 font-sans text-[13px] transition-all duration-150",
+    isActive
+      ? "border-b-[color:var(--c-accent)] text-[color:var(--c-accent)]"
+      : "border-b-transparent text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-text)]"
+  );
+
+const dashboardRowClassName = (isActive: boolean) =>
+  cn(
+    "flex cursor-pointer items-center gap-2 px-3 py-2 text-[13px]",
+    isActive
+      ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
+      : "hover:bg-[color:var(--c-bg-hover)]"
+  );
+
+const dashboardIconLinkClassName =
+  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
 
 export function Dashboard() {
   const { t } = useTranslation();
@@ -166,6 +218,8 @@ export function Dashboard() {
     () => draftStore.getChangedFiles().map((item) => item.filePath),
     [draftStore, draftStore.drafts]
   );
+  const activePullRequestHasLocalDrafts =
+    sourceRef?.type === "pr" && localChangedFiles.length > 0;
 
   const changedFilesByBank = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -305,6 +359,40 @@ export function Dashboard() {
 
   const handlePRSelect = useCallback(
     async (pr: { number: number; headRef: string; headSha: string }) => {
+      const isCurrentPullRequest =
+        sourceRef?.type === "pr" && sourceRef.prNumber === pr.number;
+      const navigateToPullRequestWorkspace = (
+        changedPaths: string[],
+        sourceSha: string
+      ) => {
+        const bankPath = getSingleChangedBankPath(changedPaths);
+        if (!bankPath) {
+          navigate("/workspace");
+          return;
+        }
+        navigate(
+          buildBankWorkspacePath({
+            bankPath,
+            filePath: getPreferredChangedFilePath(changedPaths, bankPath),
+            repository,
+            source: { type: "pr", prNumber: pr.number, sha: sourceSha },
+          })
+        );
+      };
+
+      addRecentPR(repoSlug, pr.number);
+      if (isCurrentPullRequest) {
+        const preferredChangedPaths =
+          localChangedFiles.length > 0
+            ? localChangedFiles
+            : useSourceStore.getState().sourceChangedFiles;
+        navigateToPullRequestWorkspace(
+          preferredChangedPaths,
+          sourceRef.sha ?? pr.headSha
+        );
+        return;
+      }
+
       if (
         !confirmSourceSwitch({
           confirmMessage: t("source.switchDiscardConfirm"),
@@ -313,27 +401,22 @@ export function Dashboard() {
       ) {
         return;
       }
-      addRecentPR(repoSlug, pr.number);
       await switchSource("pr", pr.headRef, pr.number, pr.headSha);
-      const changedBankPaths = collectChangedBankPaths(
-        useSourceStore.getState().sourceChangedFiles
+      navigateToPullRequestWorkspace(
+        useSourceStore.getState().sourceChangedFiles,
+        pr.headSha
       );
-      if (changedBankPaths.length === 1) {
-        const [bankPath] = changedBankPaths;
-        if (bankPath) {
-          navigate(
-            buildBankWorkspacePath({
-              bankPath,
-              repository,
-              source: { type: "pr", prNumber: pr.number, sha: pr.headSha },
-            })
-          );
-          return;
-        }
-      }
-      navigate("/workspace");
     },
-    [draftStore, navigate, repoSlug, repository, switchSource, t]
+    [
+      draftStore,
+      localChangedFiles,
+      navigate,
+      repoSlug,
+      repository,
+      sourceRef,
+      switchSource,
+      t,
+    ]
   );
 
   const loadValidationDetails = useCallback(
@@ -444,42 +527,42 @@ export function Dashboard() {
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        minHeight: 0,
-      }}
-    >
-      <div className="dashboard-grid">
-        <div className="panel dashboard-panel">
-          <div className="panel__header">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="grid min-h-0 flex-1 gap-4 [grid-template-columns:minmax(360px,1fr)_minmax(520px,1.4fr)]">
+        <div className={dashboardPanelClassName}>
+          <div className={dashboardPanelHeaderClassName}>
             {t("source.pullRequest")} · {sortedPRs.length}
           </div>
-          <div className="tabs">
+          <div className={dashboardTabsClassName}>
             <button
-              className={`tab ${prTab === "all" ? "tab--active" : ""}`}
+              className={dashboardTabClassName(prTab === "all")}
               onClick={() => setPrTab("all")}
             >
               {t("source.pullRequest")}
             </button>
             <button
-              className={`tab ${prTab === "recent" ? "tab--active" : ""}`}
+              className={dashboardTabClassName(prTab === "recent")}
               onClick={() => setPrTab("recent")}
             >
               {t("source.recentPullRequests", { defaultValue: "Recent PR" })}
             </button>
           </div>
-          <div className="dashboard-panel__list">
+          <div className="min-h-0 overflow-y-auto">
             {isPRsLoading ? (
-              <div className="p-md text-muted">{t("app.loading")}</div>
+              <div className="p-4 text-[color:var(--c-text-muted)]">
+                {t("app.loading")}
+              </div>
             ) : visiblePRs.length === 0 ? (
-              <div className="p-md text-muted">{t("bank.noResults")}</div>
+              <div className="p-4 text-[color:var(--c-text-muted)]">
+                {t("bank.noResults")}
+              </div>
             ) : (
               visiblePRs.map((pr) => {
                 const isActive =
                   sourceRef?.type === "pr" && sourceRef.prNumber === pr.number;
+                const hasLocalDrafts =
+                  activePullRequestHasLocalDrafts &&
+                  sourceRef.prNumber === pr.number;
                 const prUrl = `https://github.com/${repository.owner}/${repository.repo}/pull/${pr.number}`;
                 const validationErrorsTitle = t(
                   "source.validatorErrorsClickable",
@@ -488,9 +571,12 @@ export function Dashboard() {
                       "Нажмите, чтобы открыть детали ошибок валидатора",
                   }
                 );
+                const localDraftsTitle = t("source.unsavedDraftsInPr", {
+                  defaultValue: "Есть несохранённые локальные правки в этом PR",
+                });
                 return (
                   <div
-                    className={`autocomplete__item ${isActive ? "autocomplete__item--active" : ""}`}
+                    className={dashboardRowClassName(isActive)}
                     key={pr.number}
                     onClick={() => {
                       void handlePRSelect(pr);
@@ -504,16 +590,41 @@ export function Dashboard() {
                     role="button"
                     tabIndex={0}
                   >
-                    <span className="text-muted text-sm">#{pr.number}</span>
-                    <div
-                      className="flex-col gap-xs"
-                      style={{ flex: 1, minWidth: 0 }}
-                    >
-                      <span className="truncate text-sm">{pr.title}</span>
-                      <span className="text-dim text-xs">{pr.headRef}</span>
+                    <span className="text-xs text-[color:var(--c-text-muted)]">
+                      #{pr.number}
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="inline-flex max-w-full min-w-0 items-center gap-1">
+                        <span className="min-w-0 truncate text-sm">
+                          {pr.title}
+                        </span>
+                        {hasLocalDrafts && (
+                          <StatusBadge
+                            className="h-4 min-w-4 shrink-0 px-1 text-[10px] leading-none"
+                            title={localDraftsTitle}
+                            variant="modified"
+                          >
+                            ●
+                          </StatusBadge>
+                        )}
+                        <a
+                          aria-label={`PR #${pr.number}`}
+                          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[11px] leading-none text-[color:var(--c-text-dim)] no-underline hover:text-[color:var(--c-accent)] hover:no-underline"
+                          href={prUrl}
+                          onClick={(event) => event.stopPropagation()}
+                          rel="noreferrer"
+                          target="_blank"
+                          title={prUrl}
+                        >
+                          ↗
+                        </a>
+                      </div>
+                      <span className="text-xs text-[color:var(--c-text-dim)]">
+                        {pr.headRef}
+                      </span>
                     </div>
                     <PullRequestLabels
-                      className="dashboard-pr-labels"
+                      className="ml-2 flex-[0_1_220px] justify-end"
                       labels={pr.labels}
                       neutralLabels={
                         pr.lastCommitAuthorLogin
@@ -546,17 +657,6 @@ export function Dashboard() {
                         ✗ {pr.failedValidationCount}
                       </StatusBadge>
                     )}
-                    <a
-                      aria-label={`PR #${pr.number}`}
-                      className="format-row-link"
-                      href={prUrl}
-                      onClick={(event) => event.stopPropagation()}
-                      rel="noreferrer"
-                      target="_blank"
-                      title={prUrl}
-                    >
-                      ↗
-                    </a>
                   </div>
                 );
               })
@@ -564,47 +664,42 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="panel dashboard-panel">
-          <div className="panel__header">
+        <div className={dashboardPanelClassName}>
+          <div className={dashboardPanelHeaderClassName}>
             {t("bank.banks")} · {banks.length}
           </div>
-          <div className="tabs">
+          <div className={dashboardTabsClassName}>
             <button
-              className={`tab ${banksTab === "all" ? "tab--active" : ""}`}
+              className={dashboardTabClassName(banksTab === "all")}
               onClick={() => setBanksTab("all")}
             >
               {t("bank.banks")}
             </button>
             <button
-              className={`tab ${banksTab === "recent" ? "tab--active" : ""}`}
+              className={dashboardTabClassName(banksTab === "recent")}
               onClick={() => setBanksTab("recent")}
             >
               {t("bank.recentBanks")}
             </button>
           </div>
           {banksTab === "all" && (
-            <div
-              style={{
-                padding: "8px",
-                borderBottom: "1px solid var(--c-border)",
-              }}
-            >
-              <div className="autocomplete">
-                <Input
-                  aria-label={t("bank.search")}
-                  autoFocus
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={t("bank.search")}
-                  ref={inputRef}
-                  value={query}
-                />
-              </div>
+            <div className="border-b border-[color:var(--c-border)] p-2">
+              <Input
+                aria-label={t("bank.search")}
+                autoFocus
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={t("bank.search")}
+                ref={inputRef}
+                value={query}
+              />
             </div>
           )}
-          <div className="dashboard-panel__list">
+          <div className="min-h-0 overflow-y-auto">
             {visibleBanks.length === 0 ? (
-              <div className="p-md text-muted">{t("bank.noResults")}</div>
+              <div className="p-4 text-[color:var(--c-text-muted)]">
+                {t("bank.noResults")}
+              </div>
             ) : (
               visibleBanks.map((bank, i) => (
                 <BankListItem
@@ -636,7 +731,7 @@ export function Dashboard() {
 
       {validationDetailsModal && (
         <ModalDialog
-          className="validation-details-modal"
+          className="flex max-w-[min(840px,92vw)] flex-col"
           onClose={() => {
             setValidationDetailsModal(null);
             setValidationDetailsError(null);
@@ -646,11 +741,11 @@ export function Dashboard() {
           })}
           titleId={validationDetailsTitleId}
         >
-          <div className="text-muted text-sm">
+          <div className="text-sm text-[color:var(--c-text-muted)]">
             PR #{validationDetailsModal.prNumber} ·{" "}
             {validationDetailsModal.prTitle}
           </div>
-          <pre className="validation-details-modal__content">
+          <pre className="mt-4 max-h-[min(52vh,420px)] overflow-auto rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-2 font-mono text-xs leading-6 whitespace-pre-wrap break-words">
             {isValidationDetailsLoading
               ? t("source.loadingValidationResult", {
                   defaultValue: "Загружаем результат валидации...",
@@ -665,7 +760,7 @@ export function Dashboard() {
           {validationDetailsError && (
             <StatusBadge variant="error">{validationDetailsError}</StatusBadge>
           )}
-          <div className="modal__actions">
+          <div className="mt-6 flex justify-end gap-2">
             <Button
               disabled={isValidationDetailsLoading}
               onClick={handleRetryValidationDetails}
@@ -742,7 +837,12 @@ function BankListItem({
 
   return (
     <div
-      className={`autocomplete__item ${isActive ? "autocomplete__item--active" : ""}`}
+      className={cn(
+        "flex cursor-pointer items-start gap-2 px-4 py-2.5 text-[13px]",
+        isActive
+          ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
+          : "hover:bg-[color:var(--c-bg-hover)]"
+      )}
       onClick={onClick}
       onFocus={onMouseEnter}
       onKeyDown={(event) => {
@@ -753,18 +853,19 @@ function BankListItem({
       }}
       onMouseEnter={onMouseEnter}
       role="button"
-      style={{ padding: "10px 16px" }}
       tabIndex={0}
     >
-      <div className="flex-col gap-xs" style={{ flex: 1 }}>
-        <div className="flex items-center gap-sm">
+      <div className="flex flex-1 flex-col gap-1">
+        <div className="flex items-center gap-2">
           <span className="font-medium">{bank.displayName}</span>
           {bank.bankId && (
-            <span className="text-dim text-sm">#{bank.bankId}</span>
+            <span className="text-sm text-[color:var(--c-text-dim)]">
+              #{bank.bankId}
+            </span>
           )}
           {hasChanges && <StatusBadge variant="modified">●</StatusBadge>}
         </div>
-        <div className="text-muted text-sm">
+        <div className="text-sm text-[color:var(--c-text-muted)]">
           {bank.formatFiles.length} format(s)
           {!bank.hasSenders && (
             <StatusBadge className="ml-2" variant="warning">
@@ -773,7 +874,7 @@ function BankListItem({
           )}
         </div>
         {hasChanges && (
-          <div className="text-dim text-sm">
+          <div className="text-sm text-[color:var(--c-text-dim)]">
             {changedLabels.join(", ")}
             {extraChangedCount > 0 && ` +${extraChangedCount}`}
           </div>
@@ -781,7 +882,7 @@ function BankListItem({
       </div>
       <a
         aria-label={`${openInRepoLabel}: ${bank.displayName}`}
-        className="format-row-link"
+        className={dashboardIconLinkClassName}
         href={repoUrl}
         onClick={(e) => e.stopPropagation()}
         rel="noreferrer"

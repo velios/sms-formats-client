@@ -43,9 +43,12 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
       title={t("bank.createFormat")}
       titleId={dialogTitleId}
     >
-      <div className="flex-col gap-md">
-        <div className="flex-col gap-xs">
-          <label className="text-muted text-sm" htmlFor={formatNameInputId}>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label
+            className="text-xs text-[color:var(--c-text-muted)]"
+            htmlFor={formatNameInputId}
+          >
             {t("bank.formatName")} *
           </label>
           <Input
@@ -57,8 +60,11 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
           />
         </div>
 
-        <div className="flex-col gap-xs">
-          <label className="text-muted text-sm" htmlFor={formatIdInputId}>
+        <div className="flex flex-col gap-1">
+          <label
+            className="text-xs text-[color:var(--c-text-muted)]"
+            htmlFor={formatIdInputId}
+          >
             {t("bank.formatId")}
           </label>
           <Input
@@ -70,7 +76,7 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
         </div>
       </div>
 
-      <div className="modal__actions">
+      <div className="mt-6 flex justify-end gap-2">
         <Button onClick={onClose} type="button">
           {t("app.cancel")}
         </Button>

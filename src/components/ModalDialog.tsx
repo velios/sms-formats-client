@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,6 @@ interface Props {
   children: ReactNode;
   className?: string;
   onClose: () => void;
-  style?: CSSProperties;
   title: ReactNode;
   titleId: string;
 }
@@ -20,7 +19,6 @@ export function ModalDialog({
   children,
   className,
   onClose,
-  style,
   title,
   titleId,
 }: Props) {
@@ -28,11 +26,10 @@ export function ModalDialog({
     <Dialog onOpenChange={(open) => !open && onClose()} open>
       <DialogContent
         aria-labelledby={titleId}
-        className={cn("max-w-[min(90vw,42rem)] gap-5", className)}
+        className={cn("sm:max-w-[600px]", className)}
         showCloseButton={false}
-        style={style as CSSProperties}
       >
-        <DialogHeader className="border-b pb-4">
+        <DialogHeader className="mb-4 border-b border-[color:var(--c-border)] pb-4 text-left">
           <DialogTitle id={titleId}>{title}</DialogTitle>
         </DialogHeader>
         {children}

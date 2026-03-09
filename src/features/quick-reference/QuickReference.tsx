@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface RefItem {
   token: string;
@@ -171,52 +173,64 @@ export function QuickReference() {
   }, [activeCategory, search, lang]);
 
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div
         style={{
           padding: "6px 10px",
           borderBottom: "1px solid var(--c-border)",
         }}
       >
-        <input
+        <Input
           aria-label={
             lang === "ru"
               ? "Поиск по справочнику regex"
               : "Search regex reference"
           }
-          className="input"
+          className="h-7 px-2 py-1 text-xs"
           onChange={(e) => setSearch(e.target.value)}
           placeholder={lang === "ru" ? "Поиск…" : "Search…"}
-          style={{ fontSize: 12, padding: "4px 8px" }}
           value={search}
         />
       </div>
-      <div className="qref">
-        <div className="qref__categories">
+      <div className="grid h-full min-h-0 flex-1 overflow-hidden border-t border-[color:var(--c-border)] [grid-template-columns:140px_1fr]">
+        <div className="overflow-y-auto border-r border-[color:var(--c-border)]">
           {CATEGORIES.map((cat) => (
             <button
-              className={`qref__cat-item ${activeCat === cat.id ? "qref__cat-item--active" : ""}`}
+              className={cn(
+                "block w-full border-0 border-b border-[color:var(--c-border)] bg-transparent px-2.5 py-1.5 text-left text-xs transition-colors",
+                activeCat === cat.id
+                  ? "bg-[color:var(--c-bg-elevated)] font-semibold text-[color:var(--c-accent)]"
+                  : "text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-text)]"
+              )}
               key={cat.id}
               onClick={() => {
                 setActiveCat(cat.id);
                 setSearch("");
               }}
+              type="button"
             >
               {cat.label[lang] ?? cat.label.en}
             </button>
           ))}
         </div>
-        <div className="qref__items">
+        <div className="overflow-y-auto p-1">
           {filteredItems.map((it, i) => (
-            <div className="qref__item" key={i}>
-              <span className="qref__item-token">{it.token}</span>
-              <span className="qref__item-desc">
+            <div
+              className="flex gap-2 rounded-[var(--radius-sm)] px-2 py-1 text-xs hover:bg-[color:var(--c-bg-hover)]"
+              key={i}
+            >
+              <span className="min-w-[60px] font-mono font-medium text-[color:var(--c-accent)]">
+                {it.token}
+              </span>
+              <span className="text-[color:var(--c-text-muted)]">
                 {it.desc[lang] ?? it.desc.en}
               </span>
             </div>
           ))}
           {filteredItems.length === 0 && (
-            <div className="p-md text-muted text-sm">—</div>
+            <div className="p-4 text-sm text-[color:var(--c-text-muted)]">
+              —
+            </div>
           )}
         </div>
       </div>

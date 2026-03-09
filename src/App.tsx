@@ -34,12 +34,12 @@ export function App() {
 
   return (
     <>
-      <div className="desktop-guard">
+      <div className="fixed inset-0 z-[9999] hidden items-center justify-center bg-[color:var(--c-bg)] p-8 text-center text-base text-[color:var(--c-text-muted)] max-[1199px]:flex">
         <div>{t("app.desktopOnly")}</div>
       </div>
-      <div className="app-shell">
+      <div className="flex h-screen min-w-[1200px] flex-col max-[1199px]:hidden">
         <AppHeader />
-        <main className="app-main">
+        <main className="flex-1 overflow-hidden p-6">
           <Routes>
             <Route
               element={workspaceBlocked ? workspaceFallback : <Dashboard />}

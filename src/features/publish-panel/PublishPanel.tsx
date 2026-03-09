@@ -19,6 +19,7 @@ import {
 import type { BankInfo, RepoRef } from "@/domain/types";
 import { validateBankLevel } from "@/domain/validation";
 import type { PublishStep } from "@/store";
+import { cn } from "@/lib/utils";
 import { useDraftStore, usePublishStore, useSourceStore } from "@/store";
 
 interface Props {
@@ -375,38 +376,41 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
 
   return (
     <ModalDialog
+      className="sm:max-w-[500px]"
       onClose={onClose}
-      style={{ minWidth: 500 }}
       title={t("publish.title")}
       titleId={dialogTitleId}
     >
-      <div className="mb-md flex-col gap-md">
+      <div className="mb-4 flex flex-col gap-4">
         <div className="text-sm">
-          <span className="text-muted">
+          <span className="text-[color:var(--c-text-muted)]">
             {t("publish.scopeCheck", { bank: bankName })}
           </span>
         </div>
-        <div className="text-muted text-sm">
+        <div className="text-sm text-[color:var(--c-text-muted)]">
           {changedFiles.length} file(s) changed
         </div>
 
         {isMultiBank && (
-          <div className="issue-item issue-item--error">
+          <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]">
             {t("validation.multiBankPublish")}
           </div>
         )}
 
         {changedFiles.length === 0 && (
-          <div className="issue-item issue-item--warning">
+          <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-xs text-[color:var(--c-warning)]">
             No changes to publish for this bank
           </div>
         )}
       </div>
 
       {step === "idle" && (
-        <div className="mb-md flex-col gap-md">
-          <div className="flex-col gap-xs">
-            <label className="text-muted text-sm" htmlFor={tokenInputId}>
+        <div className="mb-4 flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <label
+              className="text-xs text-[color:var(--c-text-muted)]"
+              htmlFor={tokenInputId}
+            >
               {t("publish.tokenLabel")}
             </label>
             <Input
@@ -417,10 +421,12 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
               type="password"
               value={token}
             />
-            <span className="text-dim text-sm">{t("publish.tokenHint")}</span>
+            <span className="text-xs text-[color:var(--c-text-dim)]">
+              {t("publish.tokenHint")}
+            </span>
           </div>
 
-          <label className="flex items-center gap-sm text-sm">
+          <label className="flex items-center gap-2 text-sm">
             <input
               checked={storeInSession}
               onChange={(e) => setStoreInSession(e.target.checked)}
@@ -429,8 +435,11 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
             {t("publish.storeInSession")}
           </label>
 
-          <div className="flex-col gap-xs">
-            <label className="text-muted text-sm" htmlFor={prTitleInputId}>
+          <div className="flex flex-col gap-1">
+            <label
+              className="text-xs text-[color:var(--c-text-muted)]"
+              htmlFor={prTitleInputId}
+            >
               {t("publish.prTitle")}
             </label>
             <Input
@@ -445,7 +454,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       {step !== "idle" && (
         <div
           aria-live="polite"
-          className="publish-progress mb-md"
+          className="mb-4 flex flex-col gap-2"
           role="status"
         >
           <PublishStepItem
@@ -472,7 +481,11 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       )}
 
       {step === "done" && publishStore.prUrl && (
-        <div aria-live="polite" className="mb-md flex-col gap-sm" role="status">
+        <div
+          aria-live="polite"
+          className="mb-4 flex flex-col gap-2"
+          role="status"
+        >
           <StatusBadge variant="success">{publishSuccessLabel}</StatusBadge>
           <a
             href={publishStore.prUrl}
@@ -487,7 +500,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       {step === "error" && publishStore.error && (
         <div
           aria-live="assertive"
-          className="issue-item issue-item--error mb-md"
+          className="mb-4 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]"
           role="alert"
         >
           {publishStore.error}
@@ -496,12 +509,16 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
 
       {publishStore.validationIssues.length > 0 && (
         <div
-          className="issue-list mb-md"
+          className="mb-4 flex max-h-[200px] flex-col gap-1 overflow-y-auto"
           style={{ maxHeight: 200, overflowY: "auto" }}
         >
           {publishStore.validationIssues.map((issue, i) => (
             <div
-              className={`issue-item ${issue.level === "error" ? "issue-item--error" : "issue-item--warning"}`}
+              className={
+                issue.level === "error"
+                  ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-xs text-[color:var(--c-error)]"
+                  : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-xs text-[color:var(--c-warning)]"
+              }
               key={i}
             >
               <span className="text-mono text-sm">
@@ -513,7 +530,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
         </div>
       )}
 
-      <div className="modal__actions">
+      <div className="mt-6 flex justify-end gap-2">
         <Button onClick={onClose} type="button">
           {t("app.close")}
         </Button>
@@ -571,14 +588,17 @@ function stepStatus(
 }
 
 function PublishStepItem({ label, status }: { label: string; status: string }) {
-  const cls =
-    status === "active"
-      ? "publish-step publish-step--active"
-      : status === "done"
-        ? "publish-step publish-step--done"
-        : status === "error"
-          ? "publish-step publish-step--error"
-          : "publish-step";
+  const cls = cn(
+    "flex items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-1.5 text-xs",
+    status === "active" &&
+      "border-[color:var(--c-accent)] bg-[color:var(--c-accent-soft)] text-[color:var(--c-accent)]",
+    status === "done" &&
+      "border-[color:var(--c-success)] bg-[color:var(--c-success-soft)] text-[color:var(--c-success)]",
+    status === "error" &&
+      "border-[color:var(--c-error)] bg-[color:var(--c-error-soft)] text-[color:var(--c-error)]",
+    status === "pending" &&
+      "border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] text-[color:var(--c-text-muted)]"
+  );
 
   return (
     <div className={cls}>
