@@ -51,7 +51,7 @@ export function App() {
             />
             <Route
               element={workspaceBlocked ? workspaceFallback : <BankWorkspace />}
-              path="/bank/:bankKey/repo/:repoOwner/branch-or-pr/:branchOrPr/*"
+              path="/bank/:bankKey/repo/:repoSlug/branch-or-pr/:branchOrPr/*"
             />
             <Route element={<Navigate replace to="/" />} path="*" />
           </Routes>

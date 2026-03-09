@@ -18,7 +18,7 @@ describe("bank-route", () => {
     });
 
     expect(path).toBe(
-      "/bank/by_15382/repo/velios/branch-or-pr/main?file=src%2Fby_15382%2Fformats%2Fa.txt"
+      "/bank/by_15382/repo/velios%2Fsms-formats/branch-or-pr/main?file=src%2Fby_15382%2Fformats%2Fa.txt"
     );
   });
 
@@ -30,21 +30,21 @@ describe("bank-route", () => {
     });
 
     expect(path).toBe(
-      "/bank/by_15382/repo/velios/branch-or-pr/120?commit=a1b2c3d4"
+      "/bank/by_15382/repo/velios%2Fsms-formats/branch-or-pr/120?commit=a1b2c3d4"
     );
   });
 
   it("parses structured route params", () => {
     const parsed = parseBankRouteParams({
       bankKey: "by_15382",
-      repoOwner: "velios",
+      repoSlug: "velios/sms-formats",
       branchOrPr: "120",
       commit: "a1b2c3d4",
     });
 
     expect(parsed).toEqual({
       bankPath: "src/by_15382",
-      repoOwner: "velios",
+      repoSlug: "velios/sms-formats",
       source: { type: "pr", prNumber: 120, sha: "a1b2c3d4" },
       isStructuredRoute: true,
     });
@@ -71,16 +71,12 @@ describe("bank-route", () => {
     });
   });
 
-  it("resolves route repository from owner-only and owner/repo values", () => {
-    expect(
-      resolveRouteRepository("velios", { owner: "flocktory", repo: "sms" })
-    ).toEqual({ owner: "velios", repo: "sms" });
-    expect(
-      resolveRouteRepository("velios/sms-formats", {
-        owner: "flocktory",
-        repo: "sms",
-      })
-    ).toEqual({ owner: "velios", repo: "sms-formats" });
+  it("resolves route repository from repo slug", () => {
+    expect(resolveRouteRepository("velios/sms-formats")).toEqual({
+      owner: "velios",
+      repo: "sms-formats",
+    });
+    expect(resolveRouteRepository("velios")).toBeNull();
   });
 
   it("matches current source to route source", () => {

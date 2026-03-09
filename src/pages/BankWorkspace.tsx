@@ -8,7 +8,12 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useParams, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -49,7 +54,6 @@ import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
 const RECENT_FILES_KEY = "sms-formats-recent-formats";
-const WORKSPACE_SELECTION_HISTORY_KEY = "sms-formats-workspace-selection";
 const MAX_RECENT_FILES = 10;
 const SEARCH_EXAMPLE_MIN_QUERY_LENGTH = 2;
 const SEARCH_INDEX_PARALLELISM = 4;
@@ -59,65 +63,6 @@ interface ActiveFormatSearchContext {
   regex: string;
   examples: string[];
   activeExampleIndex: number;
-}
-
-interface WorkspaceSelectionHistoryState {
-  workspaceKey: string;
-  selectedFile: string | null;
-  showSenders: boolean;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function readWorkspaceSelectionHistoryState(
-  historyState: unknown,
-  workspaceKey: string
-): WorkspaceSelectionHistoryState | null {
-  if (!isRecord(historyState)) {
-    return null;
-  }
-  const candidate = historyState[WORKSPACE_SELECTION_HISTORY_KEY];
-  if (!isRecord(candidate)) {
-    return null;
-  }
-  if (candidate.workspaceKey !== workspaceKey) {
-    return null;
-  }
-  const selectedFile =
-    typeof candidate.selectedFile === "string" ? candidate.selectedFile : null;
-  return {
-    workspaceKey,
-    selectedFile,
-    showSenders: Boolean(candidate.showSenders),
-  };
-}
-
-function writeWorkspaceSelectionHistoryState(params: {
-  mode: "push" | "replace";
-  workspaceKey: string;
-  selectedFile: string | null;
-  showSenders: boolean;
-}) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  const { mode, workspaceKey, selectedFile, showSenders } = params;
-  const baseState = isRecord(window.history.state) ? window.history.state : {};
-  const nextState = {
-    ...baseState,
-    [WORKSPACE_SELECTION_HISTORY_KEY]: {
-      workspaceKey,
-      selectedFile,
-      showSenders,
-    },
-  };
-  if (mode === "push") {
-    window.history.pushState(nextState, "");
-    return;
-  }
-  window.history.replaceState(nextState, "");
 }
 
 function getActiveExampleText(
@@ -178,6 +123,20 @@ function decodeRequestedFileValue(
   } catch {
     return rawValue;
   }
+}
+
+function buildSelectionSearch(
+  searchParams: URLSearchParams,
+  filePath: string | null
+): string {
+  const nextSearchParams = new URLSearchParams(searchParams);
+  if (filePath) {
+    nextSearchParams.set("file", filePath);
+  } else {
+    nextSearchParams.delete("file");
+  }
+  const search = nextSearchParams.toString();
+  return search ? `?${search}` : "";
 }
 
 function collectChangedFilesInBank(
@@ -514,10 +473,7 @@ function useAutoSelectFormat(params: {
   sendersPath: string;
   preferredFormatFile: string | null;
   selectionReady: boolean;
-  selectedFile: string | null;
-  showSenders: boolean;
-  setSelectedFile: (filePath: string | null) => void;
-  setShowSenders: (value: boolean) => void;
+  onSelectFile: (filePath: string | null, replace?: boolean) => void;
 }) {
   const {
     requestedFile,
@@ -525,93 +481,36 @@ function useAutoSelectFormat(params: {
     sendersPath,
     preferredFormatFile,
     selectionReady,
-    selectedFile,
-    showSenders,
-    setSelectedFile,
-    setShowSenders,
+    onSelectFile,
   } = params;
-  const appliedRequestedFileRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!requestedFile) {
-      appliedRequestedFileRef.current = null;
-      return;
-    }
-    if (requestedFile === sendersPath) {
-      if (appliedRequestedFileRef.current === requestedFile) {
-        return;
-      }
-      setShowSenders(true);
-      setSelectedFile(null);
-      appliedRequestedFileRef.current = requestedFile;
-      return;
-    }
-    if (!allFormatFiles.includes(requestedFile)) {
-      return;
-    }
-    if (appliedRequestedFileRef.current === requestedFile) {
-      return;
-    }
-
-    setSelectedFile(requestedFile);
-    setShowSenders(false);
-    appliedRequestedFileRef.current = requestedFile;
-  }, [
-    requestedFile,
-    allFormatFiles,
-    sendersPath,
-    setSelectedFile,
-    setShowSenders,
-  ]);
-
-  useEffect(() => {
-    if (!selectedFile) {
-      return;
-    }
-    if (allFormatFiles.includes(selectedFile)) {
-      return;
-    }
-    setSelectedFile(null);
-  }, [allFormatFiles, selectedFile, setSelectedFile]);
 
   useEffect(() => {
     if (!selectionReady) {
       return;
     }
-    if (showSenders || selectedFile) {
+    if (requestedFile === sendersPath) {
       return;
     }
-    if (preferredFormatFile) {
-      setSelectedFile(preferredFormatFile);
+    if (requestedFile && allFormatFiles.includes(requestedFile)) {
+      return;
+    }
+    if (!preferredFormatFile) {
+      if (requestedFile) {
+        onSelectFile(null, true);
+      }
+      return;
+    }
+    if (requestedFile !== preferredFormatFile) {
+      onSelectFile(preferredFormatFile, true);
     }
   }, [
+    allFormatFiles,
+    onSelectFile,
     preferredFormatFile,
+    requestedFile,
     selectionReady,
-    selectedFile,
-    setSelectedFile,
-    setShowSenders,
-    showSenders,
+    sendersPath,
   ]);
-}
-
-function useResetSelectionOnSourceChange(params: {
-  requestedFile: string | null;
-  sourceSelectionKey: string;
-  setSelectedFile: (filePath: string | null) => void;
-  setShowSenders: (value: boolean) => void;
-}) {
-  const { requestedFile, sourceSelectionKey, setSelectedFile, setShowSenders } =
-    params;
-  const previousSourceKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (requestedFile || previousSourceKeyRef.current === sourceSelectionKey) {
-      return;
-    }
-    previousSourceKeyRef.current = sourceSelectionKey;
-    setSelectedFile(null);
-    setShowSenders(false);
-  }, [requestedFile, setSelectedFile, setShowSenders, sourceSelectionKey]);
 }
 
 function buildSearchIndexingMeta(params: {
@@ -1050,8 +949,8 @@ function renameDraftFormat(params: {
     renameDraft: (oldFilePath: string, newFilePath: string) => void;
   };
   setBanks: (banks: BankInfo[]) => void;
-  currentSelectedFile: string | null;
-  setSelectedFile: (filePath: string | null) => void;
+  currentRequestedFile: string | null;
+  replaceRequestedFile: (filePath: string | null) => void;
 }): boolean {
   const {
     fromPath,
@@ -1060,8 +959,8 @@ function renameDraftFormat(params: {
     allFormatFiles,
     draftStore,
     setBanks,
-    currentSelectedFile,
-    setSelectedFile,
+    currentRequestedFile,
+    replaceRequestedFile,
   } = params;
   if (fromPath === toPath) {
     return true;
@@ -1099,8 +998,8 @@ function renameDraftFormat(params: {
   });
   setBanks(nextBanks);
 
-  if (currentSelectedFile === fromPath) {
-    setSelectedFile(toPath);
+  if (currentRequestedFile === fromPath) {
+    replaceRequestedFile(toPath);
   }
   return true;
 }
@@ -1478,8 +1377,8 @@ function useRouteStateSync(params: {
   );
 
   const routeRepository = useMemo(
-    () => resolveRouteRepository(parsedRoute.repoOwner, repository),
-    [parsedRoute.repoOwner, repository]
+    () => resolveRouteRepository(parsedRoute.repoSlug),
+    [parsedRoute.repoSlug]
   );
   const routeRepoMismatch = useMemo(() => {
     if (!routeRepository) {
@@ -1563,19 +1462,21 @@ function useRouteStateSync(params: {
 
 export function BankWorkspace() {
   const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
   const routeParams = useParams();
   const [searchParams] = useSearchParams();
   const parsedRoute = useMemo(
     () =>
       parseBankRouteParams({
         bankKey: routeParams.bankKey,
-        repoOwner: routeParams.repoOwner,
+        repoSlug: routeParams.repoSlug,
         branchOrPr: routeParams.branchOrPr,
         commit: searchParams.get("commit"),
       }),
     [
       routeParams.bankKey,
-      routeParams.repoOwner,
+      routeParams.repoSlug,
       routeParams.branchOrPr,
       searchParams,
     ]
@@ -1606,9 +1507,6 @@ export function BankWorkspace() {
     [banks, bankPath]
   );
   const tree = useSourceStore((s) => s.tree);
-
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [showSenders, setShowSenders] = useState(false);
   const [showCreateFormat, setShowCreateFormat] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
@@ -1718,43 +1616,23 @@ export function BankWorkspace() {
   );
 
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
-  const sourceSelectionKey = `${repository.owner}/${repository.repo}:${sourceRef?.type ?? "none"}:${sourceRef?.name ?? ""}:${sourceRef?.sha ?? ""}:${sourceRef?.prNumber ?? ""}:${bankPath}`;
-
-  const applySelectionFromHistoryState = useCallback(
-    (historyState: unknown): boolean => {
-      const selection = readWorkspaceSelectionHistoryState(
-        historyState,
-        sourceSelectionKey
-      );
-      if (!selection) {
-        return false;
-      }
-      if (selection.showSenders) {
-        setShowSenders(true);
-        setSelectedFile(null);
-        return true;
-      }
-      if (!selection.selectedFile) {
-        setShowSenders(false);
-        setSelectedFile(null);
-        return true;
-      }
-      if (!allFormatFiles.includes(selection.selectedFile)) {
-        return false;
-      }
-      setShowSenders(false);
-      setSelectedFile(selection.selectedFile);
-      return true;
+  const navigateToRequestedFile = useCallback(
+    (filePath: string | null, replace = false) => {
+      const search = buildSelectionSearch(searchParams, filePath);
+      const nextPath = `${location.pathname}${search}`;
+      navigate(nextPath, { replace });
     },
-    [allFormatFiles, sourceSelectionKey]
+    [location.pathname, navigate, searchParams]
   );
 
-  useResetSelectionOnSourceChange({
-    requestedFile,
-    sourceSelectionKey,
-    setSelectedFile,
-    setShowSenders,
-  });
+  const showSenders = requestedFile === sendersPath;
+  const selectedFile = useMemo(
+    () =>
+      requestedFile && requestedFile !== sendersPath && allFormatFiles.includes(requestedFile)
+        ? requestedFile
+        : null,
+    [allFormatFiles, requestedFile, sendersPath]
+  );
 
   const {
     filteredFormatFiles,
@@ -1782,82 +1660,20 @@ export function BankWorkspace() {
 
   const handleSelectFile = useCallback(
     (f: string) => {
-      const currentSelection = readWorkspaceSelectionHistoryState(
-        window.history.state,
-        sourceSelectionKey
-      );
-      setSelectedFile(f);
-      setShowSenders(false);
-      if (
-        !(
-          currentSelection &&
-          currentSelection.showSenders === false &&
-          currentSelection.selectedFile === f
-        )
-      ) {
-        writeWorkspaceSelectionHistoryState({
-          mode: "push",
-          workspaceKey: sourceSelectionKey,
-          selectedFile: f,
-          showSenders: false,
-        });
+      if (requestedFile !== f) {
+        navigateToRequestedFile(f);
       }
       addRecentFile(bankPath, f);
     },
-    [bankPath, sourceSelectionKey]
+    [bankPath, navigateToRequestedFile, requestedFile]
   );
 
   const handleSelectSenders = useCallback(() => {
-    const currentSelection = readWorkspaceSelectionHistoryState(
-      window.history.state,
-      sourceSelectionKey
-    );
-    setShowSenders(true);
-    setSelectedFile(null);
-    if (
-      !(currentSelection?.showSenders && currentSelection.selectedFile === null)
-    ) {
-      writeWorkspaceSelectionHistoryState({
-        mode: "push",
-        workspaceKey: sourceSelectionKey,
-        selectedFile: null,
-        showSenders: true,
-      });
+    if (requestedFile !== sendersPath) {
+      navigateToRequestedFile(sendersPath);
     }
     addRecentFile(bankPath, sendersPath);
-  }, [bankPath, sendersPath, sourceSelectionKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    applySelectionFromHistoryState(window.history.state);
-  }, [applySelectionFromHistoryState]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const handlePopState = (event: PopStateEvent) => {
-      applySelectionFromHistoryState(event.state);
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, [applySelectionFromHistoryState]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    writeWorkspaceSelectionHistoryState({
-      mode: "replace",
-      workspaceKey: sourceSelectionKey,
-      selectedFile,
-      showSenders,
-    });
-  }, [selectedFile, showSenders, sourceSelectionKey]);
+  }, [bankPath, navigateToRequestedFile, requestedFile, sendersPath]);
 
   const handleRenameFile = useCallback(
     (fromPath: string, toPath: string): boolean => {
@@ -1868,11 +1684,18 @@ export function BankWorkspace() {
         allFormatFiles,
         draftStore,
         setBanks,
-        currentSelectedFile: selectedFile,
-        setSelectedFile,
+        currentRequestedFile: requestedFile,
+        replaceRequestedFile: (filePath) => navigateToRequestedFile(filePath, true),
       });
     },
-    [allFormatFiles, bankPath, draftStore, selectedFile, setBanks]
+    [
+      allFormatFiles,
+      bankPath,
+      draftStore,
+      navigateToRequestedFile,
+      requestedFile,
+      setBanks,
+    ]
   );
 
   const localSendersChanged = localChangedFilesInBank.has(sendersPath);
@@ -1898,11 +1721,12 @@ export function BankWorkspace() {
             .getState()
             .banks.filter((item) => item.folderPath !== bankPath)
         );
-        setSelectedFile(null);
-        setShowSenders(false);
+        if (requestedFile) {
+          navigateToRequestedFile(null, true);
+        }
       }
     }
-  }, [bankPath, draftStore, setBanks, tree]);
+  }, [bankPath, draftStore, navigateToRequestedFile, requestedFile, setBanks, tree]);
   const canApprovePullRequest = usePullRequestApprovalPermission({
     repository,
     sourceRef,
@@ -1941,10 +1765,7 @@ export function BankWorkspace() {
     sendersPath,
     preferredFormatFile: allFormatFiles[0] ?? null,
     selectionReady: isSelectionReady,
-    selectedFile,
-    showSenders,
-    setSelectedFile,
-    setShowSenders,
+    onSelectFile: navigateToRequestedFile,
   });
 
   useEffect(() => {

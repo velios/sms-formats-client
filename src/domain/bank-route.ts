@@ -13,14 +13,14 @@ interface BankWorkspacePathParams {
 
 interface ParseBankRouteParamsInput {
   bankKey?: string;
-  repoOwner?: string;
+  repoSlug?: string;
   branchOrPr?: string;
   commit?: string | null;
 }
 
 export interface ParsedBankRouteParams {
   bankPath: string;
-  repoOwner: string | null;
+  repoSlug: string | null;
   source: BankRouteSource | null;
   isStructuredRoute: boolean;
 }
@@ -82,8 +82,8 @@ export function parseBranchOrPrSegment(
 export function parseBankRouteParams(
   input: ParseBankRouteParamsInput
 ): ParsedBankRouteParams {
-  const repoOwner = input.repoOwner?.trim()
-    ? decodePathSegment(input.repoOwner).trim()
+  const repoSlug = input.repoSlug?.trim()
+    ? decodePathSegment(input.repoSlug).trim()
     : null;
   const source = parseBranchOrPrSegment(input.branchOrPr);
   const commit = input.commit?.trim()
@@ -91,7 +91,7 @@ export function parseBankRouteParams(
     : undefined;
   return {
     bankPath: input.bankKey ? routeKeyToBankPath(input.bankKey) : "",
-    repoOwner,
+    repoSlug,
     source:
       source?.type === "pr" && commit ? { ...source, sha: commit } : source,
     isStructuredRoute: Boolean(input.bankKey),
@@ -112,25 +112,21 @@ export function sourceRefToRouteSource(
 }
 
 export function resolveRouteRepository(
-  routeRepoOwner: string | null,
-  currentRepository: RepoRef
+  routeRepoSlug: string | null
 ): RepoRef | null {
-  if (!routeRepoOwner) {
+  if (!routeRepoSlug) {
     return null;
   }
-  const decoded = routeRepoOwner.trim();
+  const decoded = routeRepoSlug.trim();
   if (!decoded) {
     return null;
   }
 
-  if (decoded.includes("/")) {
-    const [owner, repo] = decoded.split("/");
-    if (owner && repo) {
-      return { owner, repo };
-    }
+  const [owner, repo] = decoded.split("/");
+  if (owner && repo) {
+    return { owner, repo };
   }
-
-  return { owner: decoded, repo: currentRepository.repo };
+  return null;
 }
 
 export function isRouteSourceMatched(
@@ -164,7 +160,8 @@ export function buildBankWorkspacePath({
   const bankKey = bankPathToRouteKey(bankPath);
   const branchOrPr =
     source.type === "pr" ? String(source.prNumber) : source.name;
-  const path = `/bank/${encodeURIComponent(bankKey)}/repo/${encodeURIComponent(repository.owner)}/branch-or-pr/${encodeURIComponent(branchOrPr)}`;
+  const repoSlug = `${repository.owner}/${repository.repo}`;
+  const path = `/bank/${encodeURIComponent(bankKey)}/repo/${encodeURIComponent(repoSlug)}/branch-or-pr/${encodeURIComponent(branchOrPr)}`;
   const searchParams = new URLSearchParams();
   if (filePath) {
     searchParams.set("file", filePath);
