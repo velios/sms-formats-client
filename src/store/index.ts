@@ -8,7 +8,12 @@ import type {
   SourceRef,
   ValidationIssue,
 } from "@/domain/types";
-import { deleteDraft, loadAllDrafts, saveDraft } from "./persistence";
+import {
+  clearDrafts,
+  deleteDraft,
+  loadAllDrafts,
+  saveDraft,
+} from "./persistence";
 
 // ─── Source store ───
 
@@ -103,7 +108,7 @@ interface DraftState {
 }
 
 function makeDraftSourceKey(sourceRef: SourceRef, repository: RepoRef): string {
-  return `${repository.owner}/${repository.repo}:${sourceRef.type}:${sourceRef.name}`;
+  return `${repository.owner}/${repository.repo}:${sourceRef.type}:${sourceRef.name}:${sourceRef.sha}`;
 }
 
 const draftHistoryByPath = new Map<string, Travels<DraftHistoryState>>();
@@ -480,6 +485,11 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   },
 
   clearAll: () => {
+    const sourceState = useSourceStore.getState();
+    const sourceRef = sourceState.sourceRef;
+    if (sourceRef) {
+      void clearDrafts(makeDraftSourceKey(sourceRef, sourceState.repository));
+    }
     draftHistoryByPath.clear();
     set({ drafts: new Map() });
   },

@@ -19,6 +19,7 @@ import { buildBankWorkspacePath } from "@/domain/bank-route";
 import { fetchPullRequestValidationDetails } from "@/domain/github";
 import type { BankInfo, PullRequestLabel } from "@/domain/types";
 import { useOpenPRs, useRepoTree, useSwitchSource } from "@/hooks/useGitHub";
+import { confirmSourceSwitch } from "@/lib/source-switch";
 import { useDraftStore, useSourceStore } from "@/store";
 
 // ─── Recent banks persistence ───
@@ -267,6 +268,14 @@ export function Dashboard() {
   const handleSelect = useCallback(
     async (bank: BankInfo) => {
       if (
+        !confirmSourceSwitch({
+          confirmMessage: t("source.switchDiscardConfirm"),
+          draftStore,
+        })
+      ) {
+        return;
+      }
+      if (
         !(
           sourceRef?.type === "branch" &&
           sourceRef.name === config.defaultBranch
@@ -283,11 +292,27 @@ export function Dashboard() {
         })
       );
     },
-    [navigate, repository, sourceRef?.name, sourceRef?.type, switchSource]
+    [
+      draftStore,
+      navigate,
+      repository,
+      sourceRef?.name,
+      sourceRef?.type,
+      switchSource,
+      t,
+    ]
   );
 
   const handlePRSelect = useCallback(
     async (pr: { number: number; headRef: string; headSha: string }) => {
+      if (
+        !confirmSourceSwitch({
+          confirmMessage: t("source.switchDiscardConfirm"),
+          draftStore,
+        })
+      ) {
+        return;
+      }
       addRecentPR(repoSlug, pr.number);
       await switchSource("pr", pr.headRef, pr.number, pr.headSha);
       const changedBankPaths = collectChangedBankPaths(
@@ -300,7 +325,7 @@ export function Dashboard() {
             buildBankWorkspacePath({
               bankPath,
               repository,
-              source: { type: "pr", prNumber: pr.number },
+              source: { type: "pr", prNumber: pr.number, sha: pr.headSha },
             })
           );
           return;
@@ -308,7 +333,7 @@ export function Dashboard() {
       }
       navigate("/workspace");
     },
-    [navigate, repoSlug, repository, switchSource]
+    [draftStore, navigate, repoSlug, repository, switchSource, t]
   );
 
   const loadValidationDetails = useCallback(

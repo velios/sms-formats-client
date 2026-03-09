@@ -24,7 +24,10 @@
     "searchPR": "Search PR by title…",
     "refresh": "Refresh",
     "switchTo": "Switch",
-    "currentSource": "Current source: {{source}}"
+    "currentSource": "Current source: {{source}}",
+    "switchDiscardConfirm": "You have unsaved changes that are not part of a PR commit yet. Switching repository, source, or commit will permanently discard them. Continue?",
+    "commitWithoutMessage": "No commit message",
+    "noCommits": "No commits found"
   },
   "githubAuth": {
     "openSettings": "GitHub token settings",
@@ -171,11 +174,14 @@
     "committing": "Creating commit…",
     "openingPR": "Opening PR…",
     "success": "PR created successfully!",
+    "updatePR": "Update Pull Request",
+    "successUpdate": "PR updated successfully!",
     "prLink": "PR link",
     "preflight": "Preflight Check",
     "scopeCheck": "Change scope: {{bank}}",
     "prTitle": "PR title",
-    "prTitleDefault": "Update formats for {{bank}}"
+    "prTitleDefault": "Update formats for {{bank}}",
+    "outdatedBase": "Cannot publish changes created on top of another commit. Switch to the correct step and reapply the edits."
   },
   "refresh": {
     "action": "Pull from GitHub",

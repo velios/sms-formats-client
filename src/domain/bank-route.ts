@@ -2,7 +2,7 @@ import type { RepoRef, SourceRef } from "@/domain/types";
 
 export type BankRouteSource =
   | { type: "branch"; name: string }
-  | { type: "pr"; prNumber: number };
+  | { type: "pr"; prNumber: number; sha?: string };
 
 interface BankWorkspacePathParams {
   bankPath: string;
@@ -15,6 +15,7 @@ interface ParseBankRouteParamsInput {
   bankKey?: string;
   repoOwner?: string;
   branchOrPr?: string;
+  commit?: string | null;
 }
 
 export interface ParsedBankRouteParams {
@@ -84,10 +85,15 @@ export function parseBankRouteParams(
   const repoOwner = input.repoOwner?.trim()
     ? decodePathSegment(input.repoOwner).trim()
     : null;
+  const source = parseBranchOrPrSegment(input.branchOrPr);
+  const commit = input.commit?.trim()
+    ? decodePathSegment(input.commit).trim()
+    : undefined;
   return {
     bankPath: input.bankKey ? routeKeyToBankPath(input.bankKey) : "",
     repoOwner,
-    source: parseBranchOrPrSegment(input.branchOrPr),
+    source:
+      source?.type === "pr" && commit ? { ...source, sha: commit } : source,
     isStructuredRoute: Boolean(input.bankKey),
   };
 }
@@ -97,7 +103,7 @@ export function sourceRefToRouteSource(
   defaultBranch: string
 ): BankRouteSource {
   if (sourceRef?.type === "pr" && sourceRef.prNumber) {
-    return { type: "pr", prNumber: sourceRef.prNumber };
+    return { type: "pr", prNumber: sourceRef.prNumber, sha: sourceRef.sha };
   }
   if (sourceRef?.type === "branch" && sourceRef.name) {
     return { type: "branch", name: sourceRef.name };
@@ -140,7 +146,8 @@ export function isRouteSourceMatched(
   if (targetSource.type === "pr") {
     return (
       currentSource.type === "pr" &&
-      currentSource.prNumber === targetSource.prNumber
+      currentSource.prNumber === targetSource.prNumber &&
+      (!targetSource.sha || currentSource.sha === targetSource.sha)
     );
   }
   return (
@@ -158,8 +165,16 @@ export function buildBankWorkspacePath({
   const branchOrPr =
     source.type === "pr" ? String(source.prNumber) : source.name;
   const path = `/bank/${encodeURIComponent(bankKey)}/repo/${encodeURIComponent(repository.owner)}/branch-or-pr/${encodeURIComponent(branchOrPr)}`;
-  if (!filePath) {
+  const searchParams = new URLSearchParams();
+  if (filePath) {
+    searchParams.set("file", filePath);
+  }
+  if (source.type === "pr" && source.sha) {
+    searchParams.set("commit", source.sha);
+  }
+  const search = searchParams.toString();
+  if (!search) {
     return path;
   }
-  return `${path}?file=${encodeURIComponent(filePath)}`;
+  return `${path}?${search}`;
 }

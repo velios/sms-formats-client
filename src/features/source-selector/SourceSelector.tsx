@@ -4,16 +4,18 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { PullRequestLabels } from "@/components/PullRequestLabels";
 import { config } from "@/config";
 import { buildBankWorkspacePath } from "@/domain/bank-route";
-import type { PullRequestLabel } from "@/domain/types";
+import type { PullRequestLabel, RepoRef, SourceRef } from "@/domain/types";
 import {
   useAvailableSourceRepos,
   useOpenPRs,
+  usePullRequestCommits,
   useSwitchRepository,
   useSwitchSource,
 } from "@/hooks/useGitHub";
-import { useSourceStore } from "@/store";
+import { confirmSourceSwitch } from "@/lib/source-switch";
+import { useDraftStore, useSourceStore } from "@/store";
 
-type OpenMenu = "repo" | "source" | null;
+type OpenMenu = "repo" | "source" | "commit" | null;
 
 interface Props {
   allowRepoSwitch?: boolean;
@@ -28,6 +30,20 @@ interface OpenPullRequestItem {
   lastCommitAuthorLogin: string | null;
   labels: PullRequestLabel[];
 }
+
+interface PullRequestCommitItem {
+  sha: string;
+  message: string;
+}
+
+interface DraftStoreGuard {
+  clearAll: () => void;
+  hasDrafts: () => boolean;
+}
+
+type SwitchSourceHandler = ReturnType<typeof useSwitchSource>;
+type SwitchRepositoryHandler = ReturnType<typeof useSwitchRepository>;
+type ConfirmDiscardHandler = () => boolean;
 
 function collectChangedBankPaths(paths: string[]): string[] {
   const banks = new Set<string>();
@@ -80,6 +96,312 @@ function buildPullRequestNeutralLabels(
   return labels;
 }
 
+function getShortSha(sha: string | undefined, length = 5): string {
+  if (!sha) {
+    return "";
+  }
+  return sha.slice(0, length);
+}
+
+function createDiscardDraftsGuard(
+  confirmMessage: string,
+  draftStore: DraftStoreGuard
+): ConfirmDiscardHandler {
+  return () => confirmSourceSwitch({ confirmMessage, draftStore });
+}
+
+async function selectRepository(params: {
+  closeMenu: () => void;
+  confirmDiscardDrafts: ConfirmDiscardHandler;
+  navigate: ReturnType<typeof useNavigate>;
+  repoSlug: string;
+  switchRepository: SwitchRepositoryHandler;
+}): Promise<void> {
+  const {
+    closeMenu,
+    confirmDiscardDrafts,
+    navigate,
+    repoSlug,
+    switchRepository,
+  } = params;
+  const [owner, repo] = repoSlug.split("/");
+  if (!(owner && repo && confirmDiscardDrafts())) {
+    return;
+  }
+
+  await switchRepository({ owner, repo });
+  closeMenu();
+  navigate("/");
+}
+
+async function selectMainSource(params: {
+  closeMenu: () => void;
+  confirmDiscardDrafts: ConfirmDiscardHandler;
+  navigate: ReturnType<typeof useNavigate>;
+  switchSource: SwitchSourceHandler;
+}): Promise<void> {
+  const { closeMenu, confirmDiscardDrafts, navigate, switchSource } = params;
+  if (!confirmDiscardDrafts()) {
+    return;
+  }
+  await switchSource("branch", config.defaultBranch);
+  closeMenu();
+  navigate("/workspace");
+}
+
+async function selectPullRequest(params: {
+  closeMenu: () => void;
+  confirmDiscardDrafts: ConfirmDiscardHandler;
+  navigate: ReturnType<typeof useNavigate>;
+  pullRequest: OpenPullRequestItem;
+  repository: RepoRef;
+  switchSource: SwitchSourceHandler;
+}): Promise<void> {
+  const {
+    closeMenu,
+    confirmDiscardDrafts,
+    navigate,
+    pullRequest,
+    repository,
+    switchSource,
+  } = params;
+  if (!confirmDiscardDrafts()) {
+    return;
+  }
+
+  await switchSource(
+    "pr",
+    pullRequest.headRef,
+    pullRequest.number,
+    pullRequest.headSha
+  );
+  const changedBankPaths = collectChangedBankPaths(
+    useSourceStore.getState().sourceChangedFiles
+  );
+  closeMenu();
+
+  if (changedBankPaths.length === 1) {
+    const [bankPath] = changedBankPaths;
+    if (bankPath) {
+      navigate(
+        buildBankWorkspacePath({
+          bankPath,
+          repository,
+          source: {
+            type: "pr",
+            prNumber: pullRequest.number,
+            sha: pullRequest.headSha,
+          },
+        })
+      );
+      return;
+    }
+  }
+
+  navigate("/workspace");
+}
+
+async function selectPullRequestCommit(params: {
+  activePullRequest: OpenPullRequestItem | null;
+  closeMenu: () => void;
+  confirmDiscardDrafts: ConfirmDiscardHandler;
+  location: ReturnType<typeof useLocation>;
+  navigate: ReturnType<typeof useNavigate>;
+  sha: string;
+  sourceRef: SourceRef | null;
+  switchSource: SwitchSourceHandler;
+}): Promise<void> {
+  const {
+    activePullRequest,
+    closeMenu,
+    confirmDiscardDrafts,
+    location,
+    navigate,
+    sha,
+    sourceRef,
+    switchSource,
+  } = params;
+  if (!(activePullRequest && sourceRef?.type === "pr")) {
+    return;
+  }
+  if (sourceRef.sha === sha) {
+    closeMenu();
+    return;
+  }
+  if (!confirmDiscardDrafts()) {
+    return;
+  }
+
+  await switchSource(
+    "pr",
+    activePullRequest.headRef,
+    activePullRequest.number,
+    sha
+  );
+  closeMenu();
+
+  if (location.pathname.startsWith("/bank/")) {
+    const params = new URLSearchParams(location.search);
+    params.set("commit", sha);
+    navigate(`${location.pathname}?${params.toString()}`);
+    return;
+  }
+
+  navigate("/workspace");
+}
+
+function RepositoryDropdown(props: {
+  currentRepoSlug: string;
+  isFetching: boolean;
+  isOpen: boolean;
+  onSelect: (repoSlug: string) => void;
+  options: RepoRef[];
+  t: (key: string) => string;
+}) {
+  const { currentRepoSlug, isFetching, isOpen, onSelect, options, t } = props;
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="source-nav__dropdown" style={{ minWidth: 320 }}>
+      {isFetching && (
+        <div className="source-nav__empty">{t("app.loading")}</div>
+      )}
+      {!isFetching &&
+        options.map((repoOption) => {
+          const repoSlug = `${repoOption.owner}/${repoOption.repo}`;
+          return (
+            <button
+              className={`source-nav__option ${repoSlug === currentRepoSlug ? "source-nav__option--active" : ""}`}
+              key={repoSlug}
+              onClick={() => onSelect(repoSlug)}
+              type="button"
+            >
+              {repoSlug}
+            </button>
+          );
+        })}
+    </div>
+  );
+}
+
+function SourceDropdown(props: {
+  currentSource: SourceRef | null;
+  isFetching: boolean;
+  isOpen: boolean;
+  onMainSelect: () => void;
+  onSourceQueryChange: (value: string) => void;
+  onPullRequestSelect: (pr: OpenPullRequestItem) => void;
+  pullRequests: OpenPullRequestItem[];
+  sourceQuery: string;
+  t: (key: string) => string;
+}) {
+  const {
+    currentSource,
+    isFetching,
+    isOpen,
+    onMainSelect,
+    onPullRequestSelect,
+    onSourceQueryChange,
+    pullRequests,
+    sourceQuery,
+    t,
+  } = props;
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="source-nav__dropdown" style={{ minWidth: 420 }}>
+      <div className="source-nav__search-wrap">
+        <input
+          aria-label={t("source.searchPR")}
+          className="input"
+          onChange={(event) => onSourceQueryChange(event.target.value)}
+          placeholder={t("source.searchPR")}
+          value={sourceQuery}
+        />
+      </div>
+      <button
+        className={`source-nav__option ${currentSource?.type === "branch" && currentSource.name === config.defaultBranch ? "source-nav__option--active" : ""}`}
+        onClick={onMainSelect}
+        type="button"
+      >
+        <span>{config.defaultBranch}</span>
+      </button>
+
+      {isFetching && (
+        <div className="source-nav__empty">{t("app.loading")}</div>
+      )}
+
+      {!isFetching &&
+        pullRequests.map((pr) => (
+          <button
+            className={`source-nav__option ${currentSource?.type === "pr" && currentSource.prNumber === pr.number ? "source-nav__option--active" : ""}`}
+            key={pr.number}
+            onClick={() => onPullRequestSelect(pr)}
+            type="button"
+          >
+            <span className="text-muted text-sm">#{pr.number}</span>
+            <span className="truncate text-sm">{pr.title}</span>
+            <span className="badge badge--info">✓ {pr.approvedCount}</span>
+          </button>
+        ))}
+
+      {!isFetching && pullRequests.length === 0 && (
+        <div className="source-nav__empty">{t("bank.noResults")}</div>
+      )}
+    </div>
+  );
+}
+
+function CommitDropdown(props: {
+  commits: PullRequestCommitItem[];
+  currentSha: string;
+  isFetching: boolean;
+  isOpen: boolean;
+  onCommitSelect: (sha: string) => void;
+  t: (key: string) => string;
+}) {
+  const { commits, currentSha, isFetching, isOpen, onCommitSelect, t } = props;
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="source-nav__dropdown" style={{ minWidth: 420 }}>
+      {isFetching && (
+        <div className="source-nav__empty">{t("app.loading")}</div>
+      )}
+
+      {!isFetching &&
+        commits.map((commit) => {
+          const isActive = commit.sha === currentSha;
+          return (
+            <button
+              className={`source-nav__option ${isActive ? "source-nav__option--active" : ""}`}
+              key={commit.sha}
+              onClick={() => onCommitSelect(commit.sha)}
+              type="button"
+            >
+              <span className="source-nav__commit-sha">
+                {getShortSha(commit.sha)}
+              </span>
+              <span className="truncate text-sm">
+                {commit.message || t("source.commitWithoutMessage")}
+              </span>
+            </button>
+          );
+        })}
+
+      {!isFetching && commits.length === 0 && (
+        <div className="source-nav__empty">{t("source.noCommits")}</div>
+      )}
+    </div>
+  );
+}
+
 export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -89,6 +411,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const [sourceQuery, setSourceQuery] = useState("");
   const repository = useSourceStore((s) => s.repository);
   const sourceRef = useSourceStore((s) => s.sourceRef);
+  const draftStore = useDraftStore();
   const switchSource = useSwitchSource();
   const switchRepository = useSwitchRepository();
   const isHome = location.pathname === "/";
@@ -98,6 +421,11 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const { data: openPRs = [], isFetching: isPRsFetching } = useOpenPRs(
     openMenu === "source" || sourceRef?.type === "pr"
   );
+  const { data: pullRequestCommits = [], isFetching: isCommitListFetching } =
+    usePullRequestCommits(
+      sourceRef?.type === "pr" ? sourceRef.prNumber : undefined,
+      openMenu === "commit"
+    );
 
   const sortedPRs = useMemo(() => sortPRs(openPRs), [openPRs]);
   const filteredPRs = useMemo(
@@ -111,7 +439,9 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
         : null,
     [sortedPRs, sourceRef]
   );
-
+  const currentRepoSlug = `${repository.owner}/${repository.repo}`;
+  const repositoryOptions =
+    availableRepos.length > 0 ? availableRepos : [repository];
   const repositoryUrl = `https://github.com/${repository.owner}/${repository.repo}`;
   const sourceLabel =
     sourceRef?.type === "pr" && sourceRef.prNumber
@@ -137,53 +467,10 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
     setSourceQuery("");
   };
 
-  const handleRepositoryChange = async (repoSlug: string) => {
-    const [owner, repo] = repoSlug.split("/");
-    if (!(owner && repo)) {
-      return;
-    }
-
-    await switchRepository({ owner, repo });
-    closeMenu();
-    navigate("/");
-  };
-
-  const handleMainSelect = async () => {
-    await switchSource("branch", config.defaultBranch);
-    closeMenu();
-    navigate("/workspace");
-  };
-
-  const handlePRSelect = async (pr: {
-    number: number;
-    headRef: string;
-    headSha: string;
-  }) => {
-    await switchSource("pr", pr.headRef, pr.number, pr.headSha);
-    const changedBankPaths = collectChangedBankPaths(
-      useSourceStore.getState().sourceChangedFiles
-    );
-    closeMenu();
-
-    if (changedBankPaths.length === 1) {
-      const [bankPath] = changedBankPaths;
-      if (bankPath) {
-        navigate(
-          buildBankWorkspacePath({
-            bankPath,
-            repository,
-            source: { type: "pr", prNumber: pr.number },
-          })
-        );
-        return;
-      }
-    }
-    navigate("/workspace");
-  };
-
-  const repositoryOptions =
-    availableRepos.length > 0 ? availableRepos : [repository];
-  const currentRepoSlug = `${repository.owner}/${repository.repo}`;
+  const confirmDiscardDrafts = createDiscardDraftsGuard(
+    t("source.switchDiscardConfirm"),
+    draftStore
+  );
 
   return (
     <div className="source-nav" ref={ref}>
@@ -209,30 +496,22 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
           >
             ↗
           </a>
-
-          {openMenu === "repo" && (
-            <div className="source-nav__dropdown" style={{ minWidth: 320 }}>
-              {isReposFetching && (
-                <div className="source-nav__empty">{t("app.loading")}</div>
-              )}
-              {!isReposFetching &&
-                repositoryOptions.map((repoOption) => {
-                  const repoSlug = `${repoOption.owner}/${repoOption.repo}`;
-                  return (
-                    <button
-                      className={`source-nav__option ${repoSlug === currentRepoSlug ? "source-nav__option--active" : ""}`}
-                      key={repoSlug}
-                      onClick={() => {
-                        void handleRepositoryChange(repoSlug);
-                      }}
-                      type="button"
-                    >
-                      {repoSlug}
-                    </button>
-                  );
-                })}
-            </div>
-          )}
+          <RepositoryDropdown
+            currentRepoSlug={currentRepoSlug}
+            isFetching={isReposFetching}
+            isOpen={openMenu === "repo"}
+            onSelect={(repoSlug) => {
+              void selectRepository({
+                closeMenu,
+                confirmDiscardDrafts,
+                navigate,
+                repoSlug,
+                switchRepository,
+              });
+            }}
+            options={repositoryOptions}
+            t={t}
+          />
         </div>
       )}
 
@@ -262,61 +541,80 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
             >
               ↗
             </a>
-            <PullRequestLabels
-              className="source-nav__pr-labels"
-              labels={activePullRequest?.labels ?? []}
-              neutralLabels={buildPullRequestNeutralLabels(activePullRequest)}
+            <SourceDropdown
+              currentSource={sourceRef}
+              isFetching={isPRsFetching}
+              isOpen={openMenu === "source"}
+              onMainSelect={() => {
+                void selectMainSource({
+                  closeMenu,
+                  confirmDiscardDrafts,
+                  navigate,
+                  switchSource,
+                });
+              }}
+              onPullRequestSelect={(pullRequest) => {
+                void selectPullRequest({
+                  closeMenu,
+                  confirmDiscardDrafts,
+                  navigate,
+                  pullRequest,
+                  repository,
+                  switchSource,
+                });
+              }}
+              onSourceQueryChange={setSourceQuery}
+              pullRequests={filteredPRs}
+              sourceQuery={sourceQuery}
+              t={t}
             />
+          </div>
 
-            {openMenu === "source" && (
-              <div className="source-nav__dropdown" style={{ minWidth: 420 }}>
-                <div className="source-nav__search-wrap">
-                  <input
-                    aria-label={t("source.searchPR")}
-                    className="input"
-                    onChange={(event) => setSourceQuery(event.target.value)}
-                    placeholder={t("source.searchPR")}
-                    value={sourceQuery}
-                  />
-                </div>
+          {sourceRef?.type === "pr" && (
+            <>
+              <span className="source-nav__separator">/</span>
+              <div className="source-nav__item">
                 <button
-                  className={`source-nav__option ${sourceRef?.type === "branch" && sourceRef.name === config.defaultBranch ? "source-nav__option--active" : ""}`}
-                  onClick={() => {
-                    void handleMainSelect();
-                  }}
+                  className="source-nav__label source-nav__label--hash"
+                  onClick={() =>
+                    setOpenMenu((current) =>
+                      current === "commit" ? null : "commit"
+                    )
+                  }
+                  title={sourceRef.sha}
                   type="button"
                 >
-                  <span>{config.defaultBranch}</span>
+                  {getShortSha(sourceRef.sha)}
                 </button>
-
-                {isPRsFetching && (
-                  <div className="source-nav__empty">{t("app.loading")}</div>
-                )}
-
-                {!isPRsFetching &&
-                  filteredPRs.map((pr) => (
-                    <button
-                      className={`source-nav__option ${sourceRef?.type === "pr" && sourceRef.prNumber === pr.number ? "source-nav__option--active" : ""}`}
-                      key={pr.number}
-                      onClick={() => {
-                        void handlePRSelect(pr);
-                      }}
-                      type="button"
-                    >
-                      <span className="text-muted text-sm">#{pr.number}</span>
-                      <span className="truncate text-sm">{pr.title}</span>
-                      <span className="badge badge--info">
-                        ✓ {pr.approvedCount}
-                      </span>
-                    </button>
-                  ))}
-
-                {!isPRsFetching && filteredPRs.length === 0 && (
-                  <div className="source-nav__empty">{t("bank.noResults")}</div>
-                )}
+                <PullRequestLabels
+                  className="source-nav__pr-labels"
+                  labels={activePullRequest?.labels ?? []}
+                  neutralLabels={buildPullRequestNeutralLabels(
+                    activePullRequest
+                  )}
+                />
+                <CommitDropdown
+                  commits={pullRequestCommits}
+                  currentSha={sourceRef.sha}
+                  isFetching={isCommitListFetching}
+                  isOpen={openMenu === "commit"}
+                  onCommitSelect={(sha) => {
+                    void selectPullRequestCommit({
+                      activePullRequest,
+                      closeMenu,
+                      confirmDiscardDrafts,
+                      location,
+                      navigate,
+                      sha,
+                      sourceRef,
+                      switchSource,
+                    });
+                  }}
+                  t={t}
+                />
               </div>
-            )}
-          </div>
+            </>
+          )}
         </>
       )}
     </div>

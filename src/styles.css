@@ -240,6 +240,14 @@
     padding: 0;
   }
 
+  .source-nav__label--hash {
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+
   .source-nav__label:hover {
     color: var(--c-accent);
   }
@@ -326,7 +334,17 @@
   }
 
   .source-nav__pr-labels {
+    margin-left: 10px;
     max-width: min(280px, 32vw);
+  }
+
+  .source-nav__commit-sha {
+    min-width: 44px;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    font-size: 12px;
+    color: var(--c-text-muted);
   }
 
   .app-main {

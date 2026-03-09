@@ -1974,6 +1974,95 @@
                       "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "YVk7f",
+                      "name": "work2Sep3",
+                      "fill": "#8A8A8A",
+                      "content": "/",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "RuTdw",
+                      "name": "work2CommitHash",
+                      "fill": "#6C6C6C",
+                      "content": "ae8a8",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "r8Lcp",
+                      "name": "work2AuthorChip",
+                      "width": 70,
+                      "height": 18,
+                      "fill": "#F0F0F0",
+                      "cornerRadius": 999,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "y3Hke",
+                          "name": "work2AuthorText",
+                          "fill": "#6C6C6C",
+                          "content": "doovoos",
+                          "fontFamily": "Inter",
+                          "fontSize": 9,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "v0NpQ",
+                      "name": "work2ApproveChip",
+                      "width": 52,
+                      "height": 18,
+                      "fill": "#F0F0F0",
+                      "cornerRadius": 999,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "x5Bma",
+                          "name": "work2ApproveText",
+                          "fill": "#6C6C6C",
+                          "content": "✓ 0",
+                          "fontFamily": "Inter",
+                          "fontSize": 9,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "m6Tqe",
+                      "name": "work2LabelChip",
+                      "width": 88,
+                      "height": 18,
+                      "fill": "#008C7A",
+                      "cornerRadius": 999,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "p1Qru",
+                          "name": "work2LabelText",
+                          "fill": "#FFFFFF",
+                          "content": "help wanted",
+                          "fontFamily": "Inter",
+                          "fontSize": 9,
+                          "fontWeight": "700"
+                        }
+                      ]
                     }
                   ]
                 },

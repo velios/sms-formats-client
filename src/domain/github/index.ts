@@ -9,6 +9,7 @@ export {
   fetchBranchSha,
   fetchFileContent,
   fetchOpenPRs,
+  fetchPullRequestCommits,
   fetchPullRequestFiles,
   fetchPullRequestHead,
   fetchPullRequestValidationDetails,

@@ -26,10 +26,12 @@ describe("bank-route", () => {
     const path = buildBankWorkspacePath({
       bankPath: "src/by_15382",
       repository: { owner: "velios", repo: "sms-formats" },
-      source: { type: "pr", prNumber: 120 },
+      source: { type: "pr", prNumber: 120, sha: "a1b2c3d4" },
     });
 
-    expect(path).toBe("/bank/by_15382/repo/velios/branch-or-pr/120");
+    expect(path).toBe(
+      "/bank/by_15382/repo/velios/branch-or-pr/120?commit=a1b2c3d4"
+    );
   });
 
   it("parses structured route params", () => {
@@ -37,12 +39,13 @@ describe("bank-route", () => {
       bankKey: "by_15382",
       repoOwner: "velios",
       branchOrPr: "120",
+      commit: "a1b2c3d4",
     });
 
     expect(parsed).toEqual({
       bankPath: "src/by_15382",
       repoOwner: "velios",
-      source: { type: "pr", prNumber: 120 },
+      source: { type: "pr", prNumber: 120, sha: "a1b2c3d4" },
       isStructuredRoute: true,
     });
   });
@@ -61,7 +64,7 @@ describe("bank-route", () => {
         { type: "pr", name: "feature/x", sha: "sha", prNumber: 7 },
         "main"
       )
-    ).toEqual({ type: "pr", prNumber: 7 });
+    ).toEqual({ type: "pr", prNumber: 7, sha: "sha" });
     expect(sourceRefToRouteSource(null, "main")).toEqual({
       type: "branch",
       name: "main",
@@ -93,6 +96,12 @@ describe("bank-route", () => {
         { type: "pr", prNumber: 99 }
       )
     ).toBe(true);
+    expect(
+      isRouteSourceMatched(
+        { type: "pr", name: "feature/x", sha: "sha-a", prNumber: 99 },
+        { type: "pr", prNumber: 99, sha: "sha-b" }
+      )
+    ).toBe(false);
     expect(
       isRouteSourceMatched(
         { type: "branch", name: "main", sha: "sha" },

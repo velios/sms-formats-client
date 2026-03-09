@@ -962,6 +962,29 @@ export async function fetchPullRequestHead(
   };
 }
 
+export async function fetchPullRequestCommits(
+  prNumber: number,
+  repoRef?: RepoRef
+): Promise<Array<{ sha: string; message: string }>> {
+  const repo = resolveRepo(repoRef);
+  const commits = await publicOctokit.paginate(
+    publicOctokit.pulls.listCommits,
+    {
+      owner: repo.owner,
+      repo: repo.repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }
+  );
+
+  return commits
+    .map((commit) => ({
+      sha: commit.sha ?? "",
+      message: commit.commit?.message?.split("\n")[0]?.trim() ?? "",
+    }))
+    .filter((commit) => commit.sha.length > 0);
+}
+
 export async function fetchPullRequestFiles(
   prNumber: number,
   repoRef?: RepoRef

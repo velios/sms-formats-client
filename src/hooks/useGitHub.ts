@@ -6,6 +6,7 @@ import {
   fetchBranchSha,
   fetchFileContent,
   fetchOpenPRs,
+  fetchPullRequestCommits,
   fetchPullRequestFiles,
   fetchPullRequestHead,
   fetchRepoTree,
@@ -14,13 +15,36 @@ import {
   refreshPullRequestApprovalPermission,
 } from "@/domain/github";
 import type { RepoRef } from "@/domain/types";
-import { useSourceStore } from "@/store";
+import { useDraftStore, useSourceStore } from "@/store";
 
 const SOURCE_CACHE_STALE_MS = 10 * 60_000;
 const SOURCE_CACHE_GC_MS = 30 * 60_000;
 
 function repoKey(repository: RepoRef): string {
   return `${repository.owner}/${repository.repo}`;
+}
+
+function shouldResetDraftsOnSourceSwitch(params: {
+  currentSource: ReturnType<typeof useSourceStore.getState>["sourceRef"];
+  type: "branch" | "pr";
+  name: string;
+  prNumber?: number;
+  shaHint?: string;
+}): boolean {
+  const { currentSource, type, name, prNumber, shaHint } = params;
+  if (type === "branch") {
+    return !(
+      currentSource?.type === "branch" &&
+      currentSource.name === name &&
+      (!shaHint || currentSource.sha === shaHint)
+    );
+  }
+
+  return !(
+    currentSource?.type === "pr" &&
+    currentSource.prNumber === prNumber &&
+    (!shaHint || currentSource.sha === shaHint)
+  );
 }
 
 export function useBranches(enabled = true) {
@@ -40,6 +64,25 @@ export function useOpenPRs(enabled = true) {
     queryKey: ["open-prs", repoKey(repository)],
     queryFn: () => fetchOpenPRs(repository),
     enabled,
+    staleTime: SOURCE_CACHE_STALE_MS,
+    gcTime: SOURCE_CACHE_GC_MS,
+  });
+}
+
+export function usePullRequestCommits(
+  prNumber: number | undefined,
+  enabled = true
+) {
+  const repository = useSourceStore((s) => s.repository);
+  return useQuery({
+    queryKey: ["pull-request-commits", repoKey(repository), prNumber],
+    queryFn: async () => {
+      if (!prNumber) {
+        throw new Error("No pull request number");
+      }
+      return fetchPullRequestCommits(prNumber, repository);
+    },
+    enabled: enabled && !!prNumber,
     staleTime: SOURCE_CACHE_STALE_MS,
     gcTime: SOURCE_CACHE_GC_MS,
   });
@@ -102,12 +145,14 @@ export function useFileContent(
 
 export function useSwitchSource() {
   const repository = useSourceStore((s) => s.repository);
+  const sourceRef = useSourceStore((s) => s.sourceRef);
   const setSource = useSourceStore((s) => s.setSource);
   const setSourceChangedFiles = useSourceStore((s) => s.setSourceChangedFiles);
   const setLoading = useSourceStore((s) => s.setLoading);
   const setError = useSourceStore((s) => s.setError);
   const setTree = useSourceStore((s) => s.setTree);
   const setBanks = useSourceStore((s) => s.setBanks);
+  const clearDrafts = useDraftStore((s) => s.clearAll);
 
   return async (
     type: "branch" | "pr",
@@ -115,16 +160,27 @@ export function useSwitchSource() {
     prNumber?: number,
     shaHint?: string
   ) => {
+    if (
+      shouldResetDraftsOnSourceSwitch({
+        currentSource: sourceRef,
+        type,
+        name,
+        prNumber,
+        shaHint,
+      })
+    ) {
+      clearDrafts();
+    }
     setLoading(true);
     try {
       let sha = shaHint;
       let changedFiles: string[] = [];
 
       if (type === "pr" && prNumber) {
+        const prHead = await fetchPullRequestHead(prNumber, repository);
+        name = prHead.headRef;
         if (!sha) {
-          const prHead = await fetchPullRequestHead(prNumber, repository);
           sha = prHead.headSha;
-          name = prHead.headRef;
         }
         changedFiles = await fetchPullRequestFiles(prNumber, repository);
       }
@@ -149,6 +205,7 @@ export function useSwitchSource() {
 
 export function useSwitchRepository() {
   const currentRepository = useSourceStore((s) => s.repository);
+  const clearDrafts = useDraftStore((s) => s.clearAll);
   const setRepository = useSourceStore((s) => s.setRepository);
   const setSource = useSourceStore((s) => s.setSource);
   const setSourceChangedFiles = useSourceStore((s) => s.setSourceChangedFiles);
@@ -165,6 +222,7 @@ export function useSwitchRepository() {
       return;
     }
 
+    clearDrafts();
     setLoading(true);
     try {
       await refreshPullRequestApprovalPermission(nextRepository);

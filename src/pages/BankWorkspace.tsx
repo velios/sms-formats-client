@@ -1366,7 +1366,7 @@ function makeRouteSyncKey(params: {
     return `repo:${repoKey}|source:none`;
   }
   if (parsedRoute.source.type === "pr") {
-    return `repo:${repoKey}|source:pr:${parsedRoute.source.prNumber}`;
+    return `repo:${repoKey}|source:pr:${parsedRoute.source.prNumber}:${parsedRoute.source.sha ?? ""}`;
   }
   return `repo:${repoKey}|source:branch:${parsedRoute.source.name}`;
 }
@@ -1383,9 +1383,15 @@ async function syncRouteSource(params: {
   if (targetSource.type === "pr") {
     const alreadySelected =
       currentSource?.type === "pr" &&
-      currentSource.prNumber === targetSource.prNumber;
+      currentSource.prNumber === targetSource.prNumber &&
+      (!targetSource.sha || currentSource.sha === targetSource.sha);
     if (!alreadySelected) {
-      await switchSource("pr", config.defaultBranch, targetSource.prNumber);
+      await switchSource(
+        "pr",
+        config.defaultBranch,
+        targetSource.prNumber,
+        targetSource.sha
+      );
     }
     return;
   }
@@ -1506,8 +1512,14 @@ export function BankWorkspace() {
         bankKey: routeParams.bankKey,
         repoOwner: routeParams.repoOwner,
         branchOrPr: routeParams.branchOrPr,
+        commit: searchParams.get("commit"),
       }),
-    [routeParams.bankKey, routeParams.repoOwner, routeParams.branchOrPr]
+    [
+      routeParams.bankKey,
+      routeParams.repoOwner,
+      routeParams.branchOrPr,
+      searchParams,
+    ]
   );
   const bankPath = parsedRoute.bankPath;
   const requestedFile = useMemo(
@@ -1566,6 +1578,7 @@ export function BankWorkspace() {
           filePath: entry.filePath,
           content: entry.content,
           isDeleted: entry.isDeleted,
+          baseSha: entry.baseSha,
         })),
     [bankPath, draftStore, draftStore.drafts]
   );

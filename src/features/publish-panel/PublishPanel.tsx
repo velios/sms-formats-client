@@ -31,6 +31,7 @@ interface ChangedFile {
   filePath: string;
   content: string;
   isDeleted: boolean;
+  baseSha: string;
 }
 
 interface PublishStoreLike {
@@ -118,6 +119,49 @@ function buildPullRequestBody(params: {
   const { bankName, changedFilesCount, validationIssues } = params;
   const validationSummary = buildValidationSummary(validationIssues);
   return `## Changes\n\nBank: \`${bankName}\`\nFiles changed: ${changedFilesCount}\n\n## Validation\n\n${validationSummary}\n\n---\n*Created by Zenmoney SMS Formats*`;
+}
+
+function resolvePublishError(params: {
+  bank: BankInfo | undefined;
+  bankPath: string;
+  changedFiles: ChangedFile[];
+  draftStore: DraftStoreLike;
+  isMultiBank: boolean;
+  publishStore: PublishStoreLike;
+  sourceSha: string | undefined;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): string | null {
+  const {
+    bank,
+    bankPath,
+    changedFiles,
+    draftStore,
+    isMultiBank,
+    publishStore,
+    sourceSha,
+    t,
+  } = params;
+  const validationError = runPublishValidation({
+    bank,
+    bankPath,
+    changedFiles,
+    draftStore,
+    publishStore,
+    t,
+  });
+  if (validationError) {
+    return validationError;
+  }
+  if (isMultiBank) {
+    return t("validation.multiBankPublish");
+  }
+  if (changedFiles.length === 0) {
+    return "No changes to publish";
+  }
+  if (sourceSha && changedFiles.some((file) => file.baseSha !== sourceSha)) {
+    return t("publish.outdatedBase");
+  }
+  return null;
 }
 
 async function publishBankChanges(params: {
@@ -264,26 +308,18 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       publishStore.setToken(trimmedToken);
 
       const bank = banks.find((b) => b.folderPath === bankPath);
-      const validationError = runPublishValidation({
+      const publishError = resolvePublishError({
         bank,
         bankPath,
         changedFiles,
         draftStore,
+        isMultiBank,
         publishStore,
+        sourceSha: sourceRef?.sha,
         t,
       });
-      if (validationError) {
-        publishStore.setError(validationError);
-        return;
-      }
-
-      if (isMultiBank) {
-        publishStore.setError(t("validation.multiBankPublish"));
-        return;
-      }
-
-      if (changedFiles.length === 0) {
-        publishStore.setError("No changes to publish");
+      if (publishError) {
+        publishStore.setError(publishError);
         return;
       }
 

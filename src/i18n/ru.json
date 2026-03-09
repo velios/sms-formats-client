@@ -37,7 +37,10 @@
     "validatorLoadFailed": "Не удалось загрузить подробности валидации. Откройте checks в GitHub.",
     "validatorErrorsTitle": "Ошибки валидатора",
     "openValidatorChecks": "Открыть на GitHub",
-    "validatorErrorsUnavailable": "Проверка валидатора не пройдена. Откройте checks в PR для деталей."
+    "validatorErrorsUnavailable": "Проверка валидатора не пройдена. Откройте checks в PR для деталей.",
+    "switchDiscardConfirm": "Есть несохранённые изменения, не вошедшие в коммит PR. При переключении репозитория, источника или коммита они будут безвозвратно удалены. Продолжить?",
+    "commitWithoutMessage": "Без сообщения коммита",
+    "noCommits": "Коммиты не найдены"
   },
   "githubAuth": {
     "openSettings": "Настройки GitHub токена",
@@ -207,6 +210,7 @@
     "success": "PR успешно создан!",
     "successUpdate": "PR успешно обновлён!",
     "noChanges": "Нет изменений для публикации",
+    "outdatedBase": "Нельзя публиковать изменения, созданные поверх другого коммита. Переключитесь на нужный шаг и внесите правки заново.",
     "updateError": "Не удалось обновить Pull Request",
     "prLink": "Ссылка на PR",
     "preflight": "Предварительная проверка",
