@@ -1,6 +1,5 @@
 import { Octokit } from "@octokit/rest";
 import { config } from "@/config";
-import { isSmsGameIssue } from "@/domain/sms-game/issue-import";
 import type { BankInfo, FileEntry, PullRequestLabel, RepoRef } from "../types";
 import { decodeBase64Utf8, encodeBase64Utf8 } from "./encoding";
 
@@ -980,41 +979,6 @@ export async function fetchPullRequestFiles(
     .filter((path): path is string => !!path);
 }
 
-export async function fetchStartableIssues(repoRef?: RepoRef): Promise<
-  {
-    number: number;
-    title: string;
-    body: string;
-    url: string;
-    state: "open" | "closed";
-    updatedAt: string;
-  }[]
-> {
-  const repo = resolveRepo(repoRef);
-  const allIssues = await publicOctokit.paginate(
-    publicOctokit.issues.listForRepo,
-    {
-      owner: repo.owner,
-      repo: repo.repo,
-      state: "all",
-      per_page: 100,
-    }
-  );
-
-  return allIssues
-    .filter((issue) => !("pull_request" in issue))
-    .map((issue) => ({
-      number: issue.number,
-      title: issue.title,
-      body: issue.body ?? "",
-      url: issue.html_url,
-      state: (issue.state === "open" ? "open" : "closed") as "open" | "closed",
-      updatedAt: issue.updated_at,
-    }))
-    .filter((issue) => isSmsGameIssue(issue))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-}
-
 export async function fetchBranchSha(
   branch: string,
   repoRef?: RepoRef
@@ -1363,41 +1327,4 @@ export async function validateToken(token: string): Promise<string> {
   const octokit = createAuthenticatedOctokit(token);
   const user = await octokit.users.getAuthenticated();
   return user.data.login;
-}
-
-export async function createIssue(
-  octokit: Octokit,
-  title: string,
-  body: string,
-  repoRef?: RepoRef
-): Promise<{ url: string; number: number }> {
-  const target = resolveRepo(repoRef);
-  const issue = await octokit.issues.create({
-    owner: target.owner,
-    repo: target.repo,
-    title,
-    body,
-  });
-  return { url: issue.data.html_url, number: issue.data.number };
-}
-
-export async function fetchIssue(
-  issueNumber: number,
-  octokit?: Octokit,
-  repoRef?: RepoRef
-): Promise<{ number: number; title: string; body: string; url: string }> {
-  const target = resolveRepo(repoRef);
-  const api = octokit ?? publicOctokit;
-  const issue = await api.issues.get({
-    owner: target.owner,
-    repo: target.repo,
-    issue_number: issueNumber,
-  });
-
-  return {
-    number: issue.data.number,
-    title: issue.data.title,
-    body: issue.data.body ?? "",
-    url: issue.data.html_url,
-  };
 }

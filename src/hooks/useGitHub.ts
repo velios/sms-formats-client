@@ -10,7 +10,6 @@ import {
   fetchPullRequestHead,
   fetchRepoTree,
   fetchSourceRepoForks,
-  fetchStartableIssues,
   indexBanksFromTree,
   refreshPullRequestApprovalPermission,
 } from "@/domain/github";
@@ -40,17 +39,6 @@ export function useOpenPRs(enabled = true) {
   return useQuery({
     queryKey: ["open-prs", repoKey(repository)],
     queryFn: () => fetchOpenPRs(repository),
-    enabled,
-    staleTime: SOURCE_CACHE_STALE_MS,
-    gcTime: SOURCE_CACHE_GC_MS,
-  });
-}
-
-export function useStartableIssues(enabled = true) {
-  const repository = useSourceStore((s) => s.repository);
-  return useQuery({
-    queryKey: ["startable-issues", repoKey(repository)],
-    queryFn: () => fetchStartableIssues(repository),
     enabled,
     staleTime: SOURCE_CACHE_STALE_MS,
     gcTime: SOURCE_CACHE_GC_MS,

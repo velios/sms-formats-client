@@ -27,22 +27,10 @@ Sequence:
 4. Review changed files and validation feedback.
 5. Apply edits or publish follow-up updates.
 
-## 3. SMS Game Flow
-
-Primary goal: guide a non-developer user through the markup game without exposing internal tooling complexity.
-
-Sequence:
-
-1. Enter `SmsMarkupGame`.
-2. Read context and task instructions.
-3. Progress through markup steps.
-4. Receive feedback and result state.
-
 ## Flow-to-Pencil Mapping
 
 - `01_Flows / Developer Workspace Flow`
 - `01_Flows / PR Review Flow`
-- `01_Flows / SMS Game Flow`
 
 Keep flow boards lightweight:
 
