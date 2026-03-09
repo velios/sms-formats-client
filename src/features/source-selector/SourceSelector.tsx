@@ -6,7 +6,6 @@ import { PullRequestLabels } from "@/components/PullRequestLabels";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
-import { buildBankWorkspacePath } from "@/domain/bank-route";
 import type { PullRequestLabel, RepoRef, SourceRef } from "@/domain/types";
 import {
   useAvailableSourceRepos,
@@ -15,6 +14,7 @@ import {
   useSwitchRepository,
   useSwitchSource,
 } from "@/hooks/useGitHub";
+import { getPullRequestWorkspacePath } from "@/lib/pull-request-navigation";
 import { confirmSourceSwitch } from "@/lib/source-switch";
 import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
@@ -70,44 +70,6 @@ const sourceNavLabelClassName = (isHash = false) =>
 const sourceNavExternalLinkClassName =
   "ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
 
-function collectChangedBankPaths(paths: string[]): string[] {
-  const banks = new Set<string>();
-  for (const path of paths) {
-    if (!path.startsWith("src/")) {
-      continue;
-    }
-    const bankFolder = path.split("/")[1];
-    if (bankFolder) {
-      banks.add(`src/${bankFolder}`);
-    }
-  }
-  return Array.from(banks).sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: "base" })
-  );
-}
-
-function getSingleChangedBankPath(paths: string[]): string | null {
-  const bankPaths = collectChangedBankPaths(paths);
-  if (bankPaths.length !== 1) {
-    return null;
-  }
-  return bankPaths[0] ?? null;
-}
-
-function getPreferredChangedFilePath(
-  paths: string[],
-  bankPath: string
-): string | null {
-  const bankPaths = paths.filter((path) => path.startsWith(`${bankPath}/`));
-  return (
-    bankPaths.find(
-      (path) => path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
-    ) ??
-    bankPaths[0] ??
-    null
-  );
-}
-
 function navigateToPullRequestWorkspace(params: {
   changedPaths: string[];
   navigate: ReturnType<typeof useNavigate>;
@@ -116,18 +78,12 @@ function navigateToPullRequestWorkspace(params: {
   sourceSha: string;
 }): void {
   const { changedPaths, navigate, prNumber, repository, sourceSha } = params;
-  const bankPath = getSingleChangedBankPath(changedPaths);
-  if (!bankPath) {
-    navigate("/workspace");
-    return;
-  }
-
   navigate(
-    buildBankWorkspacePath({
-      bankPath,
-      filePath: getPreferredChangedFilePath(changedPaths, bankPath),
+    getPullRequestWorkspacePath({
+      changedPaths,
+      prNumber,
       repository,
-      source: { type: "pr", prNumber, sha: sourceSha },
+      sourceSha,
     })
   );
 }

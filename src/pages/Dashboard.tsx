@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ModalDialog } from "@/components/ModalDialog";
 import { PullRequestLabels } from "@/components/PullRequestLabels";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,10 @@ import { buildBankWorkspacePath } from "@/domain/bank-route";
 import { fetchPullRequestValidationDetails } from "@/domain/github";
 import type { BankInfo, PullRequestLabel } from "@/domain/types";
 import { useOpenPRs, useRepoTree, useSwitchSource } from "@/hooks/useGitHub";
+import {
+  getPullRequestWorkspacePath,
+  type PullRequestShortcutNotice,
+} from "@/lib/pull-request-navigation";
 import { confirmSourceSwitch } from "@/lib/source-switch";
 import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
@@ -103,45 +107,6 @@ function addRecentPR(repoSlug: string, prNumber: number) {
   }
 }
 
-function collectChangedBankPaths(paths: string[]): string[] {
-  const banks = new Set<string>();
-  for (const path of paths) {
-    if (!path.startsWith("src/")) {
-      continue;
-    }
-    const bankFolder = path.split("/")[1];
-    if (bankFolder) {
-      banks.add(`src/${bankFolder}`);
-    }
-  }
-  return Array.from(banks).sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: "base" })
-  );
-}
-
-function getSingleChangedBankPath(paths: string[]): string | null {
-  const bankPaths = collectChangedBankPaths(paths);
-  if (bankPaths.length !== 1) {
-    return null;
-  }
-  return bankPaths[0] ?? null;
-}
-
-function getPreferredChangedFilePath(
-  paths: string[],
-  bankPath: string
-): string | null {
-  const bankPaths = paths.filter((path) => path.startsWith(`${bankPath}/`));
-  return (
-    bankPaths.find(
-      (path) =>
-        path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
-    ) ??
-    bankPaths[0] ??
-    null
-  );
-}
-
 function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => {
     const aHasValidationErrors = a.failedValidationCount > 0 ? 1 : 0;
@@ -184,8 +149,13 @@ const dashboardRowClassName = (isActive: boolean) =>
 const dashboardIconLinkClassName =
   "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
 
+interface DashboardLocationState {
+  pullRequestShortcutNotice?: PullRequestShortcutNotice;
+}
+
 export function Dashboard() {
   const { t } = useTranslation();
+  const location = useLocation();
   const navigate = useNavigate();
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
@@ -193,6 +163,9 @@ export function Dashboard() {
   const banks = useSourceStore((s) => s.banks);
   const switchSource = useSwitchSource();
   const draftStore = useDraftStore();
+  const shortcutNotice =
+    (location.state as DashboardLocationState | null)
+      ?.pullRequestShortcutNotice ?? null;
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [prTab, setPrTab] = useState<"all" | "recent">("all");
@@ -361,24 +334,6 @@ export function Dashboard() {
     async (pr: { number: number; headRef: string; headSha: string }) => {
       const isCurrentPullRequest =
         sourceRef?.type === "pr" && sourceRef.prNumber === pr.number;
-      const navigateToPullRequestWorkspace = (
-        changedPaths: string[],
-        sourceSha: string
-      ) => {
-        const bankPath = getSingleChangedBankPath(changedPaths);
-        if (!bankPath) {
-          navigate("/workspace");
-          return;
-        }
-        navigate(
-          buildBankWorkspacePath({
-            bankPath,
-            filePath: getPreferredChangedFilePath(changedPaths, bankPath),
-            repository,
-            source: { type: "pr", prNumber: pr.number, sha: sourceSha },
-          })
-        );
-      };
 
       addRecentPR(repoSlug, pr.number);
       if (isCurrentPullRequest) {
@@ -386,9 +341,13 @@ export function Dashboard() {
           localChangedFiles.length > 0
             ? localChangedFiles
             : useSourceStore.getState().sourceChangedFiles;
-        navigateToPullRequestWorkspace(
-          preferredChangedPaths,
-          sourceRef.sha ?? pr.headSha
+        navigate(
+          getPullRequestWorkspacePath({
+            changedPaths: preferredChangedPaths,
+            prNumber: pr.number,
+            repository,
+            sourceSha: sourceRef.sha ?? pr.headSha,
+          })
         );
         return;
       }
@@ -402,9 +361,13 @@ export function Dashboard() {
         return;
       }
       await switchSource("pr", pr.headRef, pr.number, pr.headSha);
-      navigateToPullRequestWorkspace(
-        useSourceStore.getState().sourceChangedFiles,
-        pr.headSha
+      navigate(
+        getPullRequestWorkspacePath({
+          changedPaths: useSourceStore.getState().sourceChangedFiles,
+          prNumber: pr.number,
+          repository,
+          sourceSha: pr.headSha,
+        })
       );
     },
     [
@@ -490,6 +453,18 @@ export function Dashboard() {
     void loadValidationDetails(validationDetailsModal.prNumber);
   }, [loadValidationDetails, validationDetailsModal]);
 
+  const clearShortcutNotice = useCallback(() => {
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, navigate]);
+
+  const handleShortcutNoticeDiscardAndOpen = useCallback(() => {
+    if (!shortcutNotice) {
+      return;
+    }
+    draftStore.clearAll();
+    navigate(`/pr/${shortcutNotice.prNumber}`, { replace: true });
+  }, [draftStore, navigate, shortcutNotice]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (banksTab !== "all") {
       return;
@@ -528,6 +503,75 @@ export function Dashboard() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {shortcutNotice && (
+        <div className="mb-4 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <StatusBadge
+                className="w-fit"
+                variant={
+                  shortcutNotice.reason === "open-failed" ? "error" : "warning"
+                }
+              >
+                {shortcutNotice.reason === "open-failed"
+                  ? t("prShortcut.bannerOpenFailedBadge", {
+                      defaultValue: "Не удалось открыть PR",
+                    })
+                  : t("prShortcut.bannerBlockedBadge", {
+                      defaultValue: "Нельзя открыть ссылку сейчас",
+                    })}
+              </StatusBadge>
+              <div className="text-sm text-[color:var(--c-text)]">
+                {shortcutNotice.reason === "same-pr-drafts"
+                  ? t("prShortcut.samePrDraftsMessage", {
+                      defaultValue:
+                        "Нельзя открыть PR #{{prNumber}} по ссылке, потому что у вас есть незаконченные локальные правки в этом PR.",
+                      prNumber: shortcutNotice.prNumber,
+                    })
+                  : shortcutNotice.reason === "other-drafts"
+                    ? t("prShortcut.otherDraftsMessage", {
+                        defaultValue:
+                          "Нельзя открыть PR #{{prNumber}} по ссылке, пока у вас есть несброшенные локальные правки. Сначала сбросьте их или откройте PR в GitHub.",
+                        prNumber: shortcutNotice.prNumber,
+                      })
+                    : t("prShortcut.openFailedMessage", {
+                        defaultValue:
+                          "Не удалось открыть PR #{{prNumber}} в приложении. Можно попробовать ещё раз после сброса локальных правок или открыть PR в GitHub.",
+                        prNumber: shortcutNotice.prNumber,
+                      })}
+              </div>
+            </div>
+            <Button onClick={clearShortcutNotice} size="sm" type="button">
+              {t("app.close")}
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {shortcutNotice.reason !== "open-failed" && (
+              <Button
+                onClick={handleShortcutNoticeDiscardAndOpen}
+                size="sm"
+                type="button"
+                variant="destructive"
+              >
+                {t("prShortcut.discardAndOpen", {
+                  defaultValue: "Сбросить правки и открыть PR",
+                })}
+              </Button>
+            )}
+            <Button asChild size="sm" variant="default">
+              <a
+                href={shortcutNotice.githubUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {t("prShortcut.openOnGitHub", {
+                  defaultValue: "Открыть PR в GitHub",
+                })}
+              </a>
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="grid min-h-0 flex-1 gap-4 [grid-template-columns:minmax(360px,1fr)_minmax(520px,1.4fr)]">
         <div className={dashboardPanelClassName}>
           <div className={dashboardPanelHeaderClassName}>

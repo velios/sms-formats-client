@@ -55,6 +55,16 @@
     "invalidToken": "Не удалось проверить токен",
     "saving": "Проверка…"
   },
+  "prShortcut": {
+    "opening": "Открываем PR…",
+    "bannerBlockedBadge": "Нельзя открыть ссылку сейчас",
+    "bannerOpenFailedBadge": "Не удалось открыть PR",
+    "samePrDraftsMessage": "Нельзя открыть PR #{{prNumber}} по ссылке, потому что у вас есть незаконченные локальные правки в этом PR.",
+    "otherDraftsMessage": "Нельзя открыть PR #{{prNumber}} по ссылке, пока у вас есть несброшенные локальные правки. Сначала сбросьте их или откройте PR в GitHub.",
+    "openFailedMessage": "Не удалось открыть PR #{{prNumber}} в приложении. Можно попробовать ещё раз после сброса локальных правок или открыть PR в GitHub.",
+    "discardAndOpen": "Сбросить правки и открыть PR",
+    "openOnGitHub": "Открыть PR в GitHub"
+  },
   "bank": {
     "search": "Поиск банка…",
     "searchFile": "Поиск файла…",

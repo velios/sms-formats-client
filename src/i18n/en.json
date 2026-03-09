@@ -42,6 +42,16 @@
     "invalidToken": "Failed to validate token",
     "saving": "Validating…"
   },
+  "prShortcut": {
+    "opening": "Opening PR…",
+    "bannerBlockedBadge": "Cannot open this link right now",
+    "bannerOpenFailedBadge": "Failed to open PR",
+    "samePrDraftsMessage": "Cannot open PR #{{prNumber}} from the link because you have unfinished local changes in this PR.",
+    "otherDraftsMessage": "Cannot open PR #{{prNumber}} from the link while you still have local drafts. Discard them first or open the PR on GitHub.",
+    "openFailedMessage": "Failed to open PR #{{prNumber}} in the app. You can try again after discarding local drafts or open the PR on GitHub.",
+    "discardAndOpen": "Discard drafts and open PR",
+    "openOnGitHub": "Open PR on GitHub"
+  },
   "bank": {
     "search": "Search bank…",
     "searchFile": "Search file…",

@@ -7,6 +7,7 @@ import { StatusBadge } from "./components/ui/status-badge";
 import { useInitMainBranch } from "./hooks/useGitHub";
 import { BankWorkspace } from "./pages/BankWorkspace";
 import { Dashboard } from "./pages/Dashboard";
+import { PullRequestShortcut } from "./pages/PullRequestShortcut";
 import { useSourceStore } from "./store";
 
 export function App() {
@@ -52,6 +53,12 @@ export function App() {
             <Route
               element={workspaceBlocked ? workspaceFallback : <BankWorkspace />}
               path="/bank/:bankKey/repo/:repoSlug/branch-or-pr/:branchOrPr/*"
+            />
+            <Route
+              element={
+                workspaceBlocked ? workspaceFallback : <PullRequestShortcut />
+              }
+              path="/pr/:prNumber"
             />
             <Route element={<Navigate replace to="/" />} path="*" />
           </Routes>
