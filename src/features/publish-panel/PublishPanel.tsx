@@ -1,6 +1,10 @@
 import { useCallback, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
 import {
   createAuthenticatedOctokit,
@@ -369,8 +373,8 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
             <label className="text-muted text-sm" htmlFor={tokenInputId}>
               {t("publish.tokenLabel")}
             </label>
-            <input
-              className="input input--mono"
+            <Input
+              className="font-mono"
               id={tokenInputId}
               onChange={(e) => setToken(e.target.value)}
               placeholder="ghp_..."
@@ -393,8 +397,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
             <label className="text-muted text-sm" htmlFor={prTitleInputId}>
               {t("publish.prTitle")}
             </label>
-            <input
-              className="input"
+            <Input
               id={prTitleInputId}
               onChange={(e) => setPrTitle(e.target.value)}
               value={prTitle}
@@ -434,7 +437,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
 
       {step === "done" && publishStore.prUrl && (
         <div aria-live="polite" className="mb-md flex-col gap-sm" role="status">
-          <div className="badge badge--success">{publishSuccessLabel}</div>
+          <StatusBadge variant="success">{publishSuccessLabel}</StatusBadge>
           <a
             href={publishStore.prUrl}
             rel="noopener noreferrer"
@@ -475,12 +478,11 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       )}
 
       <div className="modal__actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose} type="button">
           {t("app.close")}
-        </button>
+        </Button>
         {step !== "done" && (
-          <button
-            className="btn btn--primary"
+          <Button
             disabled={
               isPublishing ||
               !token.trim() ||
@@ -488,10 +490,12 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
               isMultiBank
             }
             onClick={handlePublish}
+            type="button"
+            variant="primary"
           >
-            {isPublishing ? <span className="spinner" /> : null}
+            {isPublishing ? <Spinner /> : null}
             {publishActionLabel}
-          </button>
+          </Button>
         )}
       </div>
     </ModalDialog>

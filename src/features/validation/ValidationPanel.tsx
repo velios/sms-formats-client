@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { parseFormatFile } from "@/domain/format";
 import { fetchFileContent } from "@/domain/github";
 import type { BankInfo, RepoRef, ValidationIssue } from "@/domain/types";
@@ -165,30 +168,30 @@ export function ValidationPanel({
       {running ? (
         <div
           aria-live="polite"
-          className="flex items-center gap-sm"
+          className="flex items-center gap-2 text-muted-foreground text-sm"
           role="status"
         >
-          <span className="spinner" />
+          <Spinner />
           <span>{t("app.loading")}</span>
         </div>
       ) : ran ? (
         <div aria-live="polite" className="flex-col gap-md" role="status">
           <div className="flex gap-sm">
             {errors.length === 0 && warnings.length === 0 ? (
-              <span className="badge badge--success">
+              <StatusBadge variant="success">
                 {t("validation.valid")}
-              </span>
+              </StatusBadge>
             ) : (
               <>
                 {errors.length > 0 && (
-                  <span className="badge badge--error">
+                  <StatusBadge variant="error">
                     {t("validation.errors", { count: errors.length })}
-                  </span>
+                  </StatusBadge>
                 )}
                 {warnings.length > 0 && (
-                  <span className="badge badge--warning">
+                  <StatusBadge variant="warning">
                     {t("validation.warnings", { count: warnings.length })}
-                  </span>
+                  </StatusBadge>
                 )}
               </>
             )}
@@ -214,16 +217,17 @@ export function ValidationPanel({
       ) : null}
 
       <div className="modal__actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose} type="button">
           {t("app.close")}
-        </button>
+        </Button>
         {!running && ran && (
-          <button
-            className="btn btn--primary"
+          <Button
             onClick={() => void runValidation()}
+            type="button"
+            variant="primary"
           >
             {t("app.retry")}
-          </button>
+          </Button>
         )}
       </div>
     </ModalDialog>

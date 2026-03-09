@@ -1,6 +1,8 @@
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FORMAT_TEMPLATE } from "@/domain/format";
 import { useDraftStore, useSourceStore } from "@/store";
 
@@ -72,9 +74,8 @@ export function CreateBankModal({ onClose }: Props) {
           <label className="text-muted text-sm" htmlFor={bankNameInputId}>
             {t("bank.bankName")} *
           </label>
-          <input
+          <Input
             autoFocus
-            className="input"
             id={bankNameInputId}
             onChange={(e) => setBankName(e.target.value)}
             placeholder="Банк"
@@ -86,8 +87,7 @@ export function CreateBankModal({ onClose }: Props) {
           <label className="text-muted text-sm" htmlFor={bankIdInputId}>
             {t("bank.bankId")}
           </label>
-          <input
-            className="input"
+          <Input
             id={bankIdInputId}
             onChange={(e) => setBankId(e.target.value.replace(/\D/g, ""))}
             placeholder="123"
@@ -97,16 +97,17 @@ export function CreateBankModal({ onClose }: Props) {
       </div>
 
       <div className="modal__actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose} type="button">
           {t("app.cancel")}
-        </button>
-        <button
-          className="btn btn--primary"
+        </Button>
+        <Button
           disabled={!bankName.trim()}
           onClick={handleCreate}
+          type="button"
+          variant="primary"
         >
           {t("bank.createBank")}
-        </button>
+        </Button>
       </div>
     </ModalDialog>
   );

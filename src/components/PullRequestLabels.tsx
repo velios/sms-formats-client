@@ -4,6 +4,8 @@ import type {
   MouseEvent as ReactMouseEvent,
 } from "react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { PullRequestLabel } from "@/domain/types";
 
 const DEFAULT_LABEL_COLOR = "#d1d9e0";
@@ -78,38 +80,41 @@ export function PullRequestLabels({
   return (
     <div className={containerClassName}>
       {neutralLabels.map((label) => (
-        <span
-          className="pr-label-chip pr-label-chip--neutral"
+        <StatusBadge
+          className="max-w-[180px] truncate"
           key={`neutral-${label}`}
           title={label}
+          variant="default"
         >
           {label}
-        </span>
+        </StatusBadge>
       ))}
       {visibleLabels.map((label) => {
         const chipStyle = buildLabelStyle(label.color);
         if (isExpandable) {
           return (
-            <button
-              className="pr-label-chip pr-label-chip--button"
+            <Button
+              className="h-5 max-w-[180px] rounded-full px-2 font-semibold text-[11px]"
               key={label.name}
               onClick={(event) => {
                 stopEvent(event);
                 setIsExpanded(true);
               }}
               onKeyDown={stopEvent}
+              size="xs"
               style={chipStyle}
               title={label.name}
               type="button"
+              variant="ghost"
             >
               {label.name}
-            </button>
+            </Button>
           );
         }
 
         return (
           <span
-            className="pr-label-chip"
+            className="inline-flex h-5 max-w-[180px] items-center overflow-hidden rounded-full px-2 font-semibold text-[11px]"
             key={label.name}
             style={chipStyle}
             title={label.name}
@@ -119,18 +124,20 @@ export function PullRequestLabels({
         );
       })}
       {hiddenCount > 0 && !isExpanded && (
-        <button
-          className="pr-label-chip pr-label-chip--button pr-label-chip--counter"
+        <Button
+          className="h-5 rounded-full px-2 text-[11px]"
           onClick={(event) => {
             stopEvent(event);
             setIsExpanded(true);
           }}
           onKeyDown={stopEvent}
+          size="xs"
           title={allLabelsTitle}
           type="button"
+          variant="ghost"
         >
           +{hiddenCount}
-        </button>
+        </Button>
       )}
     </div>
   );

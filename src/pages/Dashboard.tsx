@@ -10,6 +10,10 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ModalDialog } from "@/components/ModalDialog";
 import { PullRequestLabels } from "@/components/PullRequestLabels";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
 import { buildBankWorkspacePath } from "@/domain/bank-route";
 import { fetchPullRequestValidationDetails } from "@/domain/github";
@@ -399,8 +403,8 @@ export function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-sm">
-        <span className="spinner" />
+      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Spinner />
         <span>{t("app.loading")}</span>
       </div>
     );
@@ -408,9 +412,9 @@ export function Dashboard() {
 
   if (error) {
     return (
-      <div className="badge badge--error">
+      <StatusBadge variant="error">
         {t("app.error")}: {String(error)}
-      </div>
+      </StatusBadge>
     );
   }
 
@@ -492,12 +496,12 @@ export function Dashboard() {
                           : []
                       }
                     />
-                    <span className="badge badge--info">
+                    <StatusBadge variant="info">
                       ✓ {pr.approvedCount}
-                    </span>
+                    </StatusBadge>
                     {pr.failedValidationCount > 0 && (
-                      <span
-                        className="badge badge--error badge--interactive"
+                      <StatusBadge
+                        interactive
                         onClick={(event) => {
                           event.stopPropagation();
                           openValidationDetails(pr);
@@ -512,9 +516,10 @@ export function Dashboard() {
                         role="button"
                         tabIndex={0}
                         title={validationErrorsTitle}
+                        variant="error"
                       >
                         ✗ {pr.failedValidationCount}
-                      </span>
+                      </StatusBadge>
                     )}
                     <a
                       aria-label={`PR #${pr.number}`}
@@ -560,10 +565,9 @@ export function Dashboard() {
               }}
             >
               <div className="autocomplete">
-                <input
+                <Input
                   aria-label={t("bank.search")}
                   autoFocus
-                  className="input"
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={t("bank.search")}
@@ -634,14 +638,14 @@ export function Dashboard() {
                   })}
           </pre>
           {validationDetailsError && (
-            <div className="badge badge--error">{validationDetailsError}</div>
+            <StatusBadge variant="error">{validationDetailsError}</StatusBadge>
           )}
           <div className="modal__actions">
-            <button
-              className="btn btn--primary"
+            <Button
               disabled={isValidationDetailsLoading}
               onClick={handleRetryValidationDetails}
               type="button"
+              variant="primary"
             >
               {isValidationDetailsLoading
                 ? t("source.loadingValidationResult", {
@@ -650,19 +654,19 @@ export function Dashboard() {
                 : t("source.loadValidationResult", {
                     defaultValue: "Попробовать снова",
                   })}
-            </button>
-            <a
-              className="btn"
-              href={validationDetailsModal.checksUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {t("source.openValidatorChecks", {
-                defaultValue: "Открыть checks",
-              })}
-            </a>
-            <button
-              className="btn"
+            </Button>
+            <Button asChild variant="default">
+              <a
+                href={validationDetailsModal.checksUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {t("source.openValidatorChecks", {
+                  defaultValue: "Открыть checks",
+                })}
+              </a>
+            </Button>
+            <Button
               onClick={() => {
                 setValidationDetailsModal(null);
                 setValidationDetailsError(null);
@@ -670,7 +674,7 @@ export function Dashboard() {
               type="button"
             >
               {t("app.close")}
-            </button>
+            </Button>
           </div>
         </ModalDialog>
       )}
@@ -733,17 +737,14 @@ function BankListItem({
           {bank.bankId && (
             <span className="text-dim text-sm">#{bank.bankId}</span>
           )}
-          {hasChanges && <span className="badge badge--modified">●</span>}
+          {hasChanges && <StatusBadge variant="modified">●</StatusBadge>}
         </div>
         <div className="text-muted text-sm">
           {bank.formatFiles.length} format(s)
           {!bank.hasSenders && (
-            <span
-              className="badge badge--warning ml-sm"
-              style={{ marginLeft: 8 }}
-            >
+            <StatusBadge className="ml-2" variant="warning">
               no senders
-            </span>
+            </StatusBadge>
           )}
         </div>
         {hasChanges && (

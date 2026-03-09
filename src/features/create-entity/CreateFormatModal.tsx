@@ -1,6 +1,8 @@
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FORMAT_TEMPLATE } from "@/domain/format";
 import { useDraftStore, useSourceStore } from "@/store";
 
@@ -46,9 +48,8 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
           <label className="text-muted text-sm" htmlFor={formatNameInputId}>
             {t("bank.formatName")} *
           </label>
-          <input
+          <Input
             autoFocus
-            className="input"
             id={formatNameInputId}
             onChange={(e) => setFormatName(e.target.value)}
             placeholder="format_name"
@@ -60,8 +61,7 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
           <label className="text-muted text-sm" htmlFor={formatIdInputId}>
             {t("bank.formatId")}
           </label>
-          <input
-            className="input"
+          <Input
             id={formatIdInputId}
             onChange={(e) => setFormatId(e.target.value.replace(/\D/g, ""))}
             placeholder="1"
@@ -71,16 +71,17 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
       </div>
 
       <div className="modal__actions">
-        <button className="btn" onClick={onClose}>
+        <Button onClick={onClose} type="button">
           {t("app.cancel")}
-        </button>
-        <button
-          className="btn btn--primary"
+        </Button>
+        <Button
           disabled={!formatName.trim()}
           onClick={handleCreate}
+          type="button"
+          variant="primary"
         >
           {t("bank.createFormat")}
-        </button>
+        </Button>
       </div>
     </ModalDialog>
   );

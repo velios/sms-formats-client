@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppHeader } from "./components/AppHeader";
+import { Spinner } from "./components/ui/spinner";
+import { StatusBadge } from "./components/ui/status-badge";
 import { useInitMainBranch } from "./hooks/useGitHub";
 import { BankWorkspace } from "./pages/BankWorkspace";
 import { Dashboard } from "./pages/Dashboard";
@@ -20,12 +22,12 @@ export function App() {
 
   const workspaceBlocked = loading || !sourceRef;
   const workspaceFallback = error ? (
-    <div className="badge badge--error">
+    <StatusBadge className="text-sm" variant="error">
       {t("app.error")}: {error}
-    </div>
+    </StatusBadge>
   ) : (
-    <div className="flex items-center gap-sm">
-      <span className="spinner" />
+    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <Spinner />
       <span>{t("app.loading")}</span>
     </div>
   );

@@ -1,7 +1,11 @@
+import { Settings } from "lucide-react";
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ModalDialog } from "@/components/ModalDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
@@ -53,9 +57,9 @@ export function AppHeader() {
     : "общий ключ";
   const permissionBadgeClassName = hasPersonalToken
     ? hasMaintainerPermission
-      ? "badge badge--success"
-      : "badge badge--warning"
-    : "badge badge--info";
+      ? "success"
+      : "warning"
+    : "info";
 
   useEffect(() => {
     let cancelled = false;
@@ -140,28 +144,30 @@ export function AppHeader() {
 
         <div className="app-header__spacer" />
 
-        <span
-          className={permissionBadgeClassName}
+        <StatusBadge
           title="Статус прав в репозитории"
+          variant={permissionBadgeClassName}
         >
           {permissionBadgeLabel}
-        </span>
-        <button className="btn btn--ghost btn--sm" onClick={toggleLocale}>
+        </StatusBadge>
+        <Button onClick={toggleLocale} size="sm" variant="ghost">
           {locale === "ru" ? "EN" : "RU"}
-        </button>
-        <button
+        </Button>
+        <Button
           aria-label={t("githubAuth.openSettings")}
-          className="app-header__settings-btn"
+          className="size-9 rounded-full"
           onClick={openGitHubTokenModal}
+          size="icon"
           title={
             hasSavedGitHubToken
               ? t("githubAuth.tokenConfigured")
               : t("githubAuth.openSettings")
           }
           type="button"
+          variant="ghost"
         >
-          ⚙
-        </button>
+          <Settings className="size-4" />
+        </Button>
       </header>
 
       {githubTokenModalOpen && (
@@ -175,10 +181,10 @@ export function AppHeader() {
             <label className="text-muted text-sm" htmlFor={githubTokenInputId}>
               {t("githubAuth.tokenLabel")}
             </label>
-            <input
+            <Input
               autoCapitalize="off"
               autoComplete="off"
-              className="input input--mono"
+              className="font-mono"
               id={githubTokenInputId}
               onChange={(e) => setGithubTokenInput(e.target.value)}
               placeholder="ghp_..."
@@ -190,41 +196,41 @@ export function AppHeader() {
               {t("githubAuth.tokenHint")}
             </div>
             {hasSavedGitHubToken && (
-              <div className="badge badge--success">
+              <StatusBadge variant="success">
                 {t("githubAuth.tokenSaved")}
-              </div>
+              </StatusBadge>
             )}
             {githubTokenError && (
-              <div className="badge badge--error">{githubTokenError}</div>
+              <StatusBadge variant="error">{githubTokenError}</StatusBadge>
             )}
           </div>
           <div className="modal__actions">
-            <button
-              className="btn btn--danger"
+            <Button
               disabled={!hasSavedGitHubToken || isSavingGitHubToken}
               onClick={() => void handleResetGitHubToken()}
               type="button"
+              variant="destructive"
             >
               {t("githubAuth.resetToken")}
-            </button>
-            <button
-              className="btn btn--ghost"
+            </Button>
+            <Button
               disabled={isSavingGitHubToken}
               onClick={() => setGithubTokenModalOpen(false)}
               type="button"
+              variant="ghost"
             >
               {t("app.cancel")}
-            </button>
-            <button
-              className="btn btn--primary"
+            </Button>
+            <Button
               disabled={
                 isSavingGitHubToken || githubTokenInput.trim().length === 0
               }
               onClick={() => void handleSaveGitHubToken()}
               type="button"
+              variant="primary"
             >
               {isSavingGitHubToken ? t("githubAuth.saving") : t("app.save")}
-            </button>
+            </Button>
           </div>
         </ModalDialog>
       )}
