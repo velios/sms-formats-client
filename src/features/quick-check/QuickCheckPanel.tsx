@@ -1,21 +1,20 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { parseFormatFile, testRegex } from "@/domain/format";
-import { fetchFileContent } from "@/domain/github";
+import { testRegex } from "@/domain/format";
 import type { RepoRef } from "@/domain/types";
 import { cn } from "@/lib/utils";
+import {
+  type CachedFormatEntry,
+  prepareFormatEntries,
+} from "./format-entries";
 import { useDraftStore, useSourceStore } from "@/store";
 
-const QUICK_CHECK_PARALLELISM = 4;
-
 export type QuickCheckMode = "template-by-sms" | "sms-by-template";
-
-type RegexSource = "draft" | "remote";
 
 type QuickCheckStatus = "match" | "no-match" | "invalid";
 
@@ -26,20 +25,11 @@ export interface QuickCheckActiveFormatContext {
   activeSmsText: string;
 }
 
-interface CachedFormatEntry {
-  filePath: string;
-  fileName: string;
-  regex: string;
-  examples: string[];
-  source: RegexSource;
-  fingerprint: string;
-}
-
 interface TemplateBySmsResult {
   filePath: string;
   fileName: string;
   regex: string;
-  source: RegexSource;
+  source: "draft" | "remote";
   status: QuickCheckStatus;
   errorMessage: string | null;
 }
@@ -47,7 +37,7 @@ interface TemplateBySmsResult {
 interface SmsByTemplateResult {
   filePath: string;
   fileName: string;
-  source: RegexSource;
+  source: "draft" | "remote";
   status: "match" | "no-match";
   matchedExamples: number;
   totalExamples: number;
@@ -73,27 +63,6 @@ interface SmsByTemplateSummary {
   missingExamplesCount: number;
   loadErrorsCount: number;
   remoteFetchedCount: number;
-  cachedCount: number;
-}
-
-interface RemoteLoadResult {
-  entries: CachedFormatEntry[];
-  loadErrorsCount: number;
-}
-
-interface DraftEntryLike {
-  content: string;
-  isDeleted?: boolean;
-  timestamp: number;
-}
-
-interface DraftStoreLike {
-  getDraft: (filePath: string) => DraftEntryLike | undefined;
-}
-
-interface LocalFormatPreparation {
-  preparedEntries: CachedFormatEntry[];
-  remotePathsToLoad: string[];
   cachedCount: number;
 }
 
@@ -138,136 +107,6 @@ interface Props {
 
 function extractFormatFileName(path: string): string {
   return path.split("/").pop() ?? path;
-}
-
-function buildDraftFingerprint(timestamp: number): string {
-  return `draft:${timestamp}`;
-}
-
-function buildRemoteFingerprint(refName: string): string {
-  return `remote:${refName}`;
-}
-
-function buildCacheKey(repository: RepoRef, filePath: string): string {
-  return `${repository.owner}/${repository.repo}:${filePath}`;
-}
-
-function normalizeExampleText(value: string): string {
-  return value.trim();
-}
-
-function parseFormatEntry(params: {
-  filePath: string;
-  content: string;
-  source: RegexSource;
-  fingerprint: string;
-}): CachedFormatEntry {
-  const { filePath, content, source, fingerprint } = params;
-  const parsed = parseFormatFile(content, filePath);
-
-  return {
-    filePath,
-    fileName: extractFormatFileName(filePath),
-    regex: parsed.regex.trim(),
-    examples: parsed.examples.map(normalizeExampleText).filter(Boolean),
-    source,
-    fingerprint,
-  };
-}
-
-function collectLocalFormatEntries(params: {
-  filePaths: string[];
-  draftStore: DraftStoreLike;
-  cache: Map<string, CachedFormatEntry>;
-  sourceRefName: string;
-  repository: RepoRef;
-}): LocalFormatPreparation {
-  const { filePaths, draftStore, cache, sourceRefName, repository } = params;
-  const preparedEntries: CachedFormatEntry[] = [];
-  const remotePathsToLoad: string[] = [];
-  let cachedCount = 0;
-
-  for (const filePath of filePaths) {
-    const cacheKey = buildCacheKey(repository, filePath);
-    const draft = draftStore.getDraft(filePath);
-    if (draft) {
-      if (draft.isDeleted) {
-        continue;
-      }
-      const draftFingerprint = buildDraftFingerprint(draft.timestamp);
-      const cached = cache.get(cacheKey);
-      if (cached && cached.fingerprint === draftFingerprint) {
-        preparedEntries.push(cached);
-        cachedCount += 1;
-        continue;
-      }
-
-      const parsedDraftEntry = parseFormatEntry({
-        filePath,
-        content: draft.content,
-        source: "draft",
-        fingerprint: draftFingerprint,
-      });
-      cache.set(cacheKey, parsedDraftEntry);
-      preparedEntries.push(parsedDraftEntry);
-      continue;
-    }
-
-    const remoteFingerprint = buildRemoteFingerprint(sourceRefName);
-    const cached = cache.get(cacheKey);
-    if (cached && cached.fingerprint === remoteFingerprint) {
-      preparedEntries.push(cached);
-      cachedCount += 1;
-      continue;
-    }
-
-    remotePathsToLoad.push(filePath);
-  }
-
-  return {
-    preparedEntries,
-    remotePathsToLoad,
-    cachedCount,
-  };
-}
-
-async function loadRemoteFormatEntries(params: {
-  filePaths: string[];
-  refName: string;
-  repository: RepoRef;
-}): Promise<RemoteLoadResult> {
-  const { filePaths, refName, repository } = params;
-  const fingerprint = buildRemoteFingerprint(refName);
-  const queue = [...filePaths];
-  const entries: CachedFormatEntry[] = [];
-  let loadErrorsCount = 0;
-
-  const workerCount = Math.min(QUICK_CHECK_PARALLELISM, queue.length);
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (queue.length > 0) {
-      const filePath = queue.shift();
-      if (!filePath) {
-        break;
-      }
-
-      try {
-        const content = await fetchFileContent(filePath, refName, repository);
-        entries.push(
-          parseFormatEntry({
-            filePath,
-            content,
-            source: "remote",
-            fingerprint,
-          })
-        );
-      } catch {
-        loadErrorsCount += 1;
-      }
-    }
-  });
-
-  await Promise.all(workers);
-  return { entries, loadErrorsCount };
 }
 
 function sortTemplateBySmsResults(
@@ -433,8 +272,6 @@ function buildGitHubFileLink(params: {
   return `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}#L1`;
 }
 
-const sharedFormatCache = new Map<string, CachedFormatEntry>();
-
 export function QuickCheckPanel({
   bankName,
   formatPaths,
@@ -451,7 +288,6 @@ export function QuickCheckPanel({
   const repository = useSourceStore((s) => s.repository);
   const sourceRefName = sourceRef?.sha ?? sourceRef?.name;
 
-  const cacheRef = useRef(sharedFormatCache);
   const [mode, setMode] = useState<QuickCheckMode>(initialMode);
   const [smsText, setSmsText] = useState(
     activeFormatContext?.activeSmsText ?? ""
@@ -536,27 +372,15 @@ export function QuickCheckPanel({
     setErrorMessage(null);
 
     try {
-      const localPreparation = collectLocalFormatEntries({
+      const prepared = await prepareFormatEntries({
         filePaths: formatPaths,
         draftStore,
-        cache: cacheRef.current,
         sourceRefName,
         repository,
       });
-      const remoteLoad = await loadRemoteFormatEntries({
-        filePaths: localPreparation.remotePathsToLoad,
-        refName: sourceRefName,
-        repository,
-      });
-
-      const preparedEntries = [...localPreparation.preparedEntries];
-      for (const entry of remoteLoad.entries) {
-        cacheRef.current.set(buildCacheKey(repository, entry.filePath), entry);
-        preparedEntries.push(entry);
-      }
 
       if (mode === "template-by-sms") {
-        const evaluated = evaluateTemplateBySms(preparedEntries, smsText);
+        const evaluated = evaluateTemplateBySms(prepared.entries, smsText);
         setRunState({
           mode,
           results: evaluated.results,
@@ -566,15 +390,15 @@ export function QuickCheckPanel({
             matchedCount: evaluated.summary.matchedCount,
             invalidRegexCount: evaluated.summary.invalidRegexCount,
             missingRegexCount: evaluated.summary.missingRegexCount,
-            loadErrorsCount: remoteLoad.loadErrorsCount,
-            remoteFetchedCount: localPreparation.remotePathsToLoad.length,
-            cachedCount: localPreparation.cachedCount,
+            loadErrorsCount: prepared.loadErrorsCount,
+            remoteFetchedCount: prepared.remoteFetchedCount,
+            cachedCount: prepared.cachedCount,
           },
         });
         return;
       }
 
-      const evaluated = evaluateSmsByTemplate(preparedEntries, templateRegex);
+      const evaluated = evaluateSmsByTemplate(prepared.entries, templateRegex);
       setRunState({
         mode,
         results: evaluated.results,
@@ -584,9 +408,9 @@ export function QuickCheckPanel({
           matchedSmsCount: evaluated.summary.matchedSmsCount,
           matchedFormatsCount: evaluated.summary.matchedFormatsCount,
           missingExamplesCount: evaluated.summary.missingExamplesCount,
-          loadErrorsCount: remoteLoad.loadErrorsCount,
-          remoteFetchedCount: localPreparation.remotePathsToLoad.length,
-          cachedCount: localPreparation.cachedCount,
+          loadErrorsCount: prepared.loadErrorsCount,
+          remoteFetchedCount: prepared.remoteFetchedCount,
+          cachedCount: prepared.cachedCount,
         },
       });
     } catch {

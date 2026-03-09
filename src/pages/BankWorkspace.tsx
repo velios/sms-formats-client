@@ -26,7 +26,11 @@ import {
   parseBankRouteParams,
   resolveRouteRepository,
 } from "@/domain/bank-route";
-import { parseFormatFile } from "@/domain/format";
+import {
+  calculateFormatIntersectionStats,
+  parseFormatFile,
+  type FormatIntersectionStat,
+} from "@/domain/format";
 import {
   approvePullRequest,
   fetchFileContent,
@@ -43,6 +47,7 @@ import type { BankInfo, RepoRef, SourceRef } from "@/domain/types";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { PublishPanel } from "@/features/publish-panel/PublishPanel";
+import { prepareFormatEntries } from "@/features/quick-check/format-entries";
 import {
   type QuickCheckMode,
   QuickCheckPanel,
@@ -632,6 +637,7 @@ function renderWorkspaceContent(params: {
 
 function BankActionsPanel(params: {
   onApprovePullRequest: () => void;
+  onCalculateIntersections: () => void;
   onOpenValidation: () => void;
   onPublish: () => void;
   onResetToSource: () => void;
@@ -639,9 +645,12 @@ function BankActionsPanel(params: {
   onOpenTemplateBySms: () => void;
   approvePullRequestError: string | null;
   approvePullRequestLabel: string;
+  calculateIntersectionsError: string | null;
+  calculateIntersectionsWarning: string | null;
   canResetToSource: boolean;
   publishError: string | null;
   publishActionLabel: string;
+  isCalculatingIntersections: boolean;
   isPublishing: boolean;
   isApprovingPullRequest: boolean;
   isPullRequestApproved: boolean;
@@ -650,6 +659,7 @@ function BankActionsPanel(params: {
 }): ReactNode {
   const {
     onApprovePullRequest,
+    onCalculateIntersections,
     onOpenValidation,
     onPublish,
     onResetToSource,
@@ -657,9 +667,12 @@ function BankActionsPanel(params: {
     onOpenTemplateBySms,
     approvePullRequestError,
     approvePullRequestLabel,
+    calculateIntersectionsError,
+    calculateIntersectionsWarning,
     canResetToSource,
     publishError,
     publishActionLabel,
+    isCalculatingIntersections,
     isPublishing,
     isApprovingPullRequest,
     isPullRequestApproved,
@@ -722,6 +735,28 @@ function BankActionsPanel(params: {
       </Button>
       <Button
         className={workspaceActionButtonClassName}
+        disabled={isCalculatingIntersections}
+        onClick={onCalculateIntersections}
+        type="button"
+        variant="default"
+      >
+        {isCalculatingIntersections ? <Spinner /> : null}
+        {t(
+          isCalculatingIntersections
+            ? "quickCheck.calculatingIntersections"
+            : "quickCheck.calculateIntersections"
+        )}
+      </Button>
+      {calculateIntersectionsError && (
+        <StatusBadge variant="error">{calculateIntersectionsError}</StatusBadge>
+      )}
+      {calculateIntersectionsWarning && (
+        <StatusBadge variant="warning">
+          {calculateIntersectionsWarning}
+        </StatusBadge>
+      )}
+      <Button
+        className={workspaceActionButtonClassName}
         disabled={!canResetToSource}
         onClick={onResetToSource}
         type="button"
@@ -748,6 +783,7 @@ function FormatsPanel(params: {
   deletedFormatFiles: Set<string>;
   localChangedFormatFiles: Set<string>;
   sourceChangedFormatFiles: Set<string>;
+  formatIntersectionStats: Map<string, FormatIntersectionStat>;
   selectedFile: string | null;
   showSenders: boolean;
   handleSelectSenders: () => void;
@@ -774,6 +810,7 @@ function FormatsPanel(params: {
     deletedFormatFiles,
     localChangedFormatFiles,
     sourceChangedFormatFiles,
+    formatIntersectionStats,
     selectedFile,
     showSenders,
     handleSelectSenders,
@@ -870,6 +907,19 @@ function FormatsPanel(params: {
           const isSourceChanged = isSenders
             ? !localSendersChanged && sourceSendersChanged
             : !isLocalChanged && sourceChangedFormatFiles.has(path);
+          const intersectionStats = isSenders
+            ? null
+            : formatIntersectionStats.get(path) ?? null;
+          const ownExamplesMatch =
+            intersectionStats?.totalExamples ===
+            intersectionStats?.ownMatchedExamples;
+          const ownExamplesClassName = ownExamplesMatch
+            ? "text-[color:var(--c-success)]"
+            : "rounded px-1 text-white bg-[color:var(--c-error)]";
+          const intersectionsClassName =
+            intersectionStats?.intersectingOtherFormats === 0
+              ? "text-[color:var(--c-success)]"
+              : "rounded px-1 text-white bg-[color:var(--c-error)]";
           const encodedPath = path.split("/").map(encodeURIComponent).join("/");
           const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
           return (
@@ -899,7 +949,24 @@ function FormatsPanel(params: {
               role="button"
               tabIndex={0}
             >
-              <span className="truncate font-mono text-sm">{displayName}</span>
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="truncate font-mono text-sm">{displayName}</span>
+                {intersectionStats && (
+                  <span className="shrink-0 rounded border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-1.5 py-0.5 font-mono text-[11px] leading-none tabular-nums text-[color:var(--c-text-muted)]">
+                    <span className={ownExamplesClassName}>
+                      {intersectionStats.totalExamples}
+                    </span>{" "}
+                    /{" "}
+                    <span className={ownExamplesClassName}>
+                      {intersectionStats.ownMatchedExamples}
+                    </span>{" "}
+                    /{" "}
+                    <span className={intersectionsClassName}>
+                      {intersectionStats.intersectingOtherFormats}
+                    </span>
+                  </span>
+                )}
+              </div>
               {isLocalChanged && (
                 <StatusBadge className="text-xs" variant="modified">
                   ●
@@ -1513,6 +1580,18 @@ export function BankWorkspace() {
   const [showQuickCheck, setShowQuickCheck] = useState(false);
   const [quickCheckMode, setQuickCheckMode] =
     useState<QuickCheckMode>("template-by-sms");
+  const [formatIntersectionStats, setFormatIntersectionStats] = useState<
+    Map<string, FormatIntersectionStat>
+  >(new Map());
+  const [hasCalculatedIntersections, setHasCalculatedIntersections] =
+    useState(false);
+  const [intersectionLoadErrorsCount, setIntersectionLoadErrorsCount] =
+    useState(0);
+  const [calculateIntersectionsError, setCalculateIntersectionsError] =
+    useState<string | null>(null);
+  const [isCalculatingIntersections, setIsCalculatingIntersections] =
+    useState(false);
+  const intersectionRunIdRef = useRef(0);
   const [activeFormatSearchContext, setActiveFormatSearchContext] =
     useState<ActiveFormatSearchContext | null>(null);
   const [formatSearch, setFormatSearch] = useState("");
@@ -1616,6 +1695,23 @@ export function BankWorkspace() {
   );
 
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
+
+  useEffect(() => {
+    intersectionRunIdRef.current += 1;
+    setFormatIntersectionStats(new Map());
+    setHasCalculatedIntersections(false);
+    setIntersectionLoadErrorsCount(0);
+    setCalculateIntersectionsError(null);
+    setIsCalculatingIntersections(false);
+  }, [
+    bankPath,
+    draftStore.drafts,
+    quickCheckFormatPaths,
+    repository.owner,
+    repository.repo,
+    sourceRefNameForContent,
+  ]);
+
   const navigateToRequestedFile = useCallback(
     (filePath: string | null, replace = false) => {
       const search = buildSelectionSearch(searchParams, filePath);
@@ -1674,6 +1770,69 @@ export function BankWorkspace() {
     }
     addRecentFile(bankPath, sendersPath);
   }, [bankPath, navigateToRequestedFile, requestedFile, sendersPath]);
+
+  const handleCalculateIntersections = useCallback(async () => {
+    if (
+      hasCalculatedIntersections &&
+      !window.confirm(t("quickCheck.recalculateIntersectionsConfirm"))
+    ) {
+      return;
+    }
+
+    const runId = intersectionRunIdRef.current + 1;
+    intersectionRunIdRef.current = runId;
+
+    if (!sourceRefNameForContent) {
+      setCalculateIntersectionsError(t("quickCheck.noSource"));
+      setFormatIntersectionStats(new Map());
+      setIntersectionLoadErrorsCount(0);
+      setIsCalculatingIntersections(false);
+      return;
+    }
+
+    setIsCalculatingIntersections(true);
+    setCalculateIntersectionsError(null);
+    setIntersectionLoadErrorsCount(0);
+
+    try {
+      const prepared = await prepareFormatEntries({
+        filePaths: quickCheckFormatPaths,
+        draftStore,
+        sourceRefName: sourceRefNameForContent,
+        repository,
+      });
+      if (intersectionRunIdRef.current !== runId) {
+        return;
+      }
+
+      setFormatIntersectionStats(
+        calculateFormatIntersectionStats(prepared.entries)
+      );
+      setHasCalculatedIntersections(true);
+      setIntersectionLoadErrorsCount(prepared.loadErrorsCount);
+    } catch {
+      if (intersectionRunIdRef.current !== runId) {
+        return;
+      }
+      setFormatIntersectionStats(new Map());
+      setHasCalculatedIntersections(true);
+      setIntersectionLoadErrorsCount(0);
+      setCalculateIntersectionsError(
+        t("quickCheck.intersectionsUnexpectedError")
+      );
+    } finally {
+      if (intersectionRunIdRef.current === runId) {
+        setIsCalculatingIntersections(false);
+      }
+    }
+  }, [
+    draftStore,
+    hasCalculatedIntersections,
+    quickCheckFormatPaths,
+    repository,
+    sourceRefNameForContent,
+    t,
+  ]);
 
   const handleRenameFile = useCallback(
     (fromPath: string, toPath: string): boolean => {
@@ -1814,7 +1973,7 @@ export function BankWorkspace() {
     });
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[280px_1fr] gap-6">
+    <div className="grid h-full min-h-0 grid-cols-[320px_1fr] gap-6">
       {/* ─── Sidebar ─── */}
       <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
         <div className="flex items-center gap-2">
@@ -1837,12 +1996,24 @@ export function BankWorkspace() {
         <BankActionsPanel
           approvePullRequestError={approvePullRequestError}
           approvePullRequestLabel={approvePullRequestLabel}
+          calculateIntersectionsError={calculateIntersectionsError}
+          calculateIntersectionsWarning={
+            intersectionLoadErrorsCount > 0
+              ? t("quickCheck.summaryLoadErrors", {
+                  count: intersectionLoadErrorsCount,
+                })
+              : null
+          }
           canResetToSource={canResetToSource}
+          isCalculatingIntersections={isCalculatingIntersections}
           isApprovingPullRequest={isApprovingPullRequest}
           isPublishing={isPublishingQuickUpdate}
           isPullRequestApproved={isPullRequestApproved}
           onApprovePullRequest={() => {
             void handleApprovePullRequest();
+          }}
+          onCalculateIntersections={() => {
+            void handleCalculateIntersections();
           }}
           onOpenSmsByTemplate={() => {
             setQuickCheckMode("sms-by-template");
@@ -1863,6 +2034,7 @@ export function BankWorkspace() {
 
         <FormatsPanel
           deletedFormatFiles={localDeletedFormatFiles}
+          formatIntersectionStats={formatIntersectionStats}
           formatSearch={formatSearch}
           formatTab={formatTab}
           handleSelectFile={handleSelectFile}

@@ -168,6 +168,8 @@
   "quickCheck": {
     "openTemplateBySms": "Поиск шаблона по СМС",
     "openSmsByTemplate": "Поиск СМС по шаблону",
+    "calculateIntersections": "Посчитать пересечения",
+    "calculatingIntersections": "Считаем пересечения…",
     "title": "Поиск по банку: {{bank}}",
     "smsLabel": "Текст SMS",
     "smsPlaceholder": "Вставьте SMS для проверки по regex банка",
@@ -182,6 +184,8 @@
     "emptyTemplateRegex": "Введите регулярное выражение шаблона.",
     "invalidTemplateRegex": "Некорректный шаблон: {{message}}",
     "noSource": "Источник не выбран. Сначала выберите ветку или PR.",
+    "recalculateIntersectionsConfirm": "Пересечения уже посчитаны. Выполнить полный пересчёт заново?",
+    "intersectionsUnexpectedError": "Не удалось посчитать пересечения форматов.",
     "unexpectedError": "Не удалось выполнить быструю проверку.",
     "summaryChecked": "Проверено regex: {{checked}} / {{total}}",
     "summaryMatched": "Совпадений: {{count}}",

@@ -146,6 +146,10 @@
     "runValidation": "Run validation"
   },
   "quickCheck": {
+    "openTemplateBySms": "Search template by SMS",
+    "openSmsByTemplate": "Search SMS by template",
+    "calculateIntersections": "Count intersections",
+    "calculatingIntersections": "Counting intersections…",
     "open": "SMS Regex Check",
     "title": "SMS Check: {{bank}}",
     "smsLabel": "SMS text",
@@ -155,6 +159,8 @@
     "running": "Checking…",
     "emptySms": "Enter SMS text to run quick check.",
     "noSource": "Source is not selected. Choose a branch or PR first.",
+    "recalculateIntersectionsConfirm": "Intersections are already calculated. Run a full recalculation again?",
+    "intersectionsUnexpectedError": "Failed to calculate format intersections.",
     "unexpectedError": "Quick check failed to complete.",
     "summaryChecked": "Checked regexes: {{checked}} / {{total}}",
     "summaryMatched": "Matches: {{count}}",

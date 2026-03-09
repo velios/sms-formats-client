@@ -1,4 +1,9 @@
 export { FORMAT_TEMPLATE, parseFormatFile, serializeFormat } from "./parser";
+export {
+  calculateFormatIntersectionStats,
+  type FormatIntersectionInput,
+  type FormatIntersectionStat,
+} from "./intersections";
 export type {
   RegexExplanation,
   RegexExplanationLocale,
