@@ -6,12 +6,524 @@
       "id": "bi8Au",
       "x": 0,
       "y": 0,
-      "name": "Frame",
+      "name": "00_Foundations",
       "clip": true,
-      "width": 800,
-      "height": 600,
-      "fill": "#FFFFFF",
-      "layout": "none"
+      "width": 1600,
+      "height": 980,
+      "fill": "#F6F4EE",
+      "layout": "vertical",
+      "gap": 24,
+      "padding": 40,
+      "children": [
+        {
+          "type": "text",
+          "id": "SBTxX",
+          "name": "foundationTitle",
+          "fill": "#1F1F1F",
+          "content": "00_Foundations",
+          "fontFamily": "Inter",
+          "fontSize": 36,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "pjzzO",
+          "name": "Colors and Surfaces",
+          "width": "fill_container",
+          "height": 160,
+          "fill": "#FFFDF8",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "Sxf7q",
+              "name": "tokensText",
+              "fill": "#4B5563",
+              "content": "Color tokens, surfaces, borders, and emphasis levels",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "RScPz",
+          "name": "Typography",
+          "width": "fill_container",
+          "height": 160,
+          "fill": "#FFFDF8",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "6wMBV",
+              "name": "typographyText",
+              "fill": "#4B5563",
+              "content": "Type scale, heading rhythm, and editor readability rules",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "0U4UK",
+          "name": "Spacing and Grid",
+          "width": "fill_container",
+          "height": 160,
+          "fill": "#FFFDF8",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "QKTbd",
+              "name": "spacingText",
+              "fill": "#4B5563",
+              "content": "Grid, column rhythm, panel spacing, and density modes",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "6QMi3",
+          "name": "Status Language",
+          "width": "fill_container",
+          "height": 240,
+          "fill": "#FFFDF8",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "tvagC",
+              "name": "statusText",
+              "fill": "#4B5563",
+              "content": "Loading, success, warning, error, approval, and permission language",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "mUiVb",
+      "x": 1700,
+      "y": 0,
+      "name": "01_Flows",
+      "clip": true,
+      "width": 1600,
+      "height": 980,
+      "fill": "#EFF4EC",
+      "layout": "vertical",
+      "gap": 24,
+      "padding": 40,
+      "children": [
+        {
+          "type": "text",
+          "id": "nME0l",
+          "name": "flowsTitle",
+          "fill": "#1F1F1F",
+          "content": "01_Flows",
+          "fontFamily": "Inter",
+          "fontSize": 36,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "K6Ngl",
+          "name": "Developer Workspace Flow",
+          "width": "fill_container",
+          "height": 220,
+          "fill": "#FAFFF7",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "YGEfF",
+              "name": "developerFlowText",
+              "fill": "#4B5563",
+              "content": "Dashboard -> bank or PR selection -> workspace -> checks -> publish",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "pv5SO",
+          "name": "PR Review Flow",
+          "width": "fill_container",
+          "height": 220,
+          "fill": "#FAFFF7",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "wSTTK",
+              "name": "prFlowText",
+              "fill": "#4B5563",
+              "content": "Dashboard -> PR health scan -> open PR workspace -> review validation -> update",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "gRePz",
+      "x": 0,
+      "y": 1100,
+      "name": "02_Components",
+      "clip": true,
+      "width": 1600,
+      "height": 980,
+      "fill": "#EEF3F8",
+      "layout": "vertical",
+      "gap": 24,
+      "padding": 40,
+      "children": [
+        {
+          "type": "text",
+          "id": "Mk4FB",
+          "name": "componentsTitle",
+          "fill": "#1F1F1F",
+          "content": "02_Components",
+          "fontFamily": "Inter",
+          "fontSize": 36,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "G1A3u",
+          "name": "Navigation",
+          "width": "fill_container",
+          "height": 140,
+          "fill": "#FBFDFF",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "ucXFi",
+              "name": "navigationText",
+              "fill": "#4B5563",
+              "content": "AppHeader, source selector, repository context, top-level navigation",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "hTnwE",
+          "name": "Dialogs",
+          "width": "fill_container",
+          "height": 140,
+          "fill": "#FBFDFF",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "KCCl1",
+              "name": "dialogsText",
+              "fill": "#4B5563",
+              "content": "Token settings, create entity dialogs, modal confirmations",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "gBXK8",
+          "name": "Buttons, Inputs, and Tabs",
+          "width": "fill_container",
+          "height": 140,
+          "fill": "#FBFDFF",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "qLTnb",
+              "name": "controlsText",
+              "fill": "#4B5563",
+              "content": "Buttons, segmented tabs, inputs, search, badges, helper text",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "vxBI3",
+          "name": "Editor and Review Panels",
+          "width": "fill_container",
+          "height": 280,
+          "fill": "#FBFDFF",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "ggfYK",
+              "name": "editorPanelsText",
+              "fill": "#4B5563",
+              "content": "Format editor, senders editor, quick check, validation, publish panel",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "O1fRU",
+      "x": 1700,
+      "y": 1100,
+      "name": "03_Screens",
+      "clip": true,
+      "width": 1600,
+      "height": 980,
+      "fill": "#F8F1EA",
+      "layout": "vertical",
+      "gap": 24,
+      "padding": 40,
+      "children": [
+        {
+          "type": "text",
+          "id": "QF26S",
+          "name": "screensTitle",
+          "fill": "#1F1F1F",
+          "content": "03_Screens",
+          "fontFamily": "Inter",
+          "fontSize": 36,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "AQNcA",
+          "name": "Dashboard",
+          "width": "fill_container",
+          "height": 160,
+          "fill": "#FFF9F4",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "SiiY1",
+              "name": "dashboardText",
+              "fill": "#4B5563",
+              "content": "Repository context, banks list, PR list, recent activity, entry actions",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "2uv7C",
+          "name": "BankWorkspace",
+          "width": "fill_container",
+          "height": 200,
+          "fill": "#FFF9F4",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "6TbPU",
+              "name": "workspaceText",
+              "fill": "#4B5563",
+              "content": "Dominant editor region with secondary validation and publishing surfaces",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "ULOFT",
+      "x": 0,
+      "y": 2200,
+      "name": "04_States",
+      "clip": true,
+      "width": 1600,
+      "height": 980,
+      "fill": "#F3EFF7",
+      "layout": "vertical",
+      "gap": 24,
+      "padding": 40,
+      "children": [
+        {
+          "type": "text",
+          "id": "1Zauf",
+          "name": "statesTitle",
+          "fill": "#1F1F1F",
+          "content": "04_States",
+          "fontFamily": "Inter",
+          "fontSize": 36,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "7rmAf",
+          "name": "Loading and Permissions",
+          "width": "fill_container",
+          "height": 160,
+          "fill": "#FCFAFF",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "JWt1b",
+              "name": "loadingStateText",
+              "fill": "#4B5563",
+              "content": "Repository loading, source init, token missing, permission restricted",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "gMWol",
+          "name": "Empty and Onboarding",
+          "width": "fill_container",
+          "height": 160,
+          "fill": "#FCFAFF",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "GFtWd",
+              "name": "emptyStateText",
+              "fill": "#4B5563",
+              "content": "No bank selected, no file selected, no recent PRs, no search results",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "hsEzF",
+          "name": "Validation and Errors",
+          "width": "fill_container",
+          "height": 180,
+          "fill": "#FCFAFF",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "OJx87",
+              "name": "validationStateText",
+              "fill": "#4B5563",
+              "content": "Quick check failures, validation details, GitHub errors, publish blockers",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "YpAUM",
+          "name": "Success and Publish",
+          "width": "fill_container",
+          "height": 180,
+          "fill": "#FCFAFF",
+          "cornerRadius": 16,
+          "layout": "vertical",
+          "padding": 24,
+          "children": [
+            {
+              "type": "text",
+              "id": "xcuuv",
+              "name": "successStateText",
+              "fill": "#4B5563",
+              "content": "Saved token, validation passed, PR ready, publish completed",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "lI71X",
+      "x": 1700,
+      "y": 2200,
+      "name": "90_Archive",
+      "clip": true,
+      "width": 1600,
+      "height": 520,
+      "fill": "#F3F3F3",
+      "layout": "vertical",
+      "gap": 24,
+      "padding": 40,
+      "children": [
+        {
+          "type": "text",
+          "id": "BcGF9",
+          "name": "archiveTitle",
+          "fill": "#1F1F1F",
+          "content": "90_Archive",
+          "fontFamily": "Inter",
+          "fontSize": 36,
+          "fontWeight": "700"
+        }
+      ]
     }
   ]
 }
