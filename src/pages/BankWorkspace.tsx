@@ -993,7 +993,7 @@ export function FormatsPanel(params: {
                         )}
                         className={cn(
                           intersectionsClassName,
-                          "cursor-pointer border-0 bg-transparent p-0 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]"
+                          "cursor-pointer appearance-none border-0 [font:inherit] transition-[color,background-color,opacity,box-shadow] duration-150 hover:bg-[color:var(--c-error-soft)] hover:text-[color:var(--c-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]"
                         )}
                         onClick={(event) => {
                           event.stopPropagation();
@@ -1622,6 +1622,7 @@ export function BankWorkspace() {
   const [showPublish, setShowPublish] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [showQuickCheck, setShowQuickCheck] = useState(false);
+  const [quickCheckAutoRunOnOpen, setQuickCheckAutoRunOnOpen] = useState(false);
   const [quickCheckMode, setQuickCheckMode] =
     useState<QuickCheckMode>("template-by-sms");
   const [formatIntersectionStats, setFormatIntersectionStats] = useState<
@@ -1898,6 +1899,7 @@ export function BankWorkspace() {
       setQuickCheckActiveFormatContextOverride(
         buildQuickCheckContextFromEntry(entry)
       );
+      setQuickCheckAutoRunOnOpen(true);
       setQuickCheckMode("sms-by-template");
       setShowQuickCheck(true);
     },
@@ -2098,11 +2100,13 @@ export function BankWorkspace() {
           }}
           onOpenSmsByTemplate={() => {
             setQuickCheckActiveFormatContextOverride(null);
+            setQuickCheckAutoRunOnOpen(false);
             setQuickCheckMode("sms-by-template");
             setShowQuickCheck(true);
           }}
           onOpenTemplateBySms={() => {
             setQuickCheckActiveFormatContextOverride(null);
+            setQuickCheckAutoRunOnOpen(false);
             setQuickCheckMode("template-by-sms");
             setShowQuickCheck(true);
           }}
@@ -2159,11 +2163,13 @@ export function BankWorkspace() {
           onFormatSearchContextChange: setActiveFormatSearchContext,
           onOpenSmsByTemplate: () => {
             setQuickCheckActiveFormatContextOverride(null);
+            setQuickCheckAutoRunOnOpen(false);
             setQuickCheckMode("sms-by-template");
             setShowQuickCheck(true);
           },
           onOpenTemplateBySms: () => {
             setQuickCheckActiveFormatContextOverride(null);
+            setQuickCheckAutoRunOnOpen(false);
             setQuickCheckMode("template-by-sms");
             setShowQuickCheck(true);
           },
@@ -2200,10 +2206,14 @@ export function BankWorkspace() {
       {showQuickCheck && (
         <QuickCheckPanel
           activeFormatContext={quickCheckActiveFormatContext}
+          autoRunOnOpen={quickCheckAutoRunOnOpen}
           bankName={displayName}
           formatPaths={quickCheckFormatPaths}
           initialMode={quickCheckMode}
-          onClose={() => setShowQuickCheck(false)}
+          onClose={() => {
+            setQuickCheckAutoRunOnOpen(false);
+            setShowQuickCheck(false);
+          }}
           onOpenFileInApp={handleSelectFile}
         />
       )}

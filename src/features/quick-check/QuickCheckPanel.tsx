@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
 import { Button } from "@/components/ui/button";
@@ -101,6 +101,7 @@ interface Props {
   formatPaths: string[];
   initialMode: QuickCheckMode;
   activeFormatContext: QuickCheckActiveFormatContext | null;
+  autoRunOnOpen?: boolean;
   onOpenFileInApp: (filePath: string) => void;
   onClose: () => void;
 }
@@ -277,6 +278,7 @@ export function QuickCheckPanel({
   formatPaths,
   initialMode,
   activeFormatContext,
+  autoRunOnOpen = false,
   onOpenFileInApp,
   onClose,
 }: Props) {
@@ -298,6 +300,7 @@ export function QuickCheckPanel({
   const [isChecking, setIsChecking] = useState(false);
   const [runState, setRunState] = useState<QuickCheckRunState | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const hasAutoRunRef = useRef(false);
 
   useEffect(() => {
     setMode(initialMode);
@@ -429,6 +432,15 @@ export function QuickCheckPanel({
     t,
     templateRegex,
   ]);
+
+  useEffect(() => {
+    if (!autoRunOnOpen || hasAutoRunRef.current) {
+      return;
+    }
+
+    hasAutoRunRef.current = true;
+    void runQuickCheck();
+  }, [autoRunOnOpen, runQuickCheck]);
 
   const templateBySmsState =
     runState?.mode === "template-by-sms" ? runState : null;
