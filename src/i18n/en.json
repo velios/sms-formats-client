@@ -148,6 +148,7 @@
   "quickCheck": {
     "openTemplateBySms": "Search template by SMS",
     "openSmsByTemplate": "Search SMS by template",
+    "openIntersectingSmsByTemplate": "Open search SMS by template for {{file}} (intersections: {{count}})",
     "calculateIntersections": "Count intersections",
     "calculatingIntersections": "Counting intersections…",
     "open": "SMS Regex Check",

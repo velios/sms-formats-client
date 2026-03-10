@@ -168,6 +168,7 @@
   "quickCheck": {
     "openTemplateBySms": "Поиск шаблона по СМС",
     "openSmsByTemplate": "Поиск СМС по шаблону",
+    "openIntersectingSmsByTemplate": "Открыть поиск СМС по шаблону для {{file}} (пересечений: {{count}})",
     "calculateIntersections": "Посчитать пересечения",
     "calculatingIntersections": "Считаем пересечения…",
     "title": "Поиск по банку: {{bank}}",
