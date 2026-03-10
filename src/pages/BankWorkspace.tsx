@@ -94,6 +94,44 @@ function buildQuickCheckContextFromEntry(
   };
 }
 
+const formatIntersectionMetricClassName =
+  "inline-flex h-4 shrink-0 items-center justify-center rounded px-1 align-middle leading-none";
+
+function FormatIntersectionMetric(params: {
+  value: number;
+  tone: "success" | "error";
+  ariaLabel?: string;
+  onClick?: () => void;
+}): ReactNode {
+  const { value, tone, ariaLabel, onClick } = params;
+  const className = cn(
+    formatIntersectionMetricClassName,
+    tone === "success"
+      ? "text-[color:var(--c-success)]"
+      : "bg-[color:var(--c-error)] text-white",
+    onClick &&
+      "cursor-pointer appearance-none border-0 [font:inherit] transition-[color,background-color,opacity,box-shadow] duration-150 hover:bg-[color:var(--c-error-soft)] hover:text-[color:var(--c-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]"
+  );
+
+  if (onClick) {
+    return (
+      <button
+        aria-label={ariaLabel}
+        className={className}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick();
+        }}
+        type="button"
+      >
+        {value}
+      </button>
+    );
+  }
+
+  return <span className={className}>{value}</span>;
+}
+
 function getRecentFiles(bankPath: string): string[] {
   try {
     const data = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? "{}");
@@ -199,7 +237,7 @@ function sortFormatPaths(
   });
 }
 
-function collectAllFormatFiles(
+export function collectAllFormatFiles(
   bankPath: string,
   remoteFormatFiles: string[],
   draftPaths: Iterable<string>,
@@ -213,7 +251,7 @@ function collectAllFormatFiles(
     }
   }
   return sortFormatPaths(
-    Array.from(new Set([...remoteFiles, ...draftFiles])),
+    Array.from(new Set([...remoteFiles, ...draftFiles, ...changedFormatFiles])),
     changedFormatFiles
   );
 }
@@ -932,13 +970,11 @@ export function FormatsPanel(params: {
           const ownExamplesMatch =
             intersectionStats?.totalExamples ===
             intersectionStats?.ownMatchedExamples;
-          const ownExamplesClassName = ownExamplesMatch
-            ? "text-[color:var(--c-success)]"
-            : "rounded px-1 text-white bg-[color:var(--c-error)]";
-          const intersectionsClassName =
+          const ownExamplesTone = ownExamplesMatch ? "success" : "error";
+          const intersectionsTone =
             intersectionStats?.intersectingOtherFormats === 0
-              ? "text-[color:var(--c-success)]"
-              : "rounded px-1 text-white bg-[color:var(--c-error)]";
+              ? "success"
+              : "error";
           const hasIntersectingFormats =
             (intersectionStats?.intersectingOtherFormats ?? 0) > 0;
           const encodedPath = path.split("/").map(encodeURIComponent).join("/");
@@ -974,39 +1010,36 @@ export function FormatsPanel(params: {
                 <span className="truncate font-mono text-sm">{displayName}</span>
                 {intersectionStats && (
                   <span className="shrink-0 rounded border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-1.5 py-0.5 font-mono text-[11px] leading-none tabular-nums text-[color:var(--c-text-muted)]">
-                    <span className={ownExamplesClassName}>
-                      {intersectionStats.totalExamples}
-                    </span>{" "}
+                    <FormatIntersectionMetric
+                      tone={ownExamplesTone}
+                      value={intersectionStats.totalExamples}
+                    />{" "}
                     /{" "}
-                    <span className={ownExamplesClassName}>
-                      {intersectionStats.ownMatchedExamples}
-                    </span>{" "}
+                    <FormatIntersectionMetric
+                      tone={ownExamplesTone}
+                      value={intersectionStats.ownMatchedExamples}
+                    />{" "}
                     /{" "}
                     {hasIntersectingFormats ? (
-                      <button
-                        aria-label={tTemplate(
+                      <FormatIntersectionMetric
+                        ariaLabel={tTemplate(
                           "quickCheck.openIntersectingSmsByTemplate",
                           {
                             count: intersectionStats.intersectingOtherFormats,
                             file: displayName,
                           }
                         )}
-                        className={cn(
-                          intersectionsClassName,
-                          "cursor-pointer appearance-none border-0 [font:inherit] transition-[color,background-color,opacity,box-shadow] duration-150 hover:bg-[color:var(--c-error-soft)] hover:text-[color:var(--c-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]"
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        onClick={() => {
                           onOpenSmsByTemplateForIntersection(path);
                         }}
-                        type="button"
-                      >
-                        {intersectionStats.intersectingOtherFormats}
-                      </button>
+                        tone={intersectionsTone}
+                        value={intersectionStats.intersectingOtherFormats}
+                      />
                     ) : (
-                      <span className={intersectionsClassName}>
-                        {intersectionStats.intersectingOtherFormats}
-                      </span>
+                      <FormatIntersectionMetric
+                        tone={intersectionsTone}
+                        value={intersectionStats.intersectingOtherFormats}
+                      />
                     )}
                   </span>
                 )}

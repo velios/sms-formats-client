@@ -6,7 +6,7 @@ vi.mock("@/store", () => ({
   useSourceStore: () => ({}),
 }));
 
-import { FormatsPanel } from "@/pages/BankWorkspace";
+import { collectAllFormatFiles, FormatsPanel } from "@/pages/BankWorkspace";
 
 function renderFormatsPanel(intersectingOtherFormats: number) {
   const handleSelectFile = vi.fn();
@@ -86,5 +86,19 @@ describe("FormatsPanel intersections", () => {
         name: /quickCheck\.openIntersectingSmsByTemplate/,
       })
     ).not.toBeInTheDocument();
+  });
+
+  it("includes PR-deleted format files in the combined file list", () => {
+    expect(
+      collectAllFormatFiles(
+        "banks/pumb",
+        ["banks/pumb/formats/existing.txt"],
+        [],
+        new Set(["banks/pumb/formats/deleted-in-pr.txt"])
+      )
+    ).toEqual([
+      "banks/pumb/formats/deleted-in-pr.txt",
+      "banks/pumb/formats/existing.txt",
+    ]);
   });
 });
