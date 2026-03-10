@@ -461,7 +461,7 @@ export function Dashboard() {
     if (!shortcutNotice) {
       return;
     }
-    draftStore.clearAll();
+    draftStore.discardAll();
     navigate(`/pr/${shortcutNotice.prNumber}`, { replace: true });
   }, [draftStore, navigate, shortcutNotice]);
 

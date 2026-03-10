@@ -14,8 +14,14 @@ import {
   indexBanksFromTree,
   refreshPullRequestApprovalPermission,
 } from "@/domain/github";
-import type { RepoRef } from "@/domain/types";
+import type { RepoRef, SourceRef } from "@/domain/types";
+import { isSameDraftScope, makeDraftSourceKey } from "@/store/draft-scope";
 import { useDraftStore, useSourceStore } from "@/store";
+import {
+  clearWorkspaceSelection,
+  loadWorkspaceSelection,
+  saveWorkspaceSelection,
+} from "@/store/workspace-session";
 
 const SOURCE_CACHE_STALE_MS = 10 * 60_000;
 const SOURCE_CACHE_GC_MS = 30 * 60_000;
@@ -31,20 +37,62 @@ function shouldResetDraftsOnSourceSwitch(params: {
   prNumber?: number;
   shaHint?: string;
 }): boolean {
-  const { currentSource, type, name, prNumber, shaHint } = params;
-  if (type === "branch") {
-    return !(
-      currentSource?.type === "branch" &&
-      currentSource.name === name &&
-      (!shaHint || currentSource.sha === shaHint)
-    );
+  const { currentSource, type, name, prNumber } = params;
+  return !isSameDraftScope(currentSource, {
+    type,
+    name,
+    prNumber,
+  });
+}
+
+async function resolveSourceData(params: {
+  repository: RepoRef;
+  type: "branch" | "pr";
+  name: string;
+  prNumber?: number;
+  shaHint?: string;
+}): Promise<{
+  banks: ReturnType<typeof indexBanksFromTree>;
+  changedFiles: string[];
+  sourceRef: SourceRef;
+  tree: Awaited<ReturnType<typeof fetchRepoTree>>;
+}> {
+  const { repository, type, prNumber, shaHint } = params;
+  let { name } = params;
+  let sha = shaHint;
+  let changedFiles: string[] = [];
+
+  if (type === "pr" && prNumber) {
+    const prHead = await fetchPullRequestHead(prNumber, repository);
+    name = prHead.headRef;
+    if (!sha) {
+      sha = prHead.headSha;
+    }
+    changedFiles = await fetchPullRequestFiles(prNumber, repository);
   }
 
-  return !(
-    currentSource?.type === "pr" &&
-    currentSource.prNumber === prNumber &&
-    (!shaHint || currentSource.sha === shaHint)
-  );
+  if (!sha) {
+    sha = await fetchBranchSha(name, repository);
+  }
+
+  const sourceRef: SourceRef = { type, name, sha, prNumber };
+  const tree = await fetchRepoTree(sha, repository);
+  const banks = indexBanksFromTree(tree);
+
+  return { banks, changedFiles, sourceRef, tree };
+}
+
+async function restoreDraftsForSource(
+  sourceRef: SourceRef,
+  repository: RepoRef
+): Promise<void> {
+  await useDraftStore
+    .getState()
+    .restoreFromDB(makeDraftSourceKey(sourceRef, repository));
+}
+
+function persistWorkspaceState(repository: RepoRef, sourceRef: SourceRef): void {
+  saveWorkspaceSelection({ repository, sourceRef });
 }
 
 export function useBranches(enabled = true) {
@@ -173,28 +221,20 @@ export function useSwitchSource() {
     }
     setLoading(true);
     try {
-      let sha = shaHint;
-      let changedFiles: string[] = [];
+      const nextSourceData = await resolveSourceData({
+        repository,
+        type,
+        name,
+        prNumber,
+        shaHint,
+      });
 
-      if (type === "pr" && prNumber) {
-        const prHead = await fetchPullRequestHead(prNumber, repository);
-        name = prHead.headRef;
-        if (!sha) {
-          sha = prHead.headSha;
-        }
-        changedFiles = await fetchPullRequestFiles(prNumber, repository);
-      }
-
-      if (!sha) {
-        sha = await fetchBranchSha(name, repository);
-      }
-
-      setSource({ type, name, sha, prNumber });
-      const tree = await fetchRepoTree(sha, repository);
-      const banks = indexBanksFromTree(tree);
-      setTree(tree);
-      setBanks(banks);
-      setSourceChangedFiles(changedFiles);
+      await restoreDraftsForSource(nextSourceData.sourceRef, repository);
+      setSource(nextSourceData.sourceRef);
+      setTree(nextSourceData.tree);
+      setBanks(nextSourceData.banks);
+      setSourceChangedFiles(nextSourceData.changedFiles);
+      persistWorkspaceState(repository, nextSourceData.sourceRef);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to switch source");
     } finally {
@@ -226,15 +266,19 @@ export function useSwitchRepository() {
     setLoading(true);
     try {
       await refreshPullRequestApprovalPermission(nextRepository);
-      const sha = await fetchBranchSha(config.defaultBranch, nextRepository);
-      const tree = await fetchRepoTree(sha, nextRepository);
-      const banks = indexBanksFromTree(tree);
+      const nextSourceData = await resolveSourceData({
+        repository: nextRepository,
+        type: "branch",
+        name: config.defaultBranch,
+      });
 
+      await restoreDraftsForSource(nextSourceData.sourceRef, nextRepository);
       setRepository(nextRepository);
-      setSource({ type: "branch", name: config.defaultBranch, sha });
-      setSourceChangedFiles([]);
-      setTree(tree);
-      setBanks(banks);
+      setSource(nextSourceData.sourceRef);
+      setSourceChangedFiles(nextSourceData.changedFiles);
+      setTree(nextSourceData.tree);
+      setBanks(nextSourceData.banks);
+      persistWorkspaceState(nextRepository, nextSourceData.sourceRef);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to switch repository");
     } finally {
@@ -245,6 +289,7 @@ export function useSwitchRepository() {
 
 export function useInitMainBranch() {
   const repository = useSourceStore((s) => s.repository);
+  const setRepository = useSourceStore((s) => s.setRepository);
   const setSource = useSourceStore((s) => s.setSource);
   const setSourceChangedFiles = useSourceStore((s) => s.setSourceChangedFiles);
   const setLoading = useSourceStore((s) => s.setLoading);
@@ -259,14 +304,34 @@ export function useInitMainBranch() {
     }
     setLoading(true);
     try {
-      const sha = await fetchBranchSha(config.defaultBranch, repository);
-      setSource({ type: "branch", name: config.defaultBranch, sha });
-      setSourceChangedFiles([]);
-      const tree = await fetchRepoTree(sha, repository);
-      const banks = indexBanksFromTree(tree);
-      setTree(tree);
-      setBanks(banks);
+      const persistedSelection = loadWorkspaceSelection();
+      const initialRepository = persistedSelection?.repository ?? repository;
+      const selectedScopeRepository = persistedSelection?.repository ?? repository;
+      const selectedScopeSource = persistedSelection?.sourceRef ?? {
+        type: "branch" as const,
+        name: config.defaultBranch,
+        sha: "",
+      };
+      const nextSourceData = await resolveSourceData({
+        repository: selectedScopeRepository,
+        type: selectedScopeSource.type,
+        name: selectedScopeSource.name,
+        prNumber: selectedScopeSource.prNumber,
+        shaHint: selectedScopeSource.sha,
+      });
+
+      await restoreDraftsForSource(
+        nextSourceData.sourceRef,
+        selectedScopeRepository
+      );
+      setRepository(initialRepository);
+      setSource(nextSourceData.sourceRef);
+      setSourceChangedFiles(nextSourceData.changedFiles);
+      setTree(nextSourceData.tree);
+      setBanks(nextSourceData.banks);
+      persistWorkspaceState(selectedScopeRepository, nextSourceData.sourceRef);
     } catch (e) {
+      clearWorkspaceSelection();
       setError(e instanceof Error ? e.message : "Failed to load main branch");
     } finally {
       setLoading(false);

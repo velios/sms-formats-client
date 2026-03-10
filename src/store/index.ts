@@ -8,8 +8,9 @@ import type {
   SourceRef,
   ValidationIssue,
 } from "@/domain/types";
+import { makeDraftSourceKey } from "./draft-scope";
 import {
-  clearDrafts,
+  clearDrafts as clearPersistedDrafts,
   deleteDraft,
   loadAllDrafts,
   saveDraft,
@@ -104,11 +105,8 @@ interface DraftState {
   hasDrafts: () => boolean;
   getChangedFiles: () => DraftEntry[];
   clearAll: () => void;
+  discardAll: () => void;
   restoreFromDB: (sourceRef: string) => Promise<void>;
-}
-
-function makeDraftSourceKey(sourceRef: SourceRef, repository: RepoRef): string {
-  return `${repository.owner}/${repository.repo}:${sourceRef.type}:${sourceRef.name}:${sourceRef.sha}`;
 }
 
 const draftHistoryByPath = new Map<string, Travels<DraftHistoryState>>();
@@ -211,6 +209,16 @@ function syncEntryContentFromHistory(entry: DraftEntry, filePath: string) {
     remoteContent: entry.remoteContent,
     isDeleted: history.getState().isDeleted,
   });
+}
+
+function shouldReplaceWithRestoredDraft(
+  existing: DraftEntry | undefined
+): boolean {
+  if (!existing) {
+    return true;
+  }
+
+  return existing.content === existing.remoteContent && !existing.isDeleted;
 }
 
 export const useDraftStore = create<DraftState>((set, get) => ({
@@ -485,10 +493,17 @@ export const useDraftStore = create<DraftState>((set, get) => ({
   },
 
   clearAll: () => {
+    draftHistoryByPath.clear();
+    set({ drafts: new Map() });
+  },
+
+  discardAll: () => {
     const sourceState = useSourceStore.getState();
     const sourceRef = sourceState.sourceRef;
     if (sourceRef) {
-      void clearDrafts(makeDraftSourceKey(sourceRef, sourceState.repository));
+      void clearPersistedDrafts(
+        makeDraftSourceKey(sourceRef, sourceState.repository)
+      );
     }
     draftHistoryByPath.clear();
     set({ drafts: new Map() });
@@ -498,12 +513,13 @@ export const useDraftStore = create<DraftState>((set, get) => ({
     const dbDrafts = await loadAllDrafts(sourceRef);
     const newDrafts = new Map(get().drafts);
     for (const d of dbDrafts) {
-      if (!newDrafts.has(d.filePath)) {
+      const existing = newDrafts.get(d.filePath);
+      if (shouldReplaceWithRestoredDraft(existing)) {
         newDrafts.set(d.filePath, {
           filePath: d.filePath,
           baseSha: d.baseSha,
           content: d.content,
-          remoteContent: "", // will be filled on first load
+          remoteContent: existing?.remoteContent ?? "", // will be filled on first load
           isDeleted: d.isDeleted ?? false,
           timestamp: d.timestamp,
         });

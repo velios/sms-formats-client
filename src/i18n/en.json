@@ -26,7 +26,7 @@
     "switchTo": "Switch",
     "currentSource": "Current source: {{source}}",
     "unsavedDraftsInPr": "You have unsaved local changes in this PR",
-    "switchDiscardConfirm": "You have unsaved changes that are not part of a PR commit yet. Switching repository, source, or commit will permanently discard them. Continue?",
+    "switchDiscardConfirm": "You have unsaved changes that are not part of a PR commit yet. Switching repository, source, or commit will hide them from the current view, but they will stay saved and reappear when you return. Continue?",
     "commitWithoutMessage": "No commit message",
     "noCommits": "No commits found"
   },
