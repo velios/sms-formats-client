@@ -10,9 +10,10 @@ import { useDraftStore, useSourceStore } from "@/store";
 
 interface Props {
   bankPath: string;
+  readOnly?: boolean;
 }
 
-export function SendersEditor({ bankPath }: Props) {
+export function SendersEditor({ bankPath, readOnly = false }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const repository = useSourceStore((s) => s.repository);
@@ -49,12 +50,15 @@ export function SendersEditor({ bankPath }: Props) {
   }, [currentContent]);
 
   useEffect(() => {
-    if (remoteContent !== undefined) {
+    if (!readOnly && remoteContent !== undefined) {
       draftStore.ensureDraft(filePath, remoteContent, baseSha, remoteContent);
     }
-  }, [remoteContent, baseSha, draftStore, filePath]);
+  }, [baseSha, draftStore, filePath, readOnly, remoteContent]);
 
   const handleChange = (newValue: string) => {
+    if (readOnly) {
+      return;
+    }
     lastAppliedValueRef.current = newValue;
     setValue(newValue);
     draftStore.applyUserEdit(filePath, newValue, baseSha, remoteBaseline);
@@ -97,7 +101,7 @@ export function SendersEditor({ bankPath }: Props) {
         <div className="flex shrink-0 items-center gap-1">
           <Button
             aria-label={t("editor.undo")}
-            disabled={!canUndo}
+            disabled={readOnly || !canUndo}
             onClick={() => draftStore.undo(filePath)}
             size="sm"
             type="button"
@@ -107,7 +111,7 @@ export function SendersEditor({ bankPath }: Props) {
           </Button>
           <Button
             aria-label={t("editor.redo")}
-            disabled={!canRedo}
+            disabled={readOnly || !canRedo}
             onClick={() => draftStore.redo(filePath)}
             size="sm"
             type="button"
@@ -117,7 +121,7 @@ export function SendersEditor({ bankPath }: Props) {
           </Button>
           <Button
             aria-label={t("editor.resetFileToSource")}
-            disabled={!canResetFile}
+            disabled={readOnly || !canResetFile}
             onClick={() => draftStore.resetFileToRemote(filePath)}
             size="sm"
             type="button"
@@ -135,6 +139,7 @@ export function SendersEditor({ bankPath }: Props) {
           <Textarea
             className="min-h-[15rem] font-mono"
             onChange={(e) => handleChange(e.target.value)}
+            readOnly={readOnly}
             rows={15}
             spellCheck={false}
             value={value}

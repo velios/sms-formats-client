@@ -10,9 +10,15 @@ interface Props {
   bankPath: string;
   onClose: () => void;
   onCreated: (path: string) => void;
+  readOnly?: boolean;
 }
 
-export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
+export function CreateFormatModal({
+  bankPath,
+  onClose,
+  onCreated,
+  readOnly = false,
+}: Props) {
   const { t } = useTranslation();
   const dialogTitleId = useId();
   const formatNameInputId = useId();
@@ -23,7 +29,7 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
   const sourceRef = useSourceStore((s) => s.sourceRef);
 
   const handleCreate = () => {
-    if (!formatName.trim()) {
+    if (readOnly || !formatName.trim()) {
       return;
     }
 
@@ -46,7 +52,7 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label
-            className="text-xs text-[color:var(--c-text-muted)]"
+            className="text-[color:var(--c-text-muted)] text-xs"
             htmlFor={formatNameInputId}
           >
             {t("bank.formatName")} *
@@ -62,7 +68,7 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
 
         <div className="flex flex-col gap-1">
           <label
-            className="text-xs text-[color:var(--c-text-muted)]"
+            className="text-[color:var(--c-text-muted)] text-xs"
             htmlFor={formatIdInputId}
           >
             {t("bank.formatId")}
@@ -81,7 +87,7 @@ export function CreateFormatModal({ bankPath, onClose, onCreated }: Props) {
           {t("app.cancel")}
         </Button>
         <Button
-          disabled={!formatName.trim()}
+          disabled={readOnly || !formatName.trim()}
           onClick={handleCreate}
           type="button"
           variant="primary"

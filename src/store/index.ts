@@ -27,7 +27,7 @@ interface SourceState {
   loading: boolean;
   error: string | null;
   setRepository: (repository: RepoRef) => void;
-  setSource: (ref: SourceRef) => void;
+  setSource: (ref: SourceRef | null) => void;
   setSourceChangedFiles: (files: string[]) => void;
   setTree: (tree: FileEntry[]) => void;
   setBanks: (banks: BankInfo[]) => void;
@@ -60,6 +60,7 @@ export const useSourceStore = create<SourceState>((set) => ({
 interface DraftEntry {
   filePath: string;
   baseSha: string;
+  baseHeadSha: string;
   content: string;
   remoteContent: string;
   isDeleted: boolean;
@@ -115,6 +116,7 @@ function createDraftEntry(params: {
   filePath: string;
   content: string;
   baseSha: string;
+  baseHeadSha?: string;
   remoteContent: string;
   isDeleted?: boolean;
 }): DraftEntry {
@@ -122,12 +124,14 @@ function createDraftEntry(params: {
     filePath,
     content,
     baseSha,
+    baseHeadSha = useSourceStore.getState().sourceRef?.sha ?? "",
     remoteContent,
     isDeleted = false,
   } = params;
   return {
     filePath,
     baseSha,
+    baseHeadSha,
     content,
     remoteContent,
     isDeleted,
@@ -191,6 +195,7 @@ function persistDraftEntry(entry: DraftEntry) {
     bankPath,
     filePath: entry.filePath,
     baseSha: entry.baseSha,
+    baseHeadSha: entry.baseHeadSha,
     content: entry.content,
     isDeleted: entry.isDeleted,
     timestamp: entry.timestamp,
@@ -206,6 +211,7 @@ function syncEntryContentFromHistory(entry: DraftEntry, filePath: string) {
     filePath: entry.filePath,
     content: history.getState().content,
     baseSha: entry.baseSha,
+    baseHeadSha: entry.baseHeadSha,
     remoteContent: entry.remoteContent,
     isDeleted: history.getState().isDeleted,
   });
@@ -240,6 +246,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
         filePath,
         content: existing.content,
         baseSha,
+        baseHeadSha: existing.baseHeadSha,
         remoteContent,
         isDeleted: existing.isDeleted,
       });
@@ -265,13 +272,14 @@ export const useDraftStore = create<DraftState>((set, get) => ({
 
   applyUserEdit: (filePath, content, baseSha, remoteContent) => {
     const state = get();
-    const existing = state.drafts.get(filePath);
+    const existing: DraftEntry | undefined = state.drafts.get(filePath);
     const currentEntry =
       existing ??
       createDraftEntry({
         filePath,
         content: remoteContent,
         baseSha,
+        baseHeadSha: undefined,
         remoteContent,
         isDeleted: false,
       });
@@ -343,6 +351,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       filePath: newFilePath,
       content: oldEntry.content,
       baseSha: oldEntry.baseSha,
+      baseHeadSha: oldEntry.baseHeadSha,
       remoteContent: oldEntry.remoteContent,
       isDeleted: oldEntry.isDeleted,
     });
@@ -451,6 +460,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       filePath,
       content: entry.remoteContent,
       baseSha: entry.baseSha,
+      baseHeadSha: entry.baseHeadSha,
       remoteContent: entry.remoteContent,
       isDeleted: false,
     });
@@ -518,6 +528,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
         newDrafts.set(d.filePath, {
           filePath: d.filePath,
           baseSha: d.baseSha,
+          baseHeadSha: d.baseHeadSha ?? "",
           content: d.content,
           remoteContent: existing?.remoteContent ?? "", // will be filled on first load
           isDeleted: d.isDeleted ?? false,
@@ -534,10 +545,8 @@ export const useDraftStore = create<DraftState>((set, get) => ({
 export type PublishStep =
   | "idle"
   | "validating"
-  | "forking"
-  | "branching"
   | "committing"
-  | "opening-pr"
+  | "syncing"
   | "done"
   | "error";
 

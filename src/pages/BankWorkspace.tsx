@@ -20,33 +20,34 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
 import {
-  type BankRouteSource,
-  isRouteSourceMatched,
-  type ParsedBankRouteParams,
-  parseBankRouteParams,
-  resolveRouteRepository,
+  getLegacyRouteRedirectPath,
+  parsePullRequestRouteParams,
 } from "@/domain/bank-route";
 import {
   calculateFormatIntersectionStats,
-  parseFormatFile,
   type FormatIntersectionStat,
+  parseFormatFile,
 } from "@/domain/format";
 import {
   approvePullRequest,
   fetchFileContent,
   fetchPullRequestFiles,
+  fetchRepoTree,
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
   getGitHubUserToken,
+  indexBanksFromTree,
   refreshPullRequestApprovalPermission,
+  resolvePullRequestWorkspace,
   subscribeGitHubAuthChange,
   updatePullRequestHead,
 } from "@/domain/github";
 import { type FormatSearchDoc, searchFormatPaths } from "@/domain/search";
 import type { BankInfo, RepoRef, SourceRef } from "@/domain/types";
+import { validateBankLevel } from "@/domain/validation";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
-import { PublishPanel } from "@/features/publish-panel/PublishPanel";
+import { resolvePublishPreflightState } from "@/features/publish-panel/PublishPanel";
 import {
   type CachedFormatEntry,
   prepareFormatEntries,
@@ -58,9 +59,14 @@ import {
 } from "@/features/quick-check/QuickCheckPanel";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
-import { useSwitchRepository, useSwitchSource } from "@/hooks/useGitHub";
 import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
+import { makeDraftSourceKey } from "@/store/draft-scope";
+import { loadAllDrafts } from "@/store/persistence";
+import {
+  clearWorkspaceSession,
+  saveWorkspaceSession,
+} from "@/store/workspace-session";
 
 const RECENT_FILES_KEY = "sms-formats-recent-formats";
 const MAX_RECENT_FILES = 10;
@@ -110,7 +116,7 @@ function FormatIntersectionMetric(params: {
       ? "text-[color:var(--c-success)]"
       : "bg-[color:var(--c-error)] text-white",
     onClick &&
-      "cursor-pointer appearance-none border-0 [font:inherit] transition-[color,background-color,opacity,box-shadow] duration-150 hover:bg-[color:var(--c-error-soft)] hover:text-[color:var(--c-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]"
+      "cursor-pointer appearance-none border-0 transition-[color,background-color,opacity,box-shadow] duration-150 [font:inherit] hover:bg-[color:var(--c-error-soft)] hover:text-[color:var(--c-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]"
   );
 
   if (onClick) {
@@ -526,6 +532,7 @@ function useBankFormatSearch(params: {
 }
 
 function useAutoSelectFormat(params: {
+  workspaceReady: boolean;
   requestedFile: string | null;
   allFormatFiles: string[];
   sendersPath: string;
@@ -534,6 +541,7 @@ function useAutoSelectFormat(params: {
   onSelectFile: (filePath: string | null, replace?: boolean) => void;
 }) {
   const {
+    workspaceReady,
     requestedFile,
     allFormatFiles,
     sendersPath,
@@ -543,24 +551,18 @@ function useAutoSelectFormat(params: {
   } = params;
 
   useEffect(() => {
-    if (!selectionReady) {
+    const nextSelection = resolveAutoSelectFile({
+      workspaceReady,
+      selectionReady,
+      requestedFile,
+      allFormatFiles,
+      sendersPath,
+      preferredFormatFile,
+    });
+    if (typeof nextSelection === "undefined") {
       return;
     }
-    if (requestedFile === sendersPath) {
-      return;
-    }
-    if (requestedFile && allFormatFiles.includes(requestedFile)) {
-      return;
-    }
-    if (!preferredFormatFile) {
-      if (requestedFile) {
-        onSelectFile(null, true);
-      }
-      return;
-    }
-    if (requestedFile !== preferredFormatFile) {
-      onSelectFile(preferredFormatFile, true);
-    }
+    onSelectFile(nextSelection, true);
   }, [
     allFormatFiles,
     onSelectFile,
@@ -568,7 +570,41 @@ function useAutoSelectFormat(params: {
     requestedFile,
     selectionReady,
     sendersPath,
+    workspaceReady,
   ]);
+}
+
+export function resolveAutoSelectFile(params: {
+  workspaceReady: boolean;
+  selectionReady: boolean;
+  requestedFile: string | null;
+  allFormatFiles: string[];
+  sendersPath: string;
+  preferredFormatFile: string | null;
+}): string | null | undefined {
+  const {
+    workspaceReady,
+    selectionReady,
+    requestedFile,
+    allFormatFiles,
+    sendersPath,
+    preferredFormatFile,
+  } = params;
+  if (!(workspaceReady && selectionReady)) {
+    return undefined;
+  }
+  if (requestedFile === sendersPath) {
+    return undefined;
+  }
+  if (requestedFile && allFormatFiles.includes(requestedFile)) {
+    return undefined;
+  }
+  if (!preferredFormatFile) {
+    return requestedFile ? null : undefined;
+  }
+  return requestedFile !== preferredFormatFile
+    ? preferredFormatFile
+    : undefined;
 }
 
 function buildSearchIndexingMeta(params: {
@@ -618,7 +654,7 @@ const workspaceTabsClassName =
 
 const workspaceTabClassName = (isActive: boolean) =>
   cn(
-    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid px-4 py-2 font-sans text-[13px] font-medium transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
+    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid px-4 py-2 font-medium font-sans text-[13px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
     isActive
       ? "border-b-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-1px_0_var(--c-accent-soft)]"
       : "border-b-transparent text-[color:var(--c-text-muted)] hover:border-b-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
@@ -646,6 +682,7 @@ const workspaceActionButtonClassName =
 function renderWorkspaceContent(params: {
   showSenders: boolean;
   bankPath: string;
+  readOnly: boolean;
   selectedFile: string | null;
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
@@ -657,6 +694,7 @@ function renderWorkspaceContent(params: {
   const {
     showSenders,
     bankPath,
+    readOnly,
     selectedFile,
     allFormatFiles,
     handleRenameFile,
@@ -666,7 +704,7 @@ function renderWorkspaceContent(params: {
     t,
   } = params;
   if (showSenders) {
-    return <SendersEditor bankPath={bankPath} />;
+    return <SendersEditor bankPath={bankPath} readOnly={readOnly} />;
   }
   if (selectedFile) {
     return (
@@ -678,6 +716,7 @@ function renderWorkspaceContent(params: {
         onOpenTemplateBySms={onOpenTemplateBySms}
         onRenameFile={handleRenameFile}
         onSearchContextChange={onFormatSearchContextChange}
+        readOnly={readOnly}
       />
     );
   }
@@ -951,6 +990,7 @@ export function FormatsPanel(params: {
         )}
       </div>
       <div className="min-h-0 overflow-y-auto">
+        {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keeping list rendering inline avoids a broader panel refactor. */}
         {filesForRender.map((path) => {
           const isSenders = path === sendersPath;
           const displayName = isSenders
@@ -966,7 +1006,7 @@ export function FormatsPanel(params: {
             : !isLocalChanged && sourceChangedFormatFiles.has(path);
           const intersectionStats = isSenders
             ? null
-            : formatIntersectionStats.get(path) ?? null;
+            : (formatIntersectionStats.get(path) ?? null);
           const ownExamplesMatch =
             intersectionStats?.totalExamples ===
             intersectionStats?.ownMatchedExamples;
@@ -1007,9 +1047,11 @@ export function FormatsPanel(params: {
               tabIndex={0}
             >
               <div className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate font-mono text-sm">{displayName}</span>
+                <span className="truncate font-mono text-sm">
+                  {displayName}
+                </span>
                 {intersectionStats && (
-                  <span className="shrink-0 rounded border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-1.5 py-0.5 font-mono text-[11px] leading-none tabular-nums text-[color:var(--c-text-muted)]">
+                  <span className="shrink-0 rounded border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-1.5 py-0.5 font-mono text-[11px] text-[color:var(--c-text-muted)] tabular-nums leading-none">
                     <FormatIntersectionMetric
                       tone={ownExamplesTone}
                       value={intersectionStats.totalExamples}
@@ -1302,20 +1344,101 @@ function usePullRequestApprovalPermission(params: {
   return canApprovePullRequest;
 }
 
-function useQuickPullRequestUpdate(params: {
-  canUpdateCurrentPullRequest: boolean;
+function saveActiveRouteSession(
+  repository: RepoRef,
+  session: ActiveRouteSession
+): void {
+  saveWorkspaceSession({
+    repository,
+    prNumber: session.prNumber,
+    headSha: session.headSha,
+    bankPath: session.bankPath,
+    writable: session.writable,
+    readOnlyReason: session.readOnlyReason,
+  });
+}
+
+function buildPublishFormatContents(
+  changedFiles: Array<{
+    filePath: string;
+    content: string;
+    isDeleted: boolean;
+  }>
+): Map<string, string> {
+  const formatContents = new Map<string, string>();
+  for (const file of changedFiles) {
+    if (file.isDeleted) {
+      continue;
+    }
+    if (
+      !(file.filePath.endsWith(".txt") && file.filePath.includes("/formats/"))
+    ) {
+      continue;
+    }
+    formatContents.set(file.filePath, file.content);
+  }
+  return formatContents;
+}
+
+function countBlockingPublishValidationIssues(params: {
+  bank: BankInfo | undefined;
+  bankPath: string;
   changedFiles: Array<{
     filePath: string;
     content: string;
     isDeleted: boolean;
   }>;
+  draftStore: ReturnType<typeof useDraftStore.getState>;
+}): number {
+  const { bank, bankPath, changedFiles, draftStore } = params;
+  if (!bank) {
+    return 0;
+  }
+
+  const sendersDraft = draftStore.getDraft(`${bankPath}/senders.txt`);
+  const bankForValidation: BankInfo = {
+    ...bank,
+    hasSenders: bank.hasSenders || !!sendersDraft,
+  };
+  const issues = validateBankLevel(
+    bankForValidation,
+    buildPublishFormatContents(changedFiles)
+  );
+  return issues.filter((issue) => issue.level === "error").length;
+}
+
+function useQuickPullRequestUpdate(params: {
+  bank: BankInfo | undefined;
+  bankPath: string;
+  allChangedFiles: Array<{
+    filePath: string;
+    content: string;
+    isDeleted: boolean;
+  }>;
+  writable: boolean;
+  changedFiles: Array<{
+    filePath: string;
+    content: string;
+    isDeleted: boolean;
+  }>;
+  draftStore: ReturnType<typeof useDraftStore.getState>;
+  onWorkspaceReadOnly: (session: ActiveRouteSession) => void;
+  onWorkspaceStale: (session: ActiveRouteSession) => void;
+  onWorkspaceSynced: (session: ActiveRouteSession) => Promise<void>;
   repository: { owner: string; repo: string };
-  sourceRef: { type: "branch" | "pr"; prNumber?: number } | null;
-  t: (key: string) => string;
+  sourceRef: { type: "branch" | "pr"; prNumber?: number; sha: string } | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const {
-    canUpdateCurrentPullRequest,
+    bank,
+    bankPath,
+    allChangedFiles,
+    writable,
     changedFiles,
+    draftStore,
+    onWorkspaceReadOnly,
+    onWorkspaceStale,
+    onWorkspaceSynced,
     repository,
     sourceRef,
     t,
@@ -1328,14 +1451,10 @@ function useQuickPullRequestUpdate(params: {
     setPublishError(null);
   }, [repository.owner, repository.repo, sourceRef?.prNumber, sourceRef?.type]);
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: publish preflight intentionally keeps stale/read-only/validation branching in one place.
   const run = useCallback(async () => {
-    if (
-      !(
-        canUpdateCurrentPullRequest &&
-        sourceRef?.type === "pr" &&
-        sourceRef.prNumber
-      )
-    ) {
+    if (!(writable && sourceRef?.type === "pr" && sourceRef.prNumber)) {
+      setPublishError("no-write-access");
       return;
     }
 
@@ -1344,14 +1463,62 @@ function useQuickPullRequestUpdate(params: {
       setPublishError(t("githubAuth.emptyToken"));
       return;
     }
-    if (changedFiles.length === 0) {
-      setPublishError(t("publish.noChanges"));
-      return;
-    }
 
     setIsPublishing(true);
     setPublishError(null);
     try {
+      const resolution = await resolvePullRequestWorkspace(
+        sourceRef.prNumber,
+        repository
+      );
+      if (resolution.status !== "supported") {
+        setPublishError(t("publish.updateError"));
+        return;
+      }
+      const validationErrorsCount = countBlockingPublishValidationIssues({
+        bank,
+        bankPath,
+        changedFiles,
+        draftStore,
+      });
+      const publishPreflightState = resolvePublishPreflightState({
+        resolverHeadSha: resolution.headSha,
+        sessionHeadSha: sourceRef.sha,
+        writable: resolution.writable,
+        localChangesCount: changedFiles.length,
+        hasInvalidScopeChanges: allChangedFiles.some(
+          (file) => !file.filePath.startsWith(`${bankPath}/`)
+        ),
+        validationErrorsCount,
+      });
+      if (publishPreflightState === "stale") {
+        onWorkspaceStale(resolution);
+        setPublishError(t("publish.outdatedBase"));
+        return;
+      }
+      if (publishPreflightState === "read-only") {
+        onWorkspaceReadOnly(resolution);
+        setPublishError(
+          t("publish.readOnly", {
+            defaultValue: "This pull request is read-only.",
+          })
+        );
+        return;
+      }
+      if (publishPreflightState === "no-changes") {
+        setPublishError(t("publish.noChanges"));
+        return;
+      }
+      if (publishPreflightState === "invalid-scope") {
+        setPublishError(t("validation.multiBankPublish"));
+        return;
+      }
+      if (publishPreflightState === "validation-failed") {
+        setPublishError(
+          t("validation.errors", { count: validationErrorsCount })
+        );
+        return;
+      }
       await updatePullRequestHead(
         token,
         sourceRef.prNumber,
@@ -1362,6 +1529,15 @@ function useQuickPullRequestUpdate(params: {
         })),
         repository
       );
+      const syncedResolution = await resolvePullRequestWorkspace(
+        sourceRef.prNumber,
+        repository
+      );
+      if (syncedResolution.status !== "supported") {
+        setPublishError(t("publish.updateError"));
+        return;
+      }
+      await onWorkspaceSynced(syncedResolution);
     } catch (error) {
       setPublishError(
         error instanceof Error ? error.message : t("publish.updateError")
@@ -1370,12 +1546,20 @@ function useQuickPullRequestUpdate(params: {
       setIsPublishing(false);
     }
   }, [
-    canUpdateCurrentPullRequest,
+    allChangedFiles,
+    bank,
+    bankPath,
     changedFiles,
+    draftStore,
+    onWorkspaceReadOnly,
+    onWorkspaceStale,
+    onWorkspaceSynced,
     repository,
     sourceRef?.prNumber,
     sourceRef?.type,
+    sourceRef?.sha,
     t,
+    writable,
   ]);
 
   return {
@@ -1386,55 +1570,73 @@ function useQuickPullRequestUpdate(params: {
 }
 
 function useBankPublishAction(params: {
-  canApprovePullRequest: boolean;
+  bank: BankInfo | undefined;
+  bankPath: string;
   changedFiles: Array<{
     filePath: string;
     content: string;
     isDeleted: boolean;
   }>;
-  onOpenCreatePublish: () => void;
+  allChangedFiles: Array<{
+    filePath: string;
+    content: string;
+    isDeleted: boolean;
+  }>;
+  draftStore: ReturnType<typeof useDraftStore.getState>;
+  onWorkspaceReadOnly: (session: ActiveRouteSession) => void;
+  onWorkspaceStale: (session: ActiveRouteSession) => void;
+  onWorkspaceSynced: (session: ActiveRouteSession) => Promise<void>;
   repository: { owner: string; repo: string };
-  sourceRef: { type: "branch" | "pr"; name: string; prNumber?: number } | null;
-  t: (key: string) => string;
+  sourceRef: {
+    type: "branch" | "pr";
+    name: string;
+    prNumber?: number;
+    sha: string;
+  } | null;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  writable: boolean;
 }) {
   const {
-    canApprovePullRequest,
+    bank,
+    bankPath,
     changedFiles,
-    onOpenCreatePublish,
+    allChangedFiles,
+    draftStore,
+    onWorkspaceReadOnly,
+    onWorkspaceStale,
+    onWorkspaceSynced,
     repository,
     sourceRef,
     t,
+    writable,
   } = params;
   const canUpdateCurrentPullRequest = Boolean(
-    sourceRef?.type === "pr" && sourceRef.prNumber && canApprovePullRequest
+    sourceRef?.type === "pr" && sourceRef.prNumber && writable
   );
   const {
     isPublishing,
     publishError,
     run: runQuickPullRequestUpdate,
   } = useQuickPullRequestUpdate({
-    canUpdateCurrentPullRequest,
+    bank,
+    bankPath,
+    allChangedFiles,
+    writable: canUpdateCurrentPullRequest,
     changedFiles,
+    draftStore,
+    onWorkspaceReadOnly,
+    onWorkspaceStale,
+    onWorkspaceSynced,
     repository,
     sourceRef,
     t,
   });
-  const publishActionLabel = canUpdateCurrentPullRequest
-    ? isPublishing
-      ? t("publish.publishing")
-      : t("publish.updatePR")
-    : t("publish.createPR");
+  const publishActionLabel = isPublishing
+    ? t("publish.publishing")
+    : t("publish.updatePR");
   const onPublish = useCallback(() => {
-    if (canUpdateCurrentPullRequest) {
-      void runQuickPullRequestUpdate();
-      return;
-    }
-    onOpenCreatePublish();
-  }, [
-    canUpdateCurrentPullRequest,
-    onOpenCreatePublish,
-    runQuickPullRequestUpdate,
-  ]);
+    void runQuickPullRequestUpdate();
+  }, [runQuickPullRequestUpdate]);
 
   return {
     canUpdateCurrentPullRequest,
@@ -1445,214 +1647,276 @@ function useBankPublishAction(params: {
   };
 }
 
-type SwitchSourceHandler = (
-  type: "branch" | "pr",
-  name: string,
-  prNumber?: number,
-  shaHint?: string
-) => Promise<void>;
-type SwitchRepositoryHandler = (nextRepository: RepoRef) => Promise<void>;
+type ActiveRouteSession = Extract<
+  Awaited<ReturnType<typeof resolvePullRequestWorkspace>>,
+  { status: "supported" }
+>;
 
-function makeRouteSyncKey(params: {
-  parsedRoute: ParsedBankRouteParams;
-  routeRepository: RepoRef | null;
-}): string {
-  const { parsedRoute, routeRepository } = params;
-  if (!parsedRoute.isStructuredRoute) {
-    return "";
+type RouteInitState =
+  | { status: "loading" }
+  | {
+      status: "ready";
+      session: ActiveRouteSession;
+      mode: "clean" | "draft" | "read-only";
+    }
+  | { status: "stale"; session: ActiveRouteSession }
+  | { status: "transient-error"; reason: string };
+
+export function resolveWorkspaceEntryMode(params: {
+  headSha: string;
+  persistedDrafts: Array<{ baseHeadSha?: string }>;
+  writable: boolean;
+}): "stale" | "read-only" | "draft" | "clean" {
+  const { headSha, persistedDrafts, writable } = params;
+  if (
+    persistedDrafts.some(
+      (draft) => Boolean(draft.baseHeadSha) && draft.baseHeadSha !== headSha
+    )
+  ) {
+    return "stale";
   }
-  const repoKey = routeRepository
-    ? `${routeRepository.owner}/${routeRepository.repo}`
-    : "";
-  if (!parsedRoute.source) {
-    return `repo:${repoKey}|source:none`;
+  if (!writable) {
+    return "read-only";
   }
-  if (parsedRoute.source.type === "pr") {
-    return `repo:${repoKey}|source:pr:${parsedRoute.source.prNumber}:${parsedRoute.source.sha ?? ""}`;
-  }
-  return `repo:${repoKey}|source:branch:${parsedRoute.source.name}`;
+  return persistedDrafts.length > 0 ? "draft" : "clean";
 }
 
-async function syncRouteSource(params: {
-  targetSource: BankRouteSource | null;
-  switchSource: SwitchSourceHandler;
+function usePullRequestRouteInit(params: {
+  locationPathname: string;
+  locationSearch: string;
+  navigate: ReturnType<typeof useNavigate>;
+  routeParams: Readonly<Record<string, string | undefined>>;
 }) {
-  const { targetSource, switchSource } = params;
-  if (!targetSource) {
-    return;
-  }
-  const currentSource = useSourceStore.getState().sourceRef;
-  if (targetSource.type === "pr") {
-    const alreadySelected =
-      currentSource?.type === "pr" &&
-      currentSource.prNumber === targetSource.prNumber &&
-      (!targetSource.sha || currentSource.sha === targetSource.sha);
-    if (!alreadySelected) {
-      await switchSource(
-        "pr",
-        config.defaultBranch,
-        targetSource.prNumber,
-        targetSource.sha
-      );
-    }
-    return;
-  }
-
-  const alreadySelected =
-    currentSource?.type === "branch" &&
-    currentSource.name === targetSource.name;
-  if (!alreadySelected) {
-    await switchSource("branch", targetSource.name);
-  }
-}
-
-function useRouteStateSync(params: {
-  parsedRoute: ParsedBankRouteParams;
-  repository: RepoRef;
-  sourceRef: SourceRef | null;
-  switchRepository: SwitchRepositoryHandler;
-  switchSource: SwitchSourceHandler;
-}) {
-  const { parsedRoute, repository, sourceRef, switchRepository, switchSource } =
-    params;
-  const [isRouteSyncInFlight, setIsRouteSyncInFlight] = useState(false);
-  const [routeSyncAttemptKey, setRouteSyncAttemptKey] = useState<string | null>(
-    null
+  const { locationPathname, locationSearch, navigate, routeParams } = params;
+  const setRepository = useSourceStore((state) => state.setRepository);
+  const setSource = useSourceStore((state) => state.setSource);
+  const setSourceChangedFiles = useSourceStore(
+    (state) => state.setSourceChangedFiles
   );
-
-  const routeRepository = useMemo(
-    () => resolveRouteRepository(parsedRoute.repoSlug),
-    [parsedRoute.repoSlug]
+  const setTree = useSourceStore((state) => state.setTree);
+  const setBanks = useSourceStore((state) => state.setBanks);
+  const setLoading = useSourceStore((state) => state.setLoading);
+  const setError = useSourceStore((state) => state.setError);
+  const [state, setState] = useState<RouteInitState>({ status: "loading" });
+  const showStaleSession = useCallback((session: ActiveRouteSession) => {
+    setState({
+      status: "stale",
+      session,
+    });
+  }, []);
+  const showReadOnlySession = useCallback((session: ActiveRouteSession) => {
+    setState({
+      status: "ready",
+      session,
+      mode: "read-only",
+    });
+  }, []);
+  const showReadySession = useCallback(
+    (session: ActiveRouteSession, mode: "clean" | "draft" | "read-only") => {
+      setState({
+        status: "ready",
+        session,
+        mode,
+      });
+    },
+    []
   );
-  const routeRepoMismatch = useMemo(() => {
-    if (!routeRepository) {
-      return false;
-    }
-    return (
-      routeRepository.owner !== repository.owner ||
-      routeRepository.repo !== repository.repo
-    );
-  }, [routeRepository, repository]);
-  const routeSourceMismatch = useMemo(
-    () => !isRouteSourceMatched(sourceRef, parsedRoute.source),
-    [parsedRoute.source, sourceRef]
+  const parsedRoute = useMemo(
+    () =>
+      parsePullRequestRouteParams({
+        owner: routeParams.owner,
+        repo: routeParams.repo,
+        prNumber: routeParams.prNumber,
+      }),
+    [routeParams.owner, routeParams.prNumber, routeParams.repo]
   );
-  const routeSyncKey = useMemo(
-    () => makeRouteSyncKey({ parsedRoute, routeRepository }),
-    [parsedRoute, routeRepository]
-  );
-  const routeNeedsSync =
-    parsedRoute.isStructuredRoute && (routeRepoMismatch || routeSourceMismatch);
-  const waitForInitialSource = parsedRoute.isStructuredRoute && !sourceRef;
-  const routeSyncPending =
-    waitForInitialSource ||
-    (routeNeedsSync && routeSyncAttemptKey !== routeSyncKey);
 
   useEffect(() => {
-    setRouteSyncAttemptKey((current) =>
-      current && current !== routeSyncKey ? null : current
+    const legacyRedirectTarget = getLegacyRouteRedirectPath(
+      locationPathname,
+      locationSearch
     );
-  }, [routeSyncKey]);
-
-  useEffect(() => {
-    if (!sourceRef) {
+    if (legacyRedirectTarget) {
+      clearWorkspaceSession();
+      navigate(legacyRedirectTarget, { replace: true });
       return;
     }
-    if (!routeNeedsSync) {
-      return;
-    }
-    if (!routeSyncKey || routeSyncAttemptKey === routeSyncKey) {
+    if (!parsedRoute) {
+      clearWorkspaceSession();
+      navigate("/", { replace: true });
       return;
     }
 
-    let isCancelled = false;
-    setRouteSyncAttemptKey(routeSyncKey);
+    let cancelled = false;
+    setState({ status: "loading" });
+    setLoading(true);
+    setError(null);
 
-    const runSync = async () => {
-      setIsRouteSyncInFlight(true);
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: route init intentionally handles all PR-only entry branches in one place.
+    const loadWorkspace = async () => {
       try {
-        if (routeRepository && routeRepoMismatch) {
-          await switchRepository(routeRepository);
+        const resolution = await resolvePullRequestWorkspace(
+          parsedRoute.prNumber,
+          parsedRoute.repository
+        );
+        if (cancelled) {
+          return;
         }
-        await syncRouteSource({
-          targetSource: parsedRoute.source,
-          switchSource,
+
+        if (resolution.status === "transient-error") {
+          setState({
+            status: "transient-error",
+            reason: resolution.reason,
+          });
+          return;
+        }
+
+        if (resolution.status !== "supported") {
+          clearWorkspaceSession();
+          navigate("/", { replace: true });
+          return;
+        }
+
+        const tree = await fetchRepoTree(
+          resolution.headSha,
+          parsedRoute.repository
+        );
+        if (cancelled) {
+          return;
+        }
+
+        const sourceRef: SourceRef = {
+          type: "pr",
+          name: `pr-${resolution.prNumber}`,
+          sha: resolution.headSha,
+          prNumber: resolution.prNumber,
+        };
+        const draftScopeKey = makeDraftSourceKey(
+          {
+            type: "pr",
+            prNumber: resolution.prNumber,
+            name: sourceRef.name,
+          },
+          parsedRoute.repository
+        );
+        const persistedDrafts = await loadAllDrafts(draftScopeKey);
+        if (cancelled) {
+          return;
+        }
+
+        useDraftStore.getState().clearAll();
+        setRepository(parsedRoute.repository);
+        setSource(sourceRef);
+        setSourceChangedFiles(resolution.changedFiles.map((file) => file.path));
+        setTree(tree);
+        setBanks(indexBanksFromTree(tree));
+        saveActiveRouteSession(parsedRoute.repository, resolution);
+        const entryMode = resolveWorkspaceEntryMode({
+          headSha: resolution.headSha,
+          persistedDrafts,
+          writable: resolution.writable,
+        });
+        if (entryMode === "stale") {
+          showStaleSession(resolution);
+          return;
+        }
+        if (entryMode === "read-only") {
+          showReadOnlySession(resolution);
+          return;
+        }
+
+        if (persistedDrafts.length > 0) {
+          await useDraftStore.getState().restoreFromDB(draftScopeKey);
+          if (cancelled) {
+            return;
+          }
+        }
+
+        showReadySession(resolution, entryMode);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setState({
+          status: "transient-error",
+          reason:
+            error instanceof Error && error.message ? error.message : "unknown",
         });
       } finally {
-        if (!isCancelled) {
-          setIsRouteSyncInFlight(false);
+        if (!cancelled) {
+          setLoading(false);
         }
       }
     };
 
-    void runSync();
+    void loadWorkspace();
+
     return () => {
-      isCancelled = true;
+      cancelled = true;
     };
   }, [
-    parsedRoute.source,
-    routeNeedsSync,
-    routeRepoMismatch,
-    routeRepository,
-    sourceRef,
-    routeSyncAttemptKey,
-    routeSyncKey,
-    switchRepository,
-    switchSource,
+    locationPathname,
+    locationSearch,
+    navigate,
+    parsedRoute,
+    setBanks,
+    setError,
+    setLoading,
+    setRepository,
+    setSource,
+    setSourceChangedFiles,
+    setTree,
+    showReadOnlySession,
+    showReadySession,
+    showStaleSession,
   ]);
 
-  return { isRouteSyncInFlight, routeSyncPending };
+  return {
+    state,
+    showReadOnlySession,
+    showReadySession,
+    showStaleSession,
+  };
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keeping the existing workspace container intact avoids a large unrelated split.
 export function BankWorkspace() {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const routeParams = useParams();
   const [searchParams] = useSearchParams();
-  const parsedRoute = useMemo(
-    () =>
-      parseBankRouteParams({
-        bankKey: routeParams.bankKey,
-        repoSlug: routeParams.repoSlug,
-        branchOrPr: routeParams.branchOrPr,
-        commit: searchParams.get("commit"),
-      }),
-    [
-      routeParams.bankKey,
-      routeParams.repoSlug,
-      routeParams.branchOrPr,
-      searchParams,
-    ]
-  );
-  const bankPath = parsedRoute.bankPath;
   const requestedFile = useMemo(
     () => decodeRequestedFileValue(searchParams),
     [searchParams]
   );
-
-  const switchSource = useSwitchSource();
-  const switchRepository = useSwitchRepository();
+  const routeInit = usePullRequestRouteInit({
+    locationPathname: location.pathname,
+    locationSearch: location.search,
+    navigate,
+    routeParams,
+  });
+  const routeInitState = routeInit.state;
+  const bankPath =
+    routeInitState.status === "ready" ? routeInitState.session.bankPath : "";
   const banks = useSourceStore((s) => s.banks);
   const setBanks = useSourceStore((s) => s.setBanks);
+  const setRepository = useSourceStore((s) => s.setRepository);
+  const setSource = useSourceStore((s) => s.setSource);
+  const setSourceChangedFiles = useSourceStore((s) => s.setSourceChangedFiles);
+  const setTree = useSourceStore((s) => s.setTree);
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
   const repository = useSourceStore((s) => s.repository);
-  const { isRouteSyncInFlight, routeSyncPending } = useRouteStateSync({
-    parsedRoute,
-    repository,
-    sourceRef,
-    switchRepository,
-    switchSource,
-  });
 
   const bank = useMemo(
     () => banks.find((b) => b.folderPath === bankPath),
     [banks, bankPath]
   );
+  const activeSession =
+    routeInitState.status === "ready" ? routeInitState.session : null;
   const tree = useSourceStore((s) => s.tree);
   const [showCreateFormat, setShowCreateFormat] = useState(false);
-  const [showPublish, setShowPublish] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [showQuickCheck, setShowQuickCheck] = useState(false);
   const [quickCheckAutoRunOnOpen, setQuickCheckAutoRunOnOpen] = useState(false);
@@ -1675,8 +1939,10 @@ export function BankWorkspace() {
   const intersectionRunIdRef = useRef(0);
   const [activeFormatSearchContext, setActiveFormatSearchContext] =
     useState<ActiveFormatSearchContext | null>(null);
-  const [quickCheckActiveFormatContextOverride, setQuickCheckActiveFormatContextOverride] =
-    useState<QuickCheckActiveFormatContext | null>(null);
+  const [
+    quickCheckActiveFormatContextOverride,
+    setQuickCheckActiveFormatContextOverride,
+  ] = useState<QuickCheckActiveFormatContext | null>(null);
   const [formatSearch, setFormatSearch] = useState("");
   const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
   const sendersPath = `${bankPath}/senders.txt`;
@@ -1700,6 +1966,15 @@ export function BankWorkspace() {
           baseSha: entry.baseSha,
         })),
     [bankPath, draftStore, draftStore.drafts]
+  );
+  const allChangedFilesForPublish = useMemo(
+    () =>
+      draftStore.getChangedFiles().map((entry) => ({
+        filePath: entry.filePath,
+        content: entry.content,
+        isDeleted: entry.isDeleted,
+      })),
+    [draftStore, draftStore.drafts]
   );
   const localChangedFiles = useMemo(
     () => draftStore.getChangedFiles().map((item) => item.filePath),
@@ -1778,6 +2053,48 @@ export function BankWorkspace() {
   );
 
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
+  const updateSourceFromSession = useCallback(
+    (session: ActiveRouteSession) => {
+      setRepository(repository);
+      setSource({
+        type: "pr",
+        name: `pr-${session.prNumber}`,
+        sha: session.headSha,
+        prNumber: session.prNumber,
+      });
+      setSourceChangedFiles(session.changedFiles.map((file) => file.path));
+      saveActiveRouteSession(repository, session);
+    },
+    [repository, setRepository, setSource, setSourceChangedFiles]
+  );
+  const handleWorkspaceStale = useCallback(
+    (session: ActiveRouteSession) => {
+      updateSourceFromSession(session);
+      routeInit.showStaleSession(session);
+    },
+    [routeInit, updateSourceFromSession]
+  );
+  const handleWorkspaceReadOnly = useCallback(
+    (session: ActiveRouteSession) => {
+      updateSourceFromSession(session);
+      routeInit.showReadOnlySession(session);
+    },
+    [routeInit, updateSourceFromSession]
+  );
+  const handleWorkspaceSynced = useCallback(
+    async (session: ActiveRouteSession) => {
+      const tree = await fetchRepoTree(session.headSha, repository);
+      updateSourceFromSession(session);
+      setTree(tree);
+      setBanks(indexBanksFromTree(tree));
+      useDraftStore.getState().discardAll();
+      routeInit.showReadySession(
+        session,
+        session.writable ? "clean" : "read-only"
+      );
+    },
+    [repository, routeInit, setBanks, setTree, updateSourceFromSession]
+  );
 
   useEffect(() => {
     intersectionRunIdRef.current += 1;
@@ -1796,6 +2113,61 @@ export function BankWorkspace() {
     sourceRefNameForContent,
   ]);
 
+  useEffect(() => {
+    if (routeInitState.status !== "ready") {
+      return;
+    }
+
+    let cancelled = false;
+    let inFlight = false;
+    const recheckWorkspace = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
+      try {
+        const resolution = await resolvePullRequestWorkspace(
+          routeInitState.session.prNumber,
+          repository
+        );
+        if (cancelled || resolution.status !== "supported") {
+          return;
+        }
+        if (resolution.headSha !== routeInitState.session.headSha) {
+          handleWorkspaceStale(resolution);
+          return;
+        }
+        if (!resolution.writable && routeInitState.session.writable) {
+          handleWorkspaceReadOnly(resolution);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const handleWindowFocus = () => {
+      void recheckWorkspace();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void recheckWorkspace();
+      }
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [
+    handleWorkspaceReadOnly,
+    handleWorkspaceStale,
+    repository,
+    routeInitState,
+  ]);
+
   const navigateToRequestedFile = useCallback(
     (filePath: string | null, replace = false) => {
       const search = buildSelectionSearch(searchParams, filePath);
@@ -1808,7 +2180,9 @@ export function BankWorkspace() {
   const showSenders = requestedFile === sendersPath;
   const selectedFile = useMemo(
     () =>
-      requestedFile && requestedFile !== sendersPath && allFormatFiles.includes(requestedFile)
+      requestedFile &&
+      requestedFile !== sendersPath &&
+      allFormatFiles.includes(requestedFile)
         ? requestedFile
         : null,
     [allFormatFiles, requestedFile, sendersPath]
@@ -1925,7 +2299,7 @@ export function BankWorkspace() {
   const handleOpenSmsByTemplateForIntersection = useCallback(
     (filePath: string) => {
       const entry = intersectionFormatEntries.get(filePath);
-      if (!entry || !entry.regex.trim()) {
+      if (!entry?.regex.trim()) {
         return;
       }
 
@@ -1960,7 +2334,8 @@ export function BankWorkspace() {
         draftStore,
         setBanks,
         currentRequestedFile: requestedFile,
-        replaceRequestedFile: (filePath) => navigateToRequestedFile(filePath, true),
+        replaceRequestedFile: (filePath) =>
+          navigateToRequestedFile(filePath, true),
       });
     },
     [
@@ -2001,7 +2376,14 @@ export function BankWorkspace() {
         }
       }
     }
-  }, [bankPath, draftStore, navigateToRequestedFile, requestedFile, setBanks, tree]);
+  }, [
+    bankPath,
+    draftStore,
+    navigateToRequestedFile,
+    requestedFile,
+    setBanks,
+    tree,
+  ]);
   const canApprovePullRequest = usePullRequestApprovalPermission({
     repository,
     sourceRef,
@@ -2023,18 +2405,26 @@ export function BankWorkspace() {
     isPublishing: isPublishingQuickUpdate,
     publishError,
     onPublish: handlePublishAction,
-    canUpdateCurrentPullRequest,
     publishActionLabel,
   } = useBankPublishAction({
-    canApprovePullRequest,
+    bank,
+    bankPath,
     changedFiles: changedFilesForPublish,
-    onOpenCreatePublish: () => setShowPublish(true),
+    allChangedFiles: allChangedFilesForPublish,
+    draftStore,
+    onWorkspaceReadOnly: handleWorkspaceReadOnly,
+    onWorkspaceStale: handleWorkspaceStale,
+    onWorkspaceSynced: handleWorkspaceSynced,
     repository,
-    sourceRef,
+    sourceRef: sourceRef?.sha
+      ? (sourceRef as typeof sourceRef & { sha: string })
+      : null,
     t,
+    writable: activeSession?.writable ?? false,
   });
 
   useAutoSelectFormat({
+    workspaceReady: routeInitState.status === "ready",
     requestedFile,
     allFormatFiles,
     sendersPath,
@@ -2053,11 +2443,54 @@ export function BankWorkspace() {
     );
   }, [selectedFile, showSenders]);
 
-  if (isRouteSyncInFlight || routeSyncPending) {
+  if (routeInitState.status === "loading") {
     return (
       <div className="flex items-center gap-2">
         <Spinner />
         <span>{t("app.loading")}</span>
+      </div>
+    );
+  }
+
+  if (routeInitState.status === "transient-error") {
+    return (
+      <div className="flex flex-col gap-4">
+        <StatusBadge variant="error">
+          {t("app.error")}: {routeInitState.reason}
+        </StatusBadge>
+        <div>
+          <Button onClick={() => window.location.reload()} type="button">
+            {t("app.retry", { defaultValue: "Retry" })}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (routeInitState.status === "stale") {
+    return (
+      <div className="flex max-w-xl flex-col gap-4">
+        <StatusBadge variant="warning">
+          {t("publish.outdatedBase", {
+            defaultValue: "Local draft is stale for the current PR head.",
+          })}
+        </StatusBadge>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => {
+              useDraftStore.getState().discardAll();
+              window.location.reload();
+            }}
+            type="button"
+          >
+            {t("draft.discardAndOpenLatest", {
+              defaultValue: "Discard stale draft and open latest PR",
+            })}
+          </Button>
+          <Button onClick={() => navigate("/")} type="button" variant="ghost">
+            {t("app.back", { defaultValue: "Back to Dashboard" })}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -2121,8 +2554,8 @@ export function BankWorkspace() {
               : null
           }
           canResetToSource={canResetToSource}
-          isCalculatingIntersections={isCalculatingIntersections}
           isApprovingPullRequest={isApprovingPullRequest}
+          isCalculatingIntersections={isCalculatingIntersections}
           isPublishing={isPublishingQuickUpdate}
           isPullRequestApproved={isPullRequestApproved}
           onApprovePullRequest={() => {
@@ -2179,8 +2612,8 @@ export function BankWorkspace() {
           sourceChangedFormatFiles={sourceChangedFormatFiles}
           sourceSendersChanged={sourceSendersChanged}
           t={t}
-          tTemplate={t}
           totalFilesCount={allFormatFiles.length + 1}
+          tTemplate={t}
           visibleFormats={filteredFormatFiles}
         />
       </div>
@@ -2190,6 +2623,7 @@ export function BankWorkspace() {
         {renderWorkspaceContent({
           showSenders,
           bankPath,
+          readOnly: activeSession?.writable === false,
           selectedFile,
           allFormatFiles,
           handleRenameFile,
@@ -2219,15 +2653,10 @@ export function BankWorkspace() {
             handleSelectFile(path);
             setShowCreateFormat(false);
           }}
+          readOnly={activeSession?.writable === false}
         />
       )}
-      {showPublish && !canUpdateCurrentPullRequest && (
-        <PublishPanel
-          bankName={displayName}
-          bankPath={bankPath}
-          onClose={() => setShowPublish(false)}
-        />
-      )}
+      {false}
       {showValidation && (
         <ValidationPanel
           bank={bank ?? null}

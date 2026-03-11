@@ -5,18 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { config } from "@/config";
 import {
-  createAuthenticatedOctokit,
-  createCommit,
-  createOrUpdateBranch,
-  createPullRequest,
-  ensureFork,
-  fetchBranchSha,
-  getCachedPullRequestApprovalPermission,
+  resolvePullRequestWorkspace,
   updatePullRequestHead,
 } from "@/domain/github";
-import type { BankInfo, RepoRef } from "@/domain/types";
+import type { BankInfo } from "@/domain/types";
 import { validateBankLevel } from "@/domain/validation";
 import { cn } from "@/lib/utils";
 import type { PublishStep } from "@/store";
@@ -32,7 +25,6 @@ interface ChangedFile {
   filePath: string;
   content: string;
   isDeleted: boolean;
-  baseSha: string;
 }
 
 interface PublishStoreLike {
@@ -42,14 +34,52 @@ interface PublishStoreLike {
   setError: (error: string | null) => void;
   setPrUrl: (url: string | null) => void;
   reset: () => void;
-  validationIssues: ReturnType<typeof validateBankLevel>;
 }
 
 interface DraftStoreLike {
   getDraft: (filePath: string) => { content: string } | undefined;
+  getChangedFiles: () => ChangedFile[];
 }
 
-type PublishMode = "create" | "update-pr";
+export function resolvePublishPreflightState(params: {
+  resolverHeadSha: string;
+  sessionHeadSha: string;
+  writable: boolean;
+  localChangesCount: number;
+  hasInvalidScopeChanges: boolean;
+  validationErrorsCount: number;
+}):
+  | "stale"
+  | "read-only"
+  | "no-changes"
+  | "invalid-scope"
+  | "validation-failed"
+  | "can-publish" {
+  const {
+    resolverHeadSha,
+    sessionHeadSha,
+    writable,
+    localChangesCount,
+    hasInvalidScopeChanges,
+    validationErrorsCount,
+  } = params;
+  if (resolverHeadSha !== sessionHeadSha) {
+    return "stale";
+  }
+  if (!writable) {
+    return "read-only";
+  }
+  if (localChangesCount === 0) {
+    return "no-changes";
+  }
+  if (hasInvalidScopeChanges) {
+    return "invalid-scope";
+  }
+  if (validationErrorsCount > 0) {
+    return "validation-failed";
+  }
+  return "can-publish";
+}
 
 function buildFormatContents(changedFiles: ChangedFile[]): Map<string, string> {
   const formatContents = new Map<string, string>();
@@ -67,20 +97,15 @@ function buildFormatContents(changedFiles: ChangedFile[]): Map<string, string> {
   return formatContents;
 }
 
-function runPublishValidation(params: {
+function collectPublishValidationIssues(params: {
   bank: BankInfo | undefined;
   bankPath: string;
   changedFiles: ChangedFile[];
   draftStore: DraftStoreLike;
-  publishStore: PublishStoreLike;
-  t: (key: string, options?: Record<string, unknown>) => string;
-}): string | null {
-  const { bank, bankPath, changedFiles, draftStore, publishStore, t } = params;
-  if (!(bank || changedFiles.length > 0)) {
-    return null;
-  }
+}) {
+  const { bank, bankPath, changedFiles, draftStore } = params;
   if (!bank) {
-    return null;
+    return [];
   }
 
   const sendersDraft = draftStore.getDraft(`${bankPath}/senders.txt`);
@@ -88,235 +113,138 @@ function runPublishValidation(params: {
     ...bank,
     hasSenders: bank.hasSenders || !!sendersDraft,
   };
-  const issues = validateBankLevel(
+  return validateBankLevel(
     bankForValidation,
     buildFormatContents(changedFiles)
   );
-  const blockingIssues = issues.filter((issue) => issue.level === "error");
-  publishStore.setValidationIssues(issues);
-
-  if (blockingIssues.length === 0) {
-    return null;
-  }
-  return t("validation.errors", { count: blockingIssues.length });
 }
 
-function buildValidationSummary(
-  issues: ReturnType<typeof validateBankLevel>
-): string {
-  if (issues.length === 0) {
-    return "✅ All local validation checks passed";
-  }
-  return issues
-    .map((issue) => `- [${issue.level}] ${issue.filePath}: ${issue.message}`)
-    .join("\n");
-}
-
-function buildPullRequestBody(params: {
-  bankName: string;
-  changedFilesCount: number;
-  validationIssues: ReturnType<typeof validateBankLevel>;
-}): string {
-  const { bankName, changedFilesCount, validationIssues } = params;
-  const validationSummary = buildValidationSummary(validationIssues);
-  return `## Changes\n\nBank: \`${bankName}\`\nFiles changed: ${changedFilesCount}\n\n## Validation\n\n${validationSummary}\n\n---\n*Created by Zenmoney SMS Formats*`;
-}
-
-function resolvePublishError(params: {
+function resolvePublishPreflightError(params: {
   bank: BankInfo | undefined;
   bankPath: string;
   changedFiles: ChangedFile[];
+  allChangedFiles: ChangedFile[];
   draftStore: DraftStoreLike;
-  isMultiBank: boolean;
   publishStore: PublishStoreLike;
-  sourceSha: string | undefined;
+  resolverHeadSha: string;
+  sourceSha: string;
+  writable: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): string | null {
   const {
     bank,
     bankPath,
     changedFiles,
+    allChangedFiles,
     draftStore,
-    isMultiBank,
     publishStore,
+    resolverHeadSha,
     sourceSha,
+    writable,
     t,
   } = params;
-  const validationError = runPublishValidation({
+  const validationIssues = collectPublishValidationIssues({
     bank,
     bankPath,
     changedFiles,
     draftStore,
-    publishStore,
-    t,
   });
-  if (validationError) {
-    return validationError;
-  }
-  if (isMultiBank) {
-    return t("validation.multiBankPublish");
-  }
-  if (changedFiles.length === 0) {
-    return "No changes to publish";
-  }
-  if (sourceSha && changedFiles.some((file) => file.baseSha !== sourceSha)) {
+  publishStore.setValidationIssues(validationIssues);
+  const validationErrorsCount = validationIssues.filter(
+    (issue) => issue.level === "error"
+  ).length;
+  const publishState = resolvePublishPreflightState({
+    resolverHeadSha,
+    sessionHeadSha: sourceSha,
+    writable,
+    localChangesCount: changedFiles.length,
+    hasInvalidScopeChanges: allChangedFiles.some(
+      (file) => !file.filePath.startsWith(`${bankPath}/`)
+    ),
+    validationErrorsCount,
+  });
+
+  if (publishState === "stale") {
     return t("publish.outdatedBase");
   }
+  if (publishState === "read-only") {
+    return t("publish.readOnly", {
+      defaultValue: "This pull request is read-only.",
+    });
+  }
+  if (publishState === "no-changes") {
+    return t("publish.noChanges");
+  }
+  if (publishState === "invalid-scope") {
+    return t("validation.multiBankPublish");
+  }
+  if (publishState === "validation-failed") {
+    return t("validation.errors", { count: validationErrorsCount });
+  }
   return null;
-}
-
-async function publishBankChanges(params: {
-  publishStore: PublishStoreLike;
-  token: string;
-  bankName: string;
-  prTitle: string;
-  changedFiles: ChangedFile[];
-  repository: RepoRef;
-}): Promise<string> {
-  const { publishStore, token, bankName, prTitle, changedFiles, repository } =
-    params;
-  const octokit = createAuthenticatedOctokit(token);
-
-  publishStore.setStep("forking");
-  const fork = await ensureFork(octokit, repository);
-
-  publishStore.setStep("branching");
-  const baseSha = await fetchBranchSha(config.defaultBranch, repository);
-  const branchName = `sms-formats-editor/${bankName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}`;
-  await createOrUpdateBranch(
-    octokit,
-    fork.owner,
-    branchName,
-    baseSha,
-    repository
-  );
-
-  publishStore.setStep("committing");
-  await createCommit(
-    octokit,
-    fork.owner,
-    branchName,
-    baseSha,
-    changedFiles.map((file) => ({
-      path: file.filePath,
-      content: file.isDeleted ? undefined : file.content,
-      delete: file.isDeleted,
-    })),
-    prTitle,
-    repository
-  );
-
-  publishStore.setStep("opening-pr");
-  const body = buildPullRequestBody({
-    bankName,
-    changedFilesCount: changedFiles.length,
-    validationIssues: publishStore.validationIssues,
-  });
-  const pr = await createPullRequest(
-    octokit,
-    fork.owner,
-    branchName,
-    prTitle,
-    body,
-    repository
-  );
-  return pr.url;
-}
-
-async function updateExistingPullRequestChanges(params: {
-  publishStore: PublishStoreLike;
-  token: string;
-  changedFiles: ChangedFile[];
-  repository: RepoRef;
-  prNumber: number;
-}): Promise<string> {
-  const { publishStore, token, changedFiles, repository, prNumber } = params;
-
-  publishStore.setStep("committing");
-  const result = await updatePullRequestHead(
-    token,
-    prNumber,
-    changedFiles.map((file) => ({
-      path: file.filePath,
-      content: file.isDeleted ? undefined : file.content,
-      delete: file.isDeleted,
-    })),
-    repository
-  );
-
-  publishStore.setStep("opening-pr");
-  return result.url;
 }
 
 export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   const { t } = useTranslation();
   const dialogTitleId = useId();
   const tokenInputId = useId();
-  const prTitleInputId = useId();
   const draftStore = useDraftStore();
   const publishStore = usePublishStore();
-  const sourceRef = useSourceStore((s) => s.sourceRef);
-  const banks = useSourceStore((s) => s.banks);
-  const repository = useSourceStore((s) => s.repository);
-
+  const sourceRef = useSourceStore((state) => state.sourceRef);
+  const banks = useSourceStore((state) => state.banks);
+  const repository = useSourceStore((state) => state.repository);
   const [token, setToken] = useState(publishStore.token ?? "");
-  const [storeInSession, setStoreInSession] = useState(false);
-  const [prTitle, setPrTitle] = useState(
-    t("publish.prTitleDefault", { bank: bankName })
-  );
 
-  // Get changed files for this bank
   const changedFiles = draftStore
     .getChangedFiles()
-    .filter((f) => f.filePath.startsWith(bankPath));
-
-  // Check multi-bank scope
-  const allChanged = draftStore.getChangedFiles();
-  const changedBanks = new Set<string>();
-  for (const f of allChanged) {
-    const parts = f.filePath.split("/");
-    if (parts[0] === "src" && parts[1]) {
-      changedBanks.add(`src/${parts[1]}`);
-    }
-  }
-
-  const isMultiBank = changedBanks.size > 1;
-  const canUpdateCurrentPullRequest = Boolean(
-    sourceRef?.type === "pr" &&
-      sourceRef.prNumber &&
-      getCachedPullRequestApprovalPermission(repository)
-  );
-  const publishMode: PublishMode = canUpdateCurrentPullRequest
-    ? "update-pr"
-    : "create";
-  const publishActionLabel =
-    publishMode === "update-pr" ? t("publish.updatePR") : t("publish.createPR");
-  const publishSuccessLabel =
-    publishMode === "update-pr"
-      ? t("publish.successUpdate")
-      : t("publish.success");
+    .filter((entry) => entry.filePath.startsWith(bankPath))
+    .map((entry) => ({
+      filePath: entry.filePath,
+      content: entry.content,
+      isDeleted: entry.isDeleted,
+    }));
+  const allChangedFiles = draftStore.getChangedFiles().map((entry) => ({
+    filePath: entry.filePath,
+    content: entry.content,
+    isDeleted: entry.isDeleted,
+  }));
 
   const handlePublish = useCallback(async () => {
     const trimmedToken = token.trim();
-    if (!trimmedToken) {
+    if (
+      !trimmedToken ||
+      sourceRef?.type !== "pr" ||
+      !sourceRef.prNumber ||
+      !sourceRef.sha
+    ) {
       return;
     }
 
     publishStore.reset();
+    publishStore.setToken(trimmedToken);
 
     try {
       publishStore.setStep("validating");
-      publishStore.setToken(trimmedToken);
+      const resolution = await resolvePullRequestWorkspace(
+        sourceRef.prNumber,
+        repository
+      );
+      if (resolution.status !== "supported") {
+        publishStore.setError(t("publish.updateError"));
+        return;
+      }
 
-      const bank = banks.find((b) => b.folderPath === bankPath);
-      const publishError = resolvePublishError({
+      const bank = banks.find((item) => item.folderPath === bankPath);
+      const publishError = resolvePublishPreflightError({
         bank,
         bankPath,
         changedFiles,
+        allChangedFiles,
         draftStore,
-        isMultiBank,
         publishStore,
-        sourceSha: sourceRef?.sha,
+        resolverHeadSha: resolution.headSha,
+        sourceSha: sourceRef.sha,
+        writable: resolution.writable,
         t,
       });
       if (publishError) {
@@ -324,51 +252,46 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
         return;
       }
 
-      const prUrl =
-        publishMode === "update-pr" &&
-        sourceRef?.type === "pr" &&
-        sourceRef.prNumber
-          ? await updateExistingPullRequestChanges({
-              publishStore,
-              token: trimmedToken,
-              changedFiles,
-              repository,
-              prNumber: sourceRef.prNumber,
-            })
-          : await publishBankChanges({
-              publishStore,
-              token: trimmedToken,
-              bankName,
-              prTitle,
-              changedFiles,
-              repository,
-            });
+      publishStore.setStep("committing");
+      const result = await updatePullRequestHead(
+        trimmedToken,
+        sourceRef.prNumber,
+        changedFiles.map((file) => ({
+          path: file.filePath,
+          content: file.isDeleted ? undefined : file.content,
+          delete: file.isDeleted,
+        })),
+        repository
+      );
 
-      if (storeInSession) {
-        sessionStorage.setItem("sms-formats-token", trimmedToken);
+      publishStore.setStep("syncing");
+      const syncedResolution = await resolvePullRequestWorkspace(
+        sourceRef.prNumber,
+        repository
+      );
+      if (syncedResolution.status !== "supported") {
+        publishStore.setError(t("publish.updateError"));
+        return;
       }
 
-      publishStore.setPrUrl(prUrl);
+      publishStore.setPrUrl(result.url);
       publishStore.setStep("done");
-    } catch (e) {
-      publishStore.setError(e instanceof Error ? e.message : String(e));
+    } catch (error) {
+      publishStore.setError(
+        error instanceof Error ? error.message : t("publish.updateError")
+      );
     }
   }, [
-    token,
-    storeInSession,
-    prTitle,
+    allChangedFiles,
     bankPath,
-    bankName,
-    changedFiles,
     banks,
-    isMultiBank,
+    changedFiles,
     draftStore,
-    publishMode,
     publishStore,
     repository,
-    sourceRef?.prNumber,
-    sourceRef?.type,
+    sourceRef,
     t,
+    token,
   ]);
 
   const step = publishStore.step;
@@ -381,73 +304,34 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       title={t("publish.title")}
       titleId={dialogTitleId}
     >
-      <div className="mb-4 flex flex-col gap-4">
-        <div className="text-sm">
-          <span className="text-[color:var(--c-text-muted)]">
-            {t("publish.scopeCheck", { bank: bankName })}
-          </span>
+      <div className="mb-4 flex flex-col gap-2">
+        <div className="text-[color:var(--c-text-muted)] text-sm">
+          {bankName}
         </div>
         <div className="text-[color:var(--c-text-muted)] text-sm">
           {changedFiles.length} file(s) changed
         </div>
-
-        {isMultiBank && (
-          <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
-            {t("validation.multiBankPublish")}
-          </div>
-        )}
-
-        {changedFiles.length === 0 && (
-          <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-[color:var(--c-warning)] text-xs">
-            No changes to publish for this bank
-          </div>
-        )}
       </div>
 
       {step === "idle" && (
-        <div className="mb-4 flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label
-              className="text-[color:var(--c-text-muted)] text-xs"
-              htmlFor={tokenInputId}
-            >
-              {t("publish.tokenLabel")}
-            </label>
-            <Input
-              className="font-mono"
-              id={tokenInputId}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="ghp_..."
-              type="password"
-              value={token}
-            />
-            <span className="text-[color:var(--c-text-dim)] text-xs">
-              {t("publish.tokenHint")}
-            </span>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              checked={storeInSession}
-              onChange={(e) => setStoreInSession(e.target.checked)}
-              type="checkbox"
-            />
-            {t("publish.storeInSession")}
+        <div className="mb-4 flex flex-col gap-1">
+          <label
+            className="text-[color:var(--c-text-muted)] text-xs"
+            htmlFor={tokenInputId}
+          >
+            {t("publish.tokenLabel")}
           </label>
-
-          <div className="flex flex-col gap-1">
-            <label
-              className="text-[color:var(--c-text-muted)] text-xs"
-              htmlFor={prTitleInputId}
-            >
-              {t("publish.prTitle")}
-            </label>
-            <Input
-              id={prTitleInputId}
-              onChange={(e) => setPrTitle(e.target.value)}
-              value={prTitle}
-            />
-          </div>
+          <Input
+            className="font-mono"
+            id={tokenInputId}
+            onChange={(event) => setToken(event.target.value)}
+            placeholder="ghp_..."
+            type="password"
+            value={token}
+          />
+          <span className="text-[color:var(--c-text-dim)] text-xs">
+            {t("publish.tokenHint")}
+          </span>
         </div>
       )}
 
@@ -462,20 +346,14 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
             status={stepStatus("validating", step)}
           />
           <PublishStepItem
-            label={t("publish.forking")}
-            status={stepStatus("forking", step)}
-          />
-          <PublishStepItem
-            label={t("publish.branching")}
-            status={stepStatus("branching", step)}
-          />
-          <PublishStepItem
             label={t("publish.committing")}
             status={stepStatus("committing", step)}
           />
           <PublishStepItem
-            label={t("publish.openingPR")}
-            status={stepStatus("opening-pr", step)}
+            label={t("publish.syncing", {
+              defaultValue: "Syncing workspace…",
+            })}
+            status={stepStatus("syncing", step)}
           />
         </div>
       )}
@@ -486,7 +364,9 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
           className="mb-4 flex flex-col gap-2"
           role="status"
         >
-          <StatusBadge variant="success">{publishSuccessLabel}</StatusBadge>
+          <StatusBadge variant="success">
+            {t("publish.successUpdate")}
+          </StatusBadge>
           <a
             href={publishStore.prUrl}
             rel="noopener noreferrer"
@@ -508,18 +388,15 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       )}
 
       {publishStore.validationIssues.length > 0 && (
-        <div
-          className="mb-4 flex max-h-[200px] flex-col gap-1 overflow-y-auto"
-          style={{ maxHeight: 200, overflowY: "auto" }}
-        >
-          {publishStore.validationIssues.map((issue, i) => (
+        <div className="mb-4 flex max-h-[200px] flex-col gap-1 overflow-y-auto">
+          {publishStore.validationIssues.map((issue, index) => (
             <div
               className={
                 issue.level === "error"
                   ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-[color:var(--c-error)] text-xs"
                   : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-[color:var(--c-warning)] text-xs"
               }
-              key={i}
+              key={`${issue.filePath}:${index}`}
             >
               <span className="font-mono text-sm">
                 {issue.filePath.split("/").pop()}
@@ -536,18 +413,13 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
         </Button>
         {step !== "done" && (
           <Button
-            disabled={
-              isPublishing ||
-              !token.trim() ||
-              changedFiles.length === 0 ||
-              isMultiBank
-            }
+            disabled={isPublishing || !token.trim()}
             onClick={handlePublish}
             type="button"
             variant="primary"
           >
             {isPublishing ? <Spinner /> : null}
-            {publishActionLabel}
+            {t("publish.updatePR")}
           </Button>
         )}
       </div>
@@ -555,40 +427,34 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   );
 }
 
-const STEP_ORDER = [
-  "validating",
-  "forking",
-  "branching",
-  "committing",
-  "opening-pr",
-  "done",
-] as const;
+const STEP_ORDER = ["validating", "committing", "syncing", "done"] as const;
 
 function stepStatus(
-  target: string,
-  current: string
+  target: (typeof STEP_ORDER)[number],
+  current: PublishStep
 ): "pending" | "active" | "done" | "error" {
-  if (current === "error") {
-    const ci = STEP_ORDER.indexOf(current as any);
-    const ti = STEP_ORDER.indexOf(target as any);
-    return ti < ci ? "done" : ti === ci ? "error" : "pending";
-  }
-  const ci = STEP_ORDER.indexOf(current as any);
-  const ti = STEP_ORDER.indexOf(target as any);
-  if (ci === -1) {
+  if (current === "error" || current === "idle") {
     return "pending";
   }
-  if (ti < ci) {
+  const currentIndex = STEP_ORDER.indexOf(current);
+  const targetIndex = STEP_ORDER.indexOf(target);
+  if (targetIndex < currentIndex) {
     return "done";
   }
-  if (ti === ci) {
+  if (targetIndex === currentIndex) {
     return "active";
   }
   return "pending";
 }
 
-function PublishStepItem({ label, status }: { label: string; status: string }) {
-  const cls = cn(
+function PublishStepItem({
+  label,
+  status,
+}: {
+  label: string;
+  status: "pending" | "active" | "done" | "error";
+}) {
+  const className = cn(
     "flex items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-1.5 text-xs",
     status === "active" &&
       "border-[color:var(--c-accent)] bg-[color:var(--c-accent-soft)] text-[color:var(--c-accent)]",
@@ -601,7 +467,7 @@ function PublishStepItem({ label, status }: { label: string; status: string }) {
   );
 
   return (
-    <div className={cls}>
+    <div className={className}>
       {status === "active" && <Spinner />}
       {status === "done" && "✓"}
       {status === "error" && "✗"}

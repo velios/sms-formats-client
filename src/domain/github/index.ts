@@ -20,6 +20,7 @@ export {
   getGitHubUserToken,
   indexBanksFromTree,
   refreshPullRequestApprovalPermission,
+  resolvePullRequestWorkspace,
   setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
   subscribeGitHubAuthChange,

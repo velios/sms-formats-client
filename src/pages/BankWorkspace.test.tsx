@@ -6,7 +6,12 @@ vi.mock("@/store", () => ({
   useSourceStore: () => ({}),
 }));
 
-import { collectAllFormatFiles, FormatsPanel } from "@/pages/BankWorkspace";
+import {
+  collectAllFormatFiles,
+  FormatsPanel,
+  resolveAutoSelectFile,
+  resolveWorkspaceEntryMode,
+} from "@/pages/BankWorkspace";
 
 function renderFormatsPanel(intersectingOtherFormats: number) {
   const handleSelectFile = vi.fn();
@@ -50,10 +55,10 @@ function renderFormatsPanel(intersectingOtherFormats: number) {
       sourceChangedFormatFiles={new Set()}
       sourceSendersChanged={false}
       t={(key) => key}
+      totalFilesCount={1}
       tTemplate={(key, options) =>
         `${key}:${String(options?.file)}:${String(options?.count)}`
       }
-      totalFilesCount={1}
       visibleFormats={["banks/pumb/formats/example.txt"]}
     />
   );
@@ -100,5 +105,38 @@ describe("FormatsPanel intersections", () => {
       "banks/pumb/formats/deleted-in-pr.txt",
       "banks/pumb/formats/existing.txt",
     ]);
+  });
+
+  it("prioritizes stale drafts over read-only when opening a PR workspace", () => {
+    expect(
+      resolveWorkspaceEntryMode({
+        headSha: "new-head",
+        persistedDrafts: [{ baseHeadSha: "old-head" }],
+        writable: false,
+      })
+    ).toBe("stale");
+  });
+
+  it("opens read-only when the current head matches but the PR is not writable", () => {
+    expect(
+      resolveWorkspaceEntryMode({
+        headSha: "same-head",
+        persistedDrafts: [{ baseHeadSha: "same-head" }],
+        writable: false,
+      })
+    ).toBe("read-only");
+  });
+
+  it("does not rewrite ?file before PR workspace route init becomes ready", () => {
+    expect(
+      resolveAutoSelectFile({
+        workspaceReady: false,
+        selectionReady: true,
+        requestedFile: "src/TBank_123/formats/current.txt",
+        allFormatFiles: [],
+        sendersPath: "src/TBank_123/senders.txt",
+        preferredFormatFile: null,
+      })
+    ).toBeUndefined();
   });
 });

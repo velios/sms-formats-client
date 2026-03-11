@@ -42,16 +42,6 @@
     "invalidToken": "Failed to validate token",
     "saving": "Validating…"
   },
-  "prShortcut": {
-    "opening": "Opening PR…",
-    "bannerBlockedBadge": "Cannot open this link right now",
-    "bannerOpenFailedBadge": "Failed to open PR",
-    "samePrDraftsMessage": "Cannot open PR #{{prNumber}} from the link because you have unfinished local changes in this PR.",
-    "otherDraftsMessage": "Cannot open PR #{{prNumber}} from the link while you still have local drafts. Discard them first or open the PR on GitHub.",
-    "openFailedMessage": "Failed to open PR #{{prNumber}} in the app. You can try again after discarding local drafts or open the PR on GitHub.",
-    "discardAndOpen": "Discard drafts and open PR",
-    "openOnGitHub": "Open PR on GitHub"
-  },
   "bank": {
     "search": "Search bank…",
     "searchFile": "Search file…",
@@ -159,7 +149,7 @@
     "run": "Check",
     "running": "Checking…",
     "emptySms": "Enter SMS text to run quick check.",
-    "noSource": "Source is not selected. Choose a branch or PR first.",
+    "noSource": "Source is not selected. Open a pull request first.",
     "recalculateIntersectionsConfirm": "Intersections are already calculated. Run a full recalculation again?",
     "intersectionsUnexpectedError": "Failed to calculate format intersections.",
     "unexpectedError": "Quick check failed to complete.",
@@ -180,26 +170,19 @@
   },
   "publish": {
     "title": "Publish PR",
-    "tokenPrompt": "Enter GitHub Personal Access Token",
     "tokenHint": "Token needs: Contents (write), Pull Requests (write) permissions",
     "tokenLabel": "GitHub Token",
-    "storeInSession": "Store token in session",
-    "createPR": "Create Pull Request",
     "publishing": "Publishing…",
     "validating": "Validating…",
-    "forking": "Creating fork…",
-    "branching": "Creating branch…",
     "committing": "Creating commit…",
-    "openingPR": "Opening PR…",
-    "success": "PR created successfully!",
+    "syncing": "Syncing workspace…",
     "updatePR": "Update Pull Request",
     "successUpdate": "PR updated successfully!",
+    "noChanges": "No changes to publish",
     "prLink": "PR link",
-    "preflight": "Preflight Check",
-    "scopeCheck": "Change scope: {{bank}}",
-    "prTitle": "PR title",
-    "prTitleDefault": "Update formats for {{bank}}",
-    "outdatedBase": "Cannot publish changes created on top of another commit. Switch to the correct step and reapply the edits."
+    "outdatedBase": "Cannot publish changes created on top of another commit. Switch to the correct step and reapply the edits.",
+    "readOnly": "This pull request is read-only.",
+    "updateError": "Failed to update pull request"
   },
   "refresh": {
     "action": "Pull from GitHub",

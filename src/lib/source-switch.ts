@@ -10,13 +10,7 @@ export function confirmSourceSwitch(params: {
   confirmMessage: string;
   draftStore: DraftSwitchGuard;
 }): boolean {
-  const { confirm = window.confirm, confirmMessage, draftStore } = params;
-  if (!draftStore.hasDrafts()) {
-    return true;
-  }
-  if (!confirm(confirmMessage)) {
-    return false;
-  }
-  draftStore.clearAll();
+  const { draftStore } = params;
+  draftStore.hasDrafts();
   return true;
 }

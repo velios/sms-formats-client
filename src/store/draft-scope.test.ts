@@ -5,27 +5,21 @@ import { isSameDraftScope, makeDraftSourceKey } from "./draft-scope";
 describe("draft-scope", () => {
   const repository: RepoRef = { owner: "zenmoney", repo: "sms-formats" };
 
-  it("keeps the same storage key for a pull request across commit switches", () => {
-    const sourceA: SourceRef = {
-      type: "pr",
-      name: "feature/pr-123",
-      sha: "abc123",
-      prNumber: 123,
-    };
-    const sourceB: SourceRef = {
-      type: "pr",
-      name: "feature/pr-123",
-      sha: "def456",
-      prNumber: 123,
-    };
-
-    expect(makeDraftSourceKey(sourceA, repository)).toBe(
-      makeDraftSourceKey(sourceB, repository)
+  it("keeps the same storage key for a pull request regardless of PR head name", () => {
+    expect(
+      makeDraftSourceKey(
+        { type: "pr", prNumber: 123, name: "feature/x" },
+        repository
+      )
+    ).toBe(
+      makeDraftSourceKey(
+        { type: "pr", prNumber: 123, name: "feature/y" },
+        repository
+      )
     );
-    expect(isSameDraftScope(sourceA, sourceB)).toBe(true);
   });
 
-  it("treats different pull requests and branches as separate draft scopes", () => {
+  it("treats different pull requests as different draft scopes", () => {
     const currentSource: SourceRef = {
       type: "pr",
       name: "feature/pr-123",
@@ -40,11 +34,14 @@ describe("draft-scope", () => {
         prNumber: 124,
       })
     ).toBe(false);
-    expect(
-      isSameDraftScope(currentSource, {
-        type: "branch",
-        name: "main",
-      })
-    ).toBe(false);
+  });
+
+  it("rejects legacy branch draft scopes", () => {
+    expect(() =>
+      makeDraftSourceKey(
+        { type: "branch", name: "main" } as SourceRef,
+        repository
+      )
+    ).toThrow(/legacy|unsupported/i);
   });
 });

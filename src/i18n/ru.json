@@ -55,16 +55,6 @@
     "invalidToken": "Не удалось проверить токен",
     "saving": "Проверка…"
   },
-  "prShortcut": {
-    "opening": "Открываем PR…",
-    "bannerBlockedBadge": "Нельзя открыть ссылку сейчас",
-    "bannerOpenFailedBadge": "Не удалось открыть PR",
-    "samePrDraftsMessage": "Нельзя открыть PR #{{prNumber}} по ссылке, потому что у вас есть незаконченные локальные правки в этом PR.",
-    "otherDraftsMessage": "Нельзя открыть PR #{{prNumber}} по ссылке, пока у вас есть несброшенные локальные правки. Сначала сбросьте их или откройте PR в GitHub.",
-    "openFailedMessage": "Не удалось открыть PR #{{prNumber}} в приложении. Можно попробовать ещё раз после сброса локальных правок или открыть PR в GitHub.",
-    "discardAndOpen": "Сбросить правки и открыть PR",
-    "openOnGitHub": "Открыть PR в GitHub"
-  },
   "bank": {
     "search": "Поиск банка…",
     "searchFile": "Поиск файла…",
@@ -184,7 +174,7 @@
     "emptySms": "Введите текст SMS для проверки.",
     "emptyTemplateRegex": "Введите регулярное выражение шаблона.",
     "invalidTemplateRegex": "Некорректный шаблон: {{message}}",
-    "noSource": "Источник не выбран. Сначала выберите ветку или PR.",
+    "noSource": "Источник не выбран. Сначала откройте pull request.",
     "recalculateIntersectionsConfirm": "Пересечения уже посчитаны. Выполнить полный пересчёт заново?",
     "intersectionsUnexpectedError": "Не удалось посчитать пересечения форматов.",
     "unexpectedError": "Не удалось выполнить быструю проверку.",
@@ -211,28 +201,19 @@
   },
   "publish": {
     "title": "Публикация PR",
-    "tokenPrompt": "Введите GitHub Personal Access Token",
     "tokenHint": "Токену нужны права: Contents (write), Pull Requests (write)",
     "tokenLabel": "GitHub Token",
-    "storeInSession": "Сохранить токен в сессии",
-    "createPR": "Создать Pull Request",
     "updatePR": "Обновить Pull Request",
     "publishing": "Публикация…",
     "validating": "Валидация…",
-    "forking": "Создание форка…",
-    "branching": "Создание ветки…",
     "committing": "Создание коммита…",
-    "openingPR": "Открытие PR…",
-    "success": "PR успешно создан!",
+    "syncing": "Синхронизация workspace…",
     "successUpdate": "PR успешно обновлён!",
     "noChanges": "Нет изменений для публикации",
     "outdatedBase": "Нельзя публиковать изменения, созданные поверх другого коммита. Переключитесь на нужный шаг и внесите правки заново.",
+    "readOnly": "Этот pull request открыт только для чтения.",
     "updateError": "Не удалось обновить Pull Request",
-    "prLink": "Ссылка на PR",
-    "preflight": "Предварительная проверка",
-    "scopeCheck": "Область изменений: {{bank}}",
-    "prTitle": "Заголовок PR",
-    "prTitleDefault": "Обновить форматы банка {{bank}}"
+    "prLink": "Ссылка на PR"
   },
   "locale": {
     "ru": "Русский",

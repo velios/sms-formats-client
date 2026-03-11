@@ -64,8 +64,242 @@ interface CommitAuthorMetadata {
   committer?: CommitAuthorIdentity | null;
 }
 
+export interface PullRequestChangedFile {
+  kind: "add" | "modify" | "delete" | "rename";
+  path: string;
+  oldPath?: string;
+}
+
+export type PullRequestWorkspaceResolution =
+  | {
+      status: "supported";
+      repository: RepoRef;
+      prNumber: number;
+      headSha: string;
+      bankPath: string;
+      writable: boolean;
+      readOnlyReason: "no-write-access" | null;
+      changedFiles: PullRequestChangedFile[];
+    }
+  | {
+      status: "unsupported";
+      reason: "no-bank-changes" | "multiple-banks" | "outside-bank-scope";
+    }
+  | {
+      status: "unavailable";
+      reason: "not-found" | "closed" | "merged" | "inaccessible";
+    }
+  | {
+      status: "transient-error";
+      reason: "network" | "timeout" | "rate-limit" | "unknown";
+    };
+
+interface PullRequestWorkspaceSnapshot {
+  repository: RepoRef;
+  prNumber: number;
+  state: "open" | "closed";
+  merged: boolean;
+  headSha: string;
+  canWriteRepository: boolean;
+  maintainerCanModify: boolean | null;
+  headRepository: RepoRef | null;
+  changedFiles: PullRequestChangedFile[];
+}
+
 function resolveRepo(repoRef?: RepoRef): RepoRef {
   return repoRef ?? defaultRepoRef;
+}
+
+function isSameRepository(left: RepoRef, right: RepoRef): boolean {
+  return left.owner === right.owner && left.repo === right.repo;
+}
+
+function resolveBankPathFromFilePath(path: string | undefined): string | null {
+  if (!path?.startsWith("src/")) {
+    return null;
+  }
+  const [root, bank] = path.split("/");
+  if (!(root === "src" && bank)) {
+    return null;
+  }
+  return `src/${bank}`;
+}
+
+function resolvePullRequestBankPath(changedFiles: PullRequestChangedFile[]):
+  | { status: "supported"; bankPath: string }
+  | {
+      status: "unsupported";
+      reason: "no-bank-changes" | "multiple-banks" | "outside-bank-scope";
+    } {
+  if (changedFiles.length === 0) {
+    return {
+      status: "unsupported",
+      reason: "no-bank-changes",
+    };
+  }
+
+  const bankPaths = new Set<string>();
+  for (const file of changedFiles) {
+    const bankPath = resolveBankPathFromFilePath(file.path);
+    if (!bankPath) {
+      return {
+        status: "unsupported",
+        reason: "outside-bank-scope",
+      };
+    }
+    if (file.kind === "rename") {
+      const oldBankPath = resolveBankPathFromFilePath(file.oldPath);
+      if (!(oldBankPath && oldBankPath === bankPath)) {
+        return {
+          status: "unsupported",
+          reason: "outside-bank-scope",
+        };
+      }
+    }
+    bankPaths.add(bankPath);
+  }
+
+  if (bankPaths.size !== 1) {
+    return {
+      status: "unsupported",
+      reason: "multiple-banks",
+    };
+  }
+
+  return {
+    status: "supported",
+    bankPath: Array.from(bankPaths)[0] ?? "",
+  };
+}
+
+function normalizePullRequestChangedFile(file: {
+  filename?: string | null;
+  status?: string | null;
+  previous_filename?: string | null;
+}): PullRequestChangedFile | null {
+  const path = file.filename?.trim();
+  if (!path) {
+    return null;
+  }
+
+  switch (file.status) {
+    case "added":
+      return { kind: "add", path };
+    case "removed":
+      return { kind: "delete", path };
+    case "renamed":
+      return {
+        kind: "rename",
+        path,
+        oldPath: file.previous_filename?.trim() || undefined,
+      };
+    default:
+      return { kind: "modify", path };
+  }
+}
+
+function resolvePullRequestWritable(
+  snapshot: PullRequestWorkspaceSnapshot
+): boolean {
+  if (!snapshot.canWriteRepository) {
+    return false;
+  }
+  if (
+    snapshot.headRepository &&
+    isSameRepository(snapshot.headRepository, snapshot.repository)
+  ) {
+    return true;
+  }
+  return snapshot.maintainerCanModify === true;
+}
+
+export function resolvePullRequestWorkspaceSnapshot(
+  snapshot: PullRequestWorkspaceSnapshot
+): PullRequestWorkspaceResolution {
+  if (snapshot.merged) {
+    return {
+      status: "unavailable",
+      reason: "merged",
+    };
+  }
+  if (snapshot.state !== "open") {
+    return {
+      status: "unavailable",
+      reason: "closed",
+    };
+  }
+
+  const bankResolution = resolvePullRequestBankPath(snapshot.changedFiles);
+  if (bankResolution.status !== "supported") {
+    return bankResolution;
+  }
+
+  const writable = resolvePullRequestWritable(snapshot);
+  return {
+    status: "supported",
+    repository: snapshot.repository,
+    prNumber: snapshot.prNumber,
+    headSha: snapshot.headSha,
+    bankPath: bankResolution.bankPath,
+    writable,
+    readOnlyReason: writable ? null : "no-write-access",
+    changedFiles: snapshot.changedFiles,
+  };
+}
+
+export function classifyPullRequestResolverError(
+  error: unknown
+): Extract<
+  PullRequestWorkspaceResolution,
+  { status: "unavailable" } | { status: "transient-error" }
+> {
+  const candidate =
+    error && typeof error === "object"
+      ? (error as {
+          status?: number;
+          message?: string;
+        })
+      : {};
+  const message = candidate.message?.toLowerCase() ?? "";
+
+  if (candidate.status === 404) {
+    return {
+      status: "unavailable",
+      reason: "not-found",
+    };
+  }
+  if (candidate.status === 403 && !message.includes("rate limit")) {
+    return {
+      status: "unavailable",
+      reason: "inaccessible",
+    };
+  }
+  if (candidate.status === 429 || message.includes("rate limit")) {
+    return {
+      status: "transient-error",
+      reason: "rate-limit",
+    };
+  }
+  if (message.includes("timeout")) {
+    return {
+      status: "transient-error",
+      reason: "timeout",
+    };
+  }
+  if (
+    message.includes("network") ||
+    message.includes("fetch failed") ||
+    message.includes("failed to fetch")
+  ) {
+    return {
+      status: "transient-error",
+      reason: "network",
+    };
+  }
+  return {
+    status: "transient-error",
+    reason: "unknown",
+  };
 }
 
 export function resolveCommitAuthorLabel(commit: {
@@ -943,6 +1177,55 @@ export async function fetchPullRequestValidationDetails(
       details.validationUrl?.trim() ||
       `https://github.com/${repo.owner}/${repo.repo}/pull/${prNumber}/checks`,
   };
+}
+
+export async function resolvePullRequestWorkspace(
+  prNumber: number,
+  repoRef?: RepoRef
+): Promise<PullRequestWorkspaceResolution> {
+  const repo = resolveRepo(repoRef);
+
+  try {
+    const [pullRequest, canWriteRepository, files] = await Promise.all([
+      publicOctokit.pulls.get({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: prNumber,
+      }),
+      refreshPullRequestApprovalPermission(repo),
+      publicOctokit.paginate(publicOctokit.pulls.listFiles, {
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: prNumber,
+        per_page: 100,
+      }),
+    ]);
+
+    const headRepository =
+      pullRequest.data.head.repo?.owner?.login &&
+      pullRequest.data.head.repo?.name
+        ? {
+            owner: pullRequest.data.head.repo.owner.login,
+            repo: pullRequest.data.head.repo.name,
+          }
+        : null;
+
+    return resolvePullRequestWorkspaceSnapshot({
+      repository: repo,
+      prNumber,
+      state: pullRequest.data.state === "open" ? "open" : "closed",
+      merged: pullRequest.data.merged === true,
+      headSha: pullRequest.data.head.sha,
+      canWriteRepository,
+      maintainerCanModify: pullRequest.data.maintainer_can_modify ?? null,
+      headRepository,
+      changedFiles: files
+        .map((file) => normalizePullRequestChangedFile(file))
+        .filter((file): file is PullRequestChangedFile => file != null),
+    });
+  } catch (error) {
+    return classifyPullRequestResolverError(error);
+  }
 }
 
 export async function fetchPullRequestHead(

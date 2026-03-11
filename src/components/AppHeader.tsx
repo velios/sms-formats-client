@@ -45,9 +45,7 @@ export function AppHeader() {
   const [isSavingGitHubToken, setIsSavingGitHubToken] = useState(false);
   const [githubTokenError, setGithubTokenError] = useState<string | null>(null);
   const isDeveloperMode =
-    location.pathname === "/" ||
-    location.pathname.startsWith("/workspace") ||
-    location.pathname.startsWith("/bank/");
+    location.pathname === "/" || location.pathname.startsWith("/repo/");
   const hasSavedGitHubToken = savedGitHubToken.trim().length > 0;
   const hasPersonalToken = Boolean(getGitHubUserToken()?.trim());
   const permissionBadgeLabel = hasPersonalToken
@@ -126,9 +124,9 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="flex h-[52px] shrink-0 items-center gap-4 border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] px-6 py-2">
+      <header className="flex h-[52px] shrink-0 items-center gap-4 border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-surface)] px-6 py-2">
         <button
-          className="cursor-pointer whitespace-nowrap text-base font-semibold"
+          className="cursor-pointer whitespace-nowrap font-semibold text-base"
           onClick={() => navigate("/")}
           type="button"
         >
@@ -179,7 +177,7 @@ export function AppHeader() {
         >
           <div className="mb-4 flex flex-col gap-2">
             <label
-              className="text-xs text-[color:var(--c-text-muted)]"
+              className="text-[color:var(--c-text-muted)] text-xs"
               htmlFor={githubTokenInputId}
             >
               {t("githubAuth.tokenLabel")}
@@ -195,7 +193,7 @@ export function AppHeader() {
               type="password"
               value={githubTokenInput}
             />
-            <div className="text-sm text-[color:var(--c-text-muted)]">
+            <div className="text-[color:var(--c-text-muted)] text-sm">
               {t("githubAuth.tokenHint")}
             </div>
             {hasSavedGitHubToken && (

@@ -16,6 +16,7 @@ type EditorMode = "structured" | "raw";
 interface Props {
   filePath: string;
   allFormatFiles: string[];
+  readOnly?: boolean;
   onRenameFile: (fromPath: string, toPath: string) => boolean;
   onOpenTemplateBySms?: () => void;
   onOpenSmsByTemplate?: () => void;
@@ -47,15 +48,17 @@ function serializeStructuredDraft(
 
 const formatEditorModeTabClassName = (isActive: boolean) =>
   cn(
-    "rounded-[5px] border px-3 py-1.5 text-[13px] font-medium transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
+    "rounded-[5px] border px-3 py-1.5 font-medium text-[13px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
     isActive
       ? "border-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-2px_0_var(--c-accent)]"
       : "border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
   );
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keeping the existing editor shape avoids a much larger unrelated refactor.
 export function FormatEditor({
   filePath,
   allFormatFiles,
+  readOnly = false,
   onRenameFile,
   onOpenTemplateBySms,
   onOpenSmsByTemplate,
@@ -77,6 +80,7 @@ export function FormatEditor({
   const baseSha = draft?.baseSha ?? sourceRef?.sha ?? "";
   const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
   const isDeleted = draft?.isDeleted ?? false;
+  const isMutationBlocked = readOnly || isDeleted;
   const hasLoadedInitial = draft != null || remoteContent !== undefined;
 
   // Structured state
@@ -121,7 +125,7 @@ export function FormatEditor({
 
   const syncStructuredDraft = useCallback(
     (nextRegex: string, nextColumns: string[], nextExamples: string[]) => {
-      if (isDeleted) {
+      if (isMutationBlocked) {
         return;
       }
       const syncedRaw = serializeStructuredDraft(
@@ -138,7 +142,7 @@ export function FormatEditor({
       lastAppliedContentRef.current = syncedRaw;
       draftStore.applyUserEdit(filePath, syncedRaw, baseSha, remoteBaseline);
     },
-    [baseSha, draftStore, filePath, isDeleted, remoteBaseline, t]
+    [baseSha, draftStore, filePath, isMutationBlocked, remoteBaseline, t]
   );
 
   useEffect(() => {
@@ -154,13 +158,13 @@ export function FormatEditor({
   }, [currentContent, hasLoadedInitial, parseRawToStructured]);
 
   useEffect(() => {
-    if (remoteContent !== undefined) {
+    if (!readOnly && remoteContent !== undefined) {
       draftStore.ensureDraft(filePath, remoteContent, baseSha, remoteContent);
     }
-  }, [remoteContent, draftStore, filePath, baseSha]);
+  }, [baseSha, draftStore, filePath, readOnly, remoteContent]);
 
   const handleRawChange = (value: string) => {
-    if (isDeleted) {
+    if (isMutationBlocked) {
       return;
     }
     setRawContent(value);
@@ -187,7 +191,7 @@ export function FormatEditor({
   };
 
   const handleAddExample = () => {
-    if (isDeleted) {
+    if (isMutationBlocked) {
       return;
     }
     const newExamples = [...examples, ""];
@@ -197,7 +201,7 @@ export function FormatEditor({
   };
 
   const handleRemoveExample = (index: number) => {
-    if (isDeleted) {
+    if (isMutationBlocked) {
       return;
     }
     if (examples.length <= 1) {
@@ -228,11 +232,14 @@ export function FormatEditor({
   const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
   const canUndo = draftStore.canUndo(filePath);
   const canRedo = draftStore.canRedo(filePath);
-  const canResetFile = isModified || isDeleted;
-  const canDeleteFile = remoteBaseline !== "" && !isDeleted;
-  const canRenameFile = !isDeleted;
+  const canResetFile = !readOnly && (isModified || isDeleted);
+  const canDeleteFile = !readOnly && remoteBaseline !== "" && !isDeleted;
+  const canRenameFile = !(readOnly || isDeleted);
 
   const handleRename = () => {
+    if (readOnly) {
+      return;
+    }
     const currentDraft = draftStore.getDraft(filePath);
     if (!currentDraft || currentDraft.remoteContent !== "") {
       setRenameError(t("editor.renameOnlyDraft"));
@@ -337,7 +344,7 @@ export function FormatEditor({
         <div className="flex shrink-0 items-center gap-1">
           <Button
             aria-label={t("editor.undo")}
-            disabled={!canUndo}
+            disabled={readOnly || !canUndo}
             onClick={() => draftStore.undo(filePath)}
             size="sm"
             type="button"
@@ -347,7 +354,7 @@ export function FormatEditor({
           </Button>
           <Button
             aria-label={t("editor.redo")}
-            disabled={!canRedo}
+            disabled={readOnly || !canRedo}
             onClick={() => draftStore.redo(filePath)}
             size="sm"
             type="button"
@@ -419,7 +426,7 @@ export function FormatEditor({
           onOpenTemplateBySms={onOpenTemplateBySms}
           onRegexChange={handleRegexChange}
           onRemoveExample={handleRemoveExample}
-          readOnly={isDeleted}
+          readOnly={readOnly || isDeleted}
           regex={regex}
         />
       )}
@@ -433,7 +440,7 @@ export function FormatEditor({
             <Textarea
               className="min-h-[20rem] font-mono"
               onChange={(e) => handleRawChange(e.target.value)}
-              readOnly={isDeleted}
+              readOnly={readOnly || isDeleted}
               rows={20}
               spellCheck={false}
               value={rawContent}

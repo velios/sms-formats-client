@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  clearWorkspaceSelection,
-  loadWorkspaceSelection,
-  saveWorkspaceSelection,
+  clearWorkspaceSession,
+  loadWorkspaceSession,
+  saveWorkspaceSession,
 } from "./workspace-session";
 
 describe("workspace-session", () => {
@@ -23,40 +23,54 @@ describe("workspace-session", () => {
     vi.unstubAllGlobals();
   });
 
-  it("persists and restores the active repository and source selection", () => {
-    saveWorkspaceSelection({
+  it("persists and restores the active PR session shape", () => {
+    saveWorkspaceSession({
       repository: { owner: "zenmoney", repo: "sms-formats" },
-      sourceRef: {
-        type: "pr",
-        name: "feature/pr-123",
-        sha: "abc123",
-        prNumber: 123,
-      },
+      prNumber: 123,
+      headSha: "abc123",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
     });
 
-    expect(loadWorkspaceSelection()).toEqual({
+    expect(loadWorkspaceSession()).toEqual({
       repository: { owner: "zenmoney", repo: "sms-formats" },
-      sourceRef: {
-        type: "pr",
-        name: "feature/pr-123",
-        sha: "abc123",
-        prNumber: 123,
-      },
+      prNumber: 123,
+      headSha: "abc123",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
     });
   });
 
-  it("drops the saved selection after explicit clear", () => {
-    saveWorkspaceSelection({
+  it("rejects legacy generic source selections from storage", () => {
+    localStorage.setItem(
+      "sms-formats-workspace-session",
+      JSON.stringify({
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        sourceRef: {
+          type: "branch",
+          name: "main",
+          sha: "head-sha",
+        },
+      })
+    );
+
+    expect(loadWorkspaceSession()).toBeNull();
+  });
+
+  it("drops the saved session after explicit clear", () => {
+    saveWorkspaceSession({
       repository: { owner: "zenmoney", repo: "sms-formats" },
-      sourceRef: {
-        type: "branch",
-        name: "main",
-        sha: "head-sha",
-      },
+      prNumber: 123,
+      headSha: "abc123",
+      bankPath: "src/TBank_123",
+      writable: false,
+      readOnlyReason: "no-write-access",
     });
 
-    clearWorkspaceSelection();
+    clearWorkspaceSession();
 
-    expect(loadWorkspaceSelection()).toBeNull();
+    expect(loadWorkspaceSession()).toBeNull();
   });
 });

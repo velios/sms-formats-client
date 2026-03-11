@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 vi.mock("./persistence", () => ({
   clearDrafts: vi.fn(),
@@ -43,6 +51,7 @@ describe("draft store restoreFromDB", () => {
           {
             filePath: "src/TestBank/formats/a.txt",
             baseSha: "base-sha",
+            baseHeadSha: "head-sha",
             content: "remote-content",
             remoteContent: "remote-content",
             isDeleted: false,
@@ -57,6 +66,7 @@ describe("draft store restoreFromDB", () => {
         bankPath: "src/TestBank",
         filePath: "src/TestBank/formats/a.txt",
         baseSha: "base-sha",
+        baseHeadSha: "head-sha",
         content: "local-draft",
         isDeleted: false,
         timestamp: 2,
@@ -65,14 +75,16 @@ describe("draft store restoreFromDB", () => {
 
     await useDraftStore.getState().restoreFromDB("repo:pr:123");
 
-    expect(useDraftStore.getState().getDraft("src/TestBank/formats/a.txt"))
-      .toMatchObject({
-        filePath: "src/TestBank/formats/a.txt",
-        baseSha: "base-sha",
-        content: "local-draft",
-        remoteContent: "remote-content",
-        isDeleted: false,
-        timestamp: 2,
-      });
+    expect(
+      useDraftStore.getState().getDraft("src/TestBank/formats/a.txt")
+    ).toMatchObject({
+      filePath: "src/TestBank/formats/a.txt",
+      baseSha: "base-sha",
+      baseHeadSha: "head-sha",
+      content: "local-draft",
+      remoteContent: "remote-content",
+      isDeleted: false,
+      timestamp: 2,
+    });
   });
 });

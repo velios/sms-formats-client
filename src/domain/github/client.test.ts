@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RepoRef } from "../types";
 import {
+  classifyPullRequestResolverError,
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
   indexBanksFromTree,
   resolveCommitAuthorLabel,
+  resolvePullRequestWorkspaceSnapshot,
   setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
   subscribeGitHubAuthChange,
@@ -128,5 +130,119 @@ describe("resolveCommitAuthorLabel", () => {
         commit: { author: { name: "Zenmoney AI" } },
       })
     ).toBe("Zenmoney AI");
+  });
+});
+
+describe("resolvePullRequestWorkspaceSnapshot", () => {
+  const repository: RepoRef = { owner: "zenmoney", repo: "sms-formats" };
+
+  it("returns a snapshot-bound supported result for a writable PR", () => {
+    expect(
+      resolvePullRequestWorkspaceSnapshot({
+        repository,
+        prNumber: 123,
+        state: "open",
+        merged: false,
+        headSha: "abc123",
+        canWriteRepository: true,
+        maintainerCanModify: true,
+        headRepository: repository,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/one.txt" },
+          {
+            kind: "rename",
+            path: "src/TBank_123/formats/two.txt",
+            oldPath: "src/TBank_123/formats/legacy.txt",
+          },
+        ],
+      })
+    ).toEqual({
+      status: "supported",
+      repository,
+      prNumber: 123,
+      headSha: "abc123",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
+      changedFiles: [
+        { kind: "modify", path: "src/TBank_123/formats/one.txt" },
+        {
+          kind: "rename",
+          path: "src/TBank_123/formats/two.txt",
+          oldPath: "src/TBank_123/formats/legacy.txt",
+        },
+      ],
+    });
+  });
+
+  it("returns unsupported when PR changes files outside a single bank scope", () => {
+    expect(
+      resolvePullRequestWorkspaceSnapshot({
+        repository,
+        prNumber: 124,
+        state: "open",
+        merged: false,
+        headSha: "def456",
+        canWriteRepository: true,
+        maintainerCanModify: true,
+        headRepository: repository,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/one.txt" },
+          { kind: "modify", path: "docs/readme.md" },
+        ],
+      })
+    ).toEqual({
+      status: "unsupported",
+      reason: "outside-bank-scope",
+    });
+  });
+
+  it("returns unavailable when the pull request is already closed", () => {
+    expect(
+      resolvePullRequestWorkspaceSnapshot({
+        repository,
+        prNumber: 125,
+        state: "closed",
+        merged: false,
+        headSha: "ghi789",
+        canWriteRepository: false,
+        maintainerCanModify: false,
+        headRepository: repository,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/one.txt" },
+        ],
+      })
+    ).toEqual({
+      status: "unavailable",
+      reason: "closed",
+    });
+  });
+});
+
+describe("classifyPullRequestResolverError", () => {
+  it("maps GitHub not-found errors to unavailable", () => {
+    expect(
+      classifyPullRequestResolverError({
+        status: 404,
+      })
+    ).toEqual({
+      status: "unavailable",
+      reason: "not-found",
+    });
+  });
+
+  it("maps throttling and unexpected failures to transient errors", () => {
+    expect(
+      classifyPullRequestResolverError({
+        status: 429,
+      })
+    ).toEqual({
+      status: "transient-error",
+      reason: "rate-limit",
+    });
+    expect(classifyPullRequestResolverError(new Error("boom"))).toEqual({
+      status: "transient-error",
+      reason: "unknown",
+    });
   });
 });
