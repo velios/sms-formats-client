@@ -27,6 +27,7 @@ import {
   calculateFormatIntersectionStats,
   type FormatIntersectionStat,
   parseFormatFile,
+  testRegex,
 } from "@/domain/format";
 import {
   approvePullRequest,
@@ -124,6 +125,42 @@ function buildCachedFormatEntryFromEditorContext(params: {
     source: "draft",
     fingerprint: `draft-live:${Date.now()}`,
   };
+}
+
+function collectIntersectingExamples(params: {
+  activeFilePath: string | null;
+  activeRegex: string;
+  entries: CachedFormatEntry[];
+}): string[] {
+  const { activeFilePath, activeRegex, entries } = params;
+  if (!activeFilePath || !activeRegex.trim()) {
+    return [];
+  }
+
+  const seenExamples = new Set<string>();
+  const result: string[] = [];
+
+  for (const entry of entries) {
+    if (entry.filePath === activeFilePath) {
+      continue;
+    }
+
+    for (const example of entry.examples) {
+      const normalizedExample = normalizeIntersectionExample(example);
+      if (!normalizedExample || seenExamples.has(normalizedExample)) {
+        continue;
+      }
+
+      if (!testRegex(activeRegex, normalizedExample).matched) {
+        continue;
+      }
+
+      seenExamples.add(normalizedExample);
+      result.push(normalizedExample);
+    }
+  }
+
+  return result;
 }
 
 function resolveVisibleIntersectionEntries(params: {
@@ -772,6 +809,7 @@ function renderWorkspaceContent(params: {
   bankPath: string;
   readOnly: boolean;
   selectedFile: string | null;
+  selectedFileIntersectionExamples: string[];
   selectedFileSourceDeletedBaseSha: string | null;
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
@@ -790,6 +828,7 @@ function renderWorkspaceContent(params: {
     bankPath,
     readOnly,
     selectedFile,
+    selectedFileIntersectionExamples,
     selectedFileSourceDeletedBaseSha,
     allFormatFiles,
     handleRenameFile,
@@ -807,6 +846,7 @@ function renderWorkspaceContent(params: {
       <FormatEditor
         allFormatFiles={allFormatFiles}
         filePath={selectedFile}
+        intersectionExamples={selectedFileIntersectionExamples}
         key={selectedFile}
         onRegexBlurAfterEdit={onFormatRegexBlurAfterEdit}
         onOpenSmsByTemplate={onOpenSmsByTemplate}
@@ -2540,6 +2580,26 @@ export function BankWorkspace() {
     selectedFile,
     sourceDeletedFormatFiles,
   ]);
+  const selectedFileIntersectionExamples = useMemo(() => {
+    const activeRegex =
+      selectedFile && activeFormatSearchContext?.filePath === selectedFile
+        ? activeFormatSearchContext.regex
+        : selectedFile
+          ? (intersectionFormatEntries.get(selectedFile)?.regex ?? "")
+          : "";
+
+    return collectIntersectingExamples({
+      activeFilePath: selectedFile,
+      activeRegex,
+      entries: visibleIntersectionEntries,
+    });
+  }, [
+    activeFormatSearchContext?.filePath,
+    activeFormatSearchContext?.regex,
+    intersectionFormatEntries,
+    selectedFile,
+    visibleIntersectionEntries,
+  ]);
 
   const {
     filteredFormatFiles,
@@ -3034,6 +3094,7 @@ export function BankWorkspace() {
           bankPath,
           readOnly: workspaceReadOnly,
           selectedFile,
+          selectedFileIntersectionExamples,
           selectedFileSourceDeletedBaseSha,
           allFormatFiles,
           handleRenameFile,

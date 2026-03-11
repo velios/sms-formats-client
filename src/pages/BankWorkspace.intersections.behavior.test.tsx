@@ -205,9 +205,11 @@ vi.mock("@/components/ui/status-badge", () => ({
 vi.mock("@/features/format-editor/FormatEditor", () => ({
   FormatEditor: ({
     filePath,
+    intersectionExamples,
     onRegexBlurAfterEdit,
   }: {
     filePath: string;
+    intersectionExamples?: string[];
     onRegexBlurAfterEdit?: (context: {
       filePath: string;
       regex: string;
@@ -216,6 +218,9 @@ vi.mock("@/features/format-editor/FormatEditor", () => ({
   }) => (
     <div data-testid="format-editor">
       {filePath}
+      <div data-testid="format-editor-intersection-examples">
+        {(intersectionExamples ?? []).join("|")}
+      </div>
       <button
         onClick={() =>
           onRegexBlurAfterEdit?.({
@@ -450,6 +455,9 @@ describe("BankWorkspace intersections behavior", () => {
     await waitFor(() =>
       expect(getFormatRow("current.txt")).toHaveTextContent("2 / 2 / 1")
     );
+    expect(
+      screen.getByTestId("format-editor-intersection-examples")
+    ).toHaveTextContent("PAY 300");
     expect(getFormatRow("deleted.txt")).not.toHaveTextContent(
       /\d+\s*\/\s*\d+\s*\/\s*\d+/
     );
@@ -490,6 +498,9 @@ describe("BankWorkspace intersections behavior", () => {
     await waitFor(() =>
       expect(getFormatRow("current.txt")).toHaveTextContent("2 / 0 / 0")
     );
+    expect(
+      screen.getByTestId("format-editor-intersection-examples")
+    ).toBeEmptyDOMElement();
   });
 
   it("keeps the last successful indicators when a repeated calculation fails", async () => {

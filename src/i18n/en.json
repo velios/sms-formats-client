@@ -84,6 +84,8 @@
     "addExample": "Add example",
     "removeExample": "Remove example",
     "testString": "Test String",
+    "showExamples": "Examples",
+    "showIntersections": "Intersections",
     "openInRegex101": "Open in regex101",
     "matchInfo": "Match Info",
     "fullMatch": "Full match",

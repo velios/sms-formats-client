@@ -98,6 +98,8 @@
     "addExample": "Добавить пример",
     "removeExample": "Удалить пример",
     "testString": "Тестовая строка",
+    "showExamples": "Примеры",
+    "showIntersections": "Пересечения",
     "openInRegex101": "Открыть в regex101",
     "matchInfo": "Информация о совпадении",
     "fullMatch": "Полное совпадение",

@@ -35,6 +35,7 @@ interface Props {
   onRegexChange: (v: string) => void;
   onRegexBlur?: () => void;
   examples: string[];
+  intersectionExamples?: string[];
   activeExampleIndex: number;
   onActiveExampleChange: (i: number) => void;
   onExampleChange: (index: number, value: string) => void;
@@ -52,6 +53,7 @@ interface PatternSelection {
 }
 
 type RightPaneTab = "explanation" | "quickref";
+type ExampleSourceMode = "examples" | "intersections";
 
 const regexLabPanelClassName =
   "overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
@@ -115,6 +117,7 @@ export function RegexLab({
   onRegexChange,
   onRegexBlur,
   examples,
+  intersectionExamples = [],
   activeExampleIndex,
   onActiveExampleChange,
   onExampleChange,
@@ -126,7 +129,24 @@ export function RegexLab({
   onOpenSmsByTemplate,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const activeExample = examples[activeExampleIndex] ?? "";
+  const [exampleSourceMode, setExampleSourceMode] =
+    useState<ExampleSourceMode>("examples");
+  const [activeIntersectionExampleIndex, setActiveIntersectionExampleIndex] =
+    useState(0);
+  const hasIntersectionExamples = intersectionExamples.length > 0;
+  const isShowingIntersectionExamples =
+    hasIntersectionExamples && exampleSourceMode === "intersections";
+  const visibleExamples = isShowingIntersectionExamples
+    ? intersectionExamples
+    : examples;
+  const visibleActiveExampleIndex = isShowingIntersectionExamples
+    ? Math.min(
+        activeIntersectionExampleIndex,
+        Math.max(visibleExamples.length - 1, 0)
+      )
+    : activeExampleIndex;
+  const activeExample = visibleExamples[visibleActiveExampleIndex] ?? "";
+  const isExampleInputReadOnly = readOnly || isShowingIntersectionExamples;
   const [hoveredGroup, setHoveredGroup] = useState<number | null>(null);
   const [rightPaneTab, setRightPaneTab] = useState<RightPaneTab>("explanation");
   const [patternSelection, setPatternSelection] =
@@ -147,8 +167,8 @@ export function RegexLab({
     [regex, activeExample]
   );
   const exampleMatchStates = useMemo(
-    () => examples.map((example) => testRegex(regex, example ?? "")),
-    [regex, examples]
+    () => visibleExamples.map((example) => testRegex(regex, example ?? "")),
+    [regex, visibleExamples]
   );
   const explanationLocale = i18n.resolvedLanguage?.startsWith("ru")
     ? "ru"
@@ -221,6 +241,22 @@ export function RegexLab({
   );
 
   useEffect(() => {
+    if (hasIntersectionExamples) {
+      return;
+    }
+    setExampleSourceMode("examples");
+  }, [hasIntersectionExamples]);
+
+  useEffect(() => {
+    if (!isShowingIntersectionExamples) {
+      return;
+    }
+    setActiveIntersectionExampleIndex((prev) =>
+      Math.min(prev, Math.max(intersectionExamples.length - 1, 0))
+    );
+  }, [intersectionExamples.length, isShowingIntersectionExamples]);
+
+  useEffect(() => {
     if (
       selectedPatternTokenIndex != null &&
       selectedPatternTokenIndex >= explanation.patternTokens.length
@@ -232,16 +268,16 @@ export function RegexLab({
   // Clear selected token when regex or example changes
   useEffect(() => {
     setSelectedPatternTokenIndex(null);
-  }, [regex, activeExampleIndex]);
+  }, [activeExample, regex]);
 
   useEffect(() => {
-    const activeTab = exampleTabRefs.current.get(activeExampleIndex);
+    const activeTab = exampleTabRefs.current.get(visibleActiveExampleIndex);
     activeTab?.scrollIntoView({
       behavior: "smooth",
       block: "nearest",
       inline: "nearest",
     });
-  }, [activeExampleIndex, examples.length]);
+  }, [visibleActiveExampleIndex, visibleExamples.length]);
 
   const handleGroupHover = useCallback((groupIndex: number | null) => {
     setHoveredGroup(groupIndex);
@@ -313,6 +349,19 @@ export function RegexLab({
     [explanation.patternTokens]
   );
 
+  const handleToggleExampleSource = useCallback(() => {
+    if (!hasIntersectionExamples) {
+      return;
+    }
+    setExampleSourceMode((prev) => {
+      if (prev === "examples") {
+        setActiveIntersectionExampleIndex(0);
+        return "intersections";
+      }
+      return "examples";
+    });
+  }, [hasIntersectionExamples]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       {/* REGULAR EXPRESSION — unified regex editor */}
@@ -360,18 +409,33 @@ export function RegexLab({
           <div className={regexLabPanelHeaderClassName}>
             <div className="flex items-center gap-2">
               {t("editor.testString")}
-              <Button
-                aria-label={t("editor.addExample")}
-                disabled={readOnly}
-                onClick={onAddExample}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                +
-              </Button>
+              {!isShowingIntersectionExamples && (
+                <Button
+                  aria-label={t("editor.addExample")}
+                  disabled={readOnly}
+                  onClick={onAddExample}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  +
+                </Button>
+              )}
             </div>
             <div className={regexLabHeaderActionsClassName}>
+              {hasIntersectionExamples && (
+                <Button
+                  className={regexLabHeaderButtonClassName}
+                  onClick={handleToggleExampleSource}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  {isShowingIntersectionExamples
+                    ? t("editor.showExamples")
+                    : t("editor.showIntersections")}
+                </Button>
+              )}
               <Button
                 className={regexLabHeaderButtonClassName}
                 onClick={onOpenTemplateBySms}
@@ -398,11 +462,17 @@ export function RegexLab({
             </div>
           </div>
           <div className="flex flex-wrap border-b border-[color:var(--c-border)]">
-            {examples.map((_, i) => (
+            {visibleExamples.map((_, i) => (
               <div className="flex items-center" key={i}>
                 <button
-                  className={regexLabTabClassName(i === activeExampleIndex)}
-                  onClick={() => onActiveExampleChange(i)}
+                  className={regexLabTabClassName(i === visibleActiveExampleIndex)}
+                  onClick={() => {
+                    if (isShowingIntersectionExamples) {
+                      setActiveIntersectionExampleIndex(i);
+                      return;
+                    }
+                    onActiveExampleChange(i);
+                  }}
                   ref={(el) => {
                     if (el) {
                       exampleTabRefs.current.set(i, el);
@@ -426,7 +496,7 @@ export function RegexLab({
                     </span>
                   )}
                 </button>
-                {examples.length > 1 && (
+                {!isShowingIntersectionExamples && visibleExamples.length > 1 && (
                   <Button
                     aria-label={t("editor.removeExample")}
                     className="px-1 py-0.5 text-[11px] text-[color:var(--c-text-dim)]"
@@ -454,7 +524,7 @@ export function RegexLab({
               onTextChange={(value) =>
                 onExampleChange(activeExampleIndex, value)
               }
-              readOnly={readOnly}
+              readOnly={isExampleInputReadOnly}
               result={matchResult}
               text={activeExample}
             />

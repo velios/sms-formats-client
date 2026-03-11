@@ -16,6 +16,7 @@ type EditorMode = "structured" | "raw";
 interface Props {
   filePath: string;
   allFormatFiles: string[];
+  intersectionExamples?: string[];
   readOnly?: boolean;
   sourceDeletedBaseSha?: string | null;
   onRenameFile: (fromPath: string, toPath: string) => boolean;
@@ -64,6 +65,7 @@ const formatEditorModeTabClassName = (isActive: boolean) =>
 export function FormatEditor({
   filePath,
   allFormatFiles,
+  intersectionExamples = [],
   readOnly = false,
   sourceDeletedBaseSha = null,
   onRenameFile,
@@ -477,6 +479,7 @@ export function FormatEditor({
           activeExampleIndex={activeExampleIndex}
           columns={columns}
           examples={examples}
+          intersectionExamples={intersectionExamples}
           onActiveExampleChange={setActiveExampleIndex}
           onAddExample={handleAddExample}
           onColumnsChange={handleColumnsChange}
