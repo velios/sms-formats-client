@@ -16,9 +16,8 @@ vi.mock("idb-keyval", () => ({
 }));
 
 vi.mock("@/domain/github", async () => {
-  const actual = await vi.importActual<typeof import("@/domain/github")>(
-    "@/domain/github"
-  );
+  const actual =
+    await vi.importActual<typeof import("@/domain/github")>("@/domain/github");
   return {
     ...actual,
     fetchFileContent: (...args: unknown[]) => fetchFileContentMock(...args),
@@ -88,5 +87,38 @@ describe("useWorkspaceFileContent", () => {
       expect(result.current.isLoading).toBe(false);
     });
     expect(fetchFileContentMock).not.toHaveBeenCalled();
+  });
+
+  it("loads deleted-file preview content from an override ref", async () => {
+    const { useSourceStore, useWorkspaceFileContent } = await loadModules();
+    useSourceStore.getState().setRepository({
+      owner: "zenmoney",
+      repo: "sms-formats",
+    });
+    useSourceStore.getState().setSource({
+      type: "pr",
+      name: "pr-123",
+      sha: "head-sha",
+      prNumber: 123,
+    });
+    fetchFileContentMock.mockResolvedValue("BASE CONTENT");
+
+    const { result } = renderHook(() =>
+      useWorkspaceFileContent({
+        filePath: "src/TBank_123/formats/deleted.txt",
+        loadedFrom: "editor",
+        contentRefName: "base-sha",
+      })
+    );
+
+    await waitFor(() => {
+      expect(fetchFileContentMock).toHaveBeenCalledWith(
+        "src/TBank_123/formats/deleted.txt",
+        "base-sha",
+        { owner: "zenmoney", repo: "sms-formats" }
+      );
+      expect(result.current.data).toBe("BASE CONTENT");
+      expect(result.current.isLoading).toBe(false);
+    });
   });
 });

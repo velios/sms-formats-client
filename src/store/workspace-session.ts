@@ -2,13 +2,23 @@ import type { RepoRef } from "@/domain/types";
 
 const WORKSPACE_SESSION_STORAGE_KEY = "sms-formats-workspace-session";
 
+type WorkspaceSessionChangedFileKind = "add" | "modify" | "delete" | "rename";
+
+export interface WorkspaceSessionChangedFile {
+  kind: WorkspaceSessionChangedFileKind;
+  path: string;
+  oldPath?: string;
+}
+
 export interface WorkspaceSession {
   repository: RepoRef;
   prNumber: number;
   headSha: string;
+  baseSha?: string;
   bankPath: string;
   writable: boolean;
   readOnlyReason: "no-write-access" | null;
+  changedFiles?: WorkspaceSessionChangedFile[];
 }
 
 function isRepoRef(value: unknown): value is RepoRef {
@@ -28,6 +38,33 @@ function isReadOnlyReason(
   return value === null || value === "no-write-access";
 }
 
+function isChangedFileKind(
+  value: unknown
+): value is WorkspaceSessionChangedFileKind {
+  return (
+    value === "add" ||
+    value === "modify" ||
+    value === "delete" ||
+    value === "rename"
+  );
+}
+
+function isWorkspaceSessionChangedFile(
+  value: unknown
+): value is WorkspaceSessionChangedFile {
+  if (!(value && typeof value === "object")) {
+    return false;
+  }
+
+  const candidate = value as Partial<WorkspaceSessionChangedFile>;
+  return (
+    isChangedFileKind(candidate.kind) &&
+    typeof candidate.path === "string" &&
+    (typeof candidate.oldPath === "undefined" ||
+      typeof candidate.oldPath === "string")
+  );
+}
+
 function isWorkspaceSession(value: unknown): value is WorkspaceSession {
   if (!(value && typeof value === "object")) {
     return false;
@@ -39,8 +76,15 @@ function isWorkspaceSession(value: unknown): value is WorkspaceSession {
       isRepoRef(candidate.repository) && Number.isInteger(candidate.prNumber)
     ) ||
     typeof candidate.headSha !== "string" ||
+    (typeof candidate.baseSha !== "undefined" &&
+      typeof candidate.baseSha !== "string") ||
     typeof candidate.bankPath !== "string" ||
     typeof candidate.writable !== "boolean" ||
+    (typeof candidate.changedFiles !== "undefined" &&
+      !(
+        Array.isArray(candidate.changedFiles) &&
+        candidate.changedFiles.every(isWorkspaceSessionChangedFile)
+      )) ||
     !isReadOnlyReason(candidate.readOnlyReason)
   ) {
     return false;

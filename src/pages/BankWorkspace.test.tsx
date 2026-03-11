@@ -10,6 +10,7 @@ import {
   collectAllFormatFiles,
   FormatsPanel,
   resolveAutoSelectFile,
+  resolveVisibleDeletedFormatFiles,
   resolveWorkspaceEntryMode,
 } from "@/pages/BankWorkspace";
 
@@ -19,6 +20,7 @@ function renderFormatsPanel(intersectingOtherFormats: number) {
 
   render(
     <FormatsPanel
+      createFormatDisabled={false}
       deletedFormatFiles={new Set()}
       formatIntersectionStats={
         new Map([
@@ -35,7 +37,6 @@ function renderFormatsPanel(intersectingOtherFormats: number) {
       }
       formatSearch=""
       formatTab="all"
-      createFormatDisabled={false}
       handleSelectFile={handleSelectFile}
       handleSelectSenders={vi.fn()}
       localChangedFormatFiles={new Set()}
@@ -106,6 +107,50 @@ describe("FormatsPanel intersections", () => {
       "banks/pumb/formats/deleted-in-pr.txt",
       "banks/pumb/formats/existing.txt",
     ]);
+  });
+
+  it("keeps source-deleted files struck through until a local draft overrides them", () => {
+    expect(
+      Array.from(
+        resolveVisibleDeletedFormatFiles({
+          localDeletedFormatFiles: new Set(),
+          sourceDeletedFormatFiles: new Set([
+            "banks/pumb/formats/deleted-in-pr.txt",
+          ]),
+          localChangedFormatFiles: new Set(),
+        })
+      )
+    ).toEqual(["banks/pumb/formats/deleted-in-pr.txt"]);
+
+    expect(
+      Array.from(
+        resolveVisibleDeletedFormatFiles({
+          localDeletedFormatFiles: new Set(),
+          sourceDeletedFormatFiles: new Set([
+            "banks/pumb/formats/deleted-in-pr.txt",
+          ]),
+          localChangedFormatFiles: new Set([
+            "banks/pumb/formats/deleted-in-pr.txt",
+          ]),
+        })
+      )
+    ).toEqual([]);
+
+    expect(
+      Array.from(
+        resolveVisibleDeletedFormatFiles({
+          localDeletedFormatFiles: new Set([
+            "banks/pumb/formats/deleted-in-pr.txt",
+          ]),
+          sourceDeletedFormatFiles: new Set([
+            "banks/pumb/formats/deleted-in-pr.txt",
+          ]),
+          localChangedFormatFiles: new Set([
+            "banks/pumb/formats/deleted-in-pr.txt",
+          ]),
+        })
+      )
+    ).toEqual(["banks/pumb/formats/deleted-in-pr.txt"]);
   });
 
   it("prioritizes stale drafts over read-only when opening a PR workspace", () => {

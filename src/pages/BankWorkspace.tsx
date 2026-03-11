@@ -36,6 +36,7 @@ import {
   getGitHubAuthChangeVersion,
   getGitHubUserToken,
   indexBanksFromTree,
+  type PullRequestChangedFile,
   refreshPullRequestApprovalPermission,
   resolvePullRequestWorkspace,
   subscribeGitHubAuthChange,
@@ -64,8 +65,8 @@ import {
   useSourceStore,
   waitForDraftStoreHydration,
 } from "@/store";
-import { useFileContentStore } from "@/store/file-content-store";
 import { makeDraftSourceKey } from "@/store/draft-scope";
+import { useFileContentStore } from "@/store/file-content-store";
 import {
   clearWorkspaceSession,
   loadWorkspaceSession,
@@ -229,6 +230,41 @@ function collectChangedFormatFiles(
       (path) => path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
     )
   );
+}
+
+export function collectSourceDeletedFormatFiles(
+  bankPath: string,
+  changedFiles: PullRequestChangedFile[]
+): Set<string> {
+  return new Set(
+    changedFiles
+      .filter(
+        (file) =>
+          file.kind === "delete" &&
+          file.path.startsWith(`${bankPath}/formats/`) &&
+          file.path.endsWith(".txt")
+      )
+      .map((file) => file.path)
+  );
+}
+
+export function resolveVisibleDeletedFormatFiles(params: {
+  localDeletedFormatFiles: Set<string>;
+  sourceDeletedFormatFiles: Set<string>;
+  localChangedFormatFiles: Set<string>;
+}): Set<string> {
+  const {
+    localDeletedFormatFiles,
+    sourceDeletedFormatFiles,
+    localChangedFormatFiles,
+  } = params;
+  const result = new Set(localDeletedFormatFiles);
+  for (const path of sourceDeletedFormatFiles) {
+    if (!localChangedFormatFiles.has(path)) {
+      result.add(path);
+    }
+  }
+  return result;
 }
 
 function sortFormatPaths(
@@ -440,14 +476,14 @@ function useBankFormatSearch(params: {
         if (indexingSessionRef.current !== sessionId) {
           return;
         }
-        const remoteContent = useFileContentStore.getState().getCachedFileContent(
-          {
+        const remoteContent = useFileContentStore
+          .getState()
+          .getCachedFileContent({
             repository,
             prNumber,
             filePath: path,
             headSha: sourceHeadSha,
-          }
-        );
+          });
         if (typeof remoteContent !== "string") {
           throw new Error("missing-file-cache-entry");
         }
@@ -705,6 +741,7 @@ function renderWorkspaceContent(params: {
   bankPath: string;
   readOnly: boolean;
   selectedFile: string | null;
+  selectedFileSourceDeletedBaseSha: string | null;
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
   onFormatSearchContextChange: (context: ActiveFormatSearchContext) => void;
@@ -717,6 +754,7 @@ function renderWorkspaceContent(params: {
     bankPath,
     readOnly,
     selectedFile,
+    selectedFileSourceDeletedBaseSha,
     allFormatFiles,
     handleRenameFile,
     onFormatSearchContextChange,
@@ -738,6 +776,7 @@ function renderWorkspaceContent(params: {
         onRenameFile={handleRenameFile}
         onSearchContextChange={onFormatSearchContextChange}
         readOnly={readOnly}
+        sourceDeletedBaseSha={selectedFileSourceDeletedBaseSha}
       />
     );
   }
@@ -1378,10 +1417,12 @@ function saveActiveRouteSession(
     repository,
     prNumber: session.prNumber,
     headSha: session.headSha,
+    baseSha: session.baseSha,
     bankPath: session.bankPath,
     writable: session.writable,
     readOnlyReason: session.readOnlyReason,
-  });
+    changedFiles: session.changedFiles,
+  } as Parameters<typeof saveWorkspaceSession>[0]);
 }
 
 function buildPublishFormatContents(
@@ -1737,15 +1778,23 @@ function resolveReusableRouteInitState(params: {
   if (!persistedSession) {
     return null;
   }
+  const extendedPersistedSession =
+    persistedSession as typeof persistedSession & {
+      baseSha?: string;
+      changedFiles?: PullRequestChangedFile[];
+    };
 
   if (
     !(
-      isSameRepository(parsedRoute.repository, persistedSession.repository) &&
+      isSameRepository(
+        parsedRoute.repository,
+        extendedPersistedSession.repository
+      ) &&
       isSameRepository(parsedRoute.repository, currentRepository) &&
       currentSourceRef?.type === "pr" &&
       currentSourceRef.prNumber === parsedRoute.prNumber &&
-      persistedSession.prNumber === parsedRoute.prNumber &&
-      currentSourceRef.sha === persistedSession.headSha &&
+      extendedPersistedSession.prNumber === parsedRoute.prNumber &&
+      currentSourceRef.sha === extendedPersistedSession.headSha &&
       hasTree &&
       hasBanks
     )
@@ -1757,18 +1806,22 @@ function resolveReusableRouteInitState(params: {
     status: "ready" as const,
     session: {
       status: "supported" as const,
-      repository: persistedSession.repository,
-      prNumber: persistedSession.prNumber,
-      headSha: persistedSession.headSha,
-      bankPath: persistedSession.bankPath,
-      writable: persistedSession.writable,
-      readOnlyReason: persistedSession.readOnlyReason,
-      changedFiles: currentSourceChangedFiles.map((path) => ({
-        kind: "modify" as const,
-        path,
-      })),
+      repository: extendedPersistedSession.repository,
+      prNumber: extendedPersistedSession.prNumber,
+      headSha: extendedPersistedSession.headSha,
+      baseSha:
+        extendedPersistedSession.baseSha ?? extendedPersistedSession.headSha,
+      bankPath: extendedPersistedSession.bankPath,
+      writable: extendedPersistedSession.writable,
+      readOnlyReason: extendedPersistedSession.readOnlyReason,
+      changedFiles:
+        extendedPersistedSession.changedFiles ??
+        currentSourceChangedFiles.map((path) => ({
+          kind: "modify" as const,
+          path,
+        })),
     },
-    mode: (persistedSession.writable ? "clean" : "read-only") as
+    mode: (extendedPersistedSession.writable ? "clean" : "read-only") as
       | "clean"
       | "read-only",
   };
@@ -1826,21 +1879,18 @@ function usePullRequestRouteInit(params: {
     () => getLegacyRouteRedirectPath(locationPathname, locationSearch),
     [locationPathname, locationSearch]
   );
-  const reusableState = useMemo(
-    () => {
-      const sourceState = useSourceStore.getState();
-      return resolveReusableRouteInitState({
-        parsedRoute,
-        legacyRedirectTarget,
-        currentRepository: sourceState.repository,
-        currentSourceRef: sourceState.sourceRef,
-        currentSourceChangedFiles: sourceState.sourceChangedFiles,
-        hasTree: sourceState.tree.length > 0,
-        hasBanks: sourceState.banks.length > 0,
-      });
-    },
-    [legacyRedirectTarget, parsedRoute]
-  );
+  const reusableState = useMemo(() => {
+    const sourceState = useSourceStore.getState();
+    return resolveReusableRouteInitState({
+      parsedRoute,
+      legacyRedirectTarget,
+      currentRepository: sourceState.repository,
+      currentSourceRef: sourceState.sourceRef,
+      currentSourceChangedFiles: sourceState.sourceChangedFiles,
+      hasTree: sourceState.tree.length > 0,
+      hasBanks: sourceState.banks.length > 0,
+    });
+  }, [legacyRedirectTarget, parsedRoute]);
   const [state, setState] = useState<RouteInitState>(
     () => reusableState ?? { status: "loading" }
   );
@@ -1863,11 +1913,11 @@ function usePullRequestRouteInit(params: {
     }
 
     let cancelled = false;
-    if (!reusableState) {
+    if (reusableState) {
+      setLoading(false);
+    } else {
       setState({ status: "loading" });
       setLoading(true);
-    } else {
-      setLoading(false);
     }
     setError(null);
 
@@ -1927,8 +1977,9 @@ function usePullRequestRouteInit(params: {
         if (cancelled) {
           return;
         }
-        const persistedDrafts =
-          useDraftStore.getState().getStoredDraftsForScope(draftScopeKey);
+        const persistedDrafts = useDraftStore
+          .getState()
+          .getStoredDraftsForScope(draftScopeKey);
 
         setRepository(parsedRoute.repository);
         setSource(sourceRef);
@@ -2108,9 +2159,18 @@ export function BankWorkspace() {
     () => draftStore.getChangedFiles().map((item) => item.filePath),
     [draftStore, draftStore.drafts]
   );
+  const sessionChangedFiles = useMemo(
+    () => activeSession?.changedFiles.map((file) => file.path) ?? [],
+    [activeSession]
+  );
   const effectiveSourceChangedFiles = useMemo(
-    () => (sourceChangedFiles.length > 0 ? sourceChangedFiles : prChangedFiles),
-    [prChangedFiles, sourceChangedFiles]
+    () =>
+      sessionChangedFiles.length > 0
+        ? sessionChangedFiles
+        : sourceChangedFiles.length > 0
+          ? sourceChangedFiles
+          : prChangedFiles,
+    [prChangedFiles, sessionChangedFiles, sourceChangedFiles]
   );
   const localChangedFilesInBank = useMemo(
     () => collectChangedFilesInBank(bankPath, localChangedFiles),
@@ -2124,11 +2184,19 @@ export function BankWorkspace() {
     if (sourceRef?.type !== "pr") {
       return true;
     }
+    if (sessionChangedFiles.length > 0) {
+      return true;
+    }
     if (sourceChangedFiles.length > 0) {
       return true;
     }
     return isPrChangedFilesReady;
-  }, [isPrChangedFilesReady, sourceChangedFiles.length, sourceRef?.type]);
+  }, [
+    isPrChangedFilesReady,
+    sessionChangedFiles.length,
+    sourceChangedFiles.length,
+    sourceRef?.type,
+  ]);
   const localChangedFormatFiles = useMemo(
     () => collectChangedFormatFiles(bankPath, localChangedFilesInBank),
     [bankPath, localChangedFilesInBank]
@@ -2146,6 +2214,23 @@ export function BankWorkspace() {
           .map((entry) => entry.filePath)
       ),
     [bankPath, draftStore, draftStore.drafts]
+  );
+  const sourceDeletedFormatFiles = useMemo(
+    () =>
+      collectSourceDeletedFormatFiles(
+        bankPath,
+        activeSession?.changedFiles ?? []
+      ),
+    [activeSession?.changedFiles, bankPath]
+  );
+  const visibleDeletedFormatFiles = useMemo(
+    () =>
+      resolveVisibleDeletedFormatFiles({
+        localDeletedFormatFiles,
+        sourceDeletedFormatFiles,
+        localChangedFormatFiles,
+      }),
+    [localChangedFormatFiles, localDeletedFormatFiles, sourceDeletedFormatFiles]
   );
   const sourceChangedFormatFiles = useMemo(
     () => collectChangedFormatFiles(bankPath, sourceChangedFilesInBank),
@@ -2334,6 +2419,21 @@ export function BankWorkspace() {
         : null,
     [allFormatFiles, requestedFile, sendersPath]
   );
+  const selectedFileSourceDeletedBaseSha = useMemo(() => {
+    if (
+      !selectedFile ||
+      localChangedFormatFiles.has(selectedFile) ||
+      !sourceDeletedFormatFiles.has(selectedFile)
+    ) {
+      return null;
+    }
+    return activeSession?.baseSha ?? null;
+  }, [
+    activeSession?.baseSha,
+    localChangedFormatFiles,
+    selectedFile,
+    sourceDeletedFormatFiles,
+  ]);
 
   const {
     filteredFormatFiles,
@@ -2755,7 +2855,7 @@ export function BankWorkspace() {
 
         <FormatsPanel
           createFormatDisabled={workspaceReadOnly}
-          deletedFormatFiles={localDeletedFormatFiles}
+          deletedFormatFiles={visibleDeletedFormatFiles}
           formatIntersectionStats={formatIntersectionStats}
           formatSearch={formatSearch}
           formatTab={formatTab}
@@ -2790,7 +2890,7 @@ export function BankWorkspace() {
       {/* ─── Main content ─── */}
       <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
         {staleWorkspaceSession && (
-          <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--c-warning)] bg-[color:var(--c-warning-soft)] px-4 py-3 text-sm text-[color:var(--c-warning)]">
+          <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--c-warning)] bg-[color:var(--c-warning-soft)] px-4 py-3 text-[color:var(--c-warning)] text-sm">
             <span>
               {t("workspace.cachedStaleNotice", {
                 defaultValue:
@@ -2813,6 +2913,7 @@ export function BankWorkspace() {
           bankPath,
           readOnly: workspaceReadOnly,
           selectedFile,
+          selectedFileSourceDeletedBaseSha,
           allFormatFiles,
           handleRenameFile,
           onFormatSearchContextChange: setActiveFormatSearchContext,

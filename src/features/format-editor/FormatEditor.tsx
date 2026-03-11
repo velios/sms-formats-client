@@ -17,6 +17,7 @@ interface Props {
   filePath: string;
   allFormatFiles: string[];
   readOnly?: boolean;
+  sourceDeletedBaseSha?: string | null;
   onRenameFile: (fromPath: string, toPath: string) => boolean;
   onOpenTemplateBySms?: () => void;
   onOpenSmsByTemplate?: () => void;
@@ -59,6 +60,7 @@ export function FormatEditor({
   filePath,
   allFormatFiles,
   readOnly = false,
+  sourceDeletedBaseSha = null,
   onRenameFile,
   onOpenTemplateBySms,
   onOpenSmsByTemplate,
@@ -76,13 +78,17 @@ export function FormatEditor({
   } = useWorkspaceFileContent({
     filePath,
     loadedFrom: "editor",
+    contentRefName: sourceDeletedBaseSha ?? undefined,
   });
 
   const draft = draftStore.getDraft(filePath);
+  const hasSourceDeletedPreview = Boolean(sourceDeletedBaseSha);
   const currentContent = draft?.content ?? remoteContent ?? "";
   const baseSha = draft?.baseSha ?? sourceRef?.sha ?? "";
-  const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
-  const isDeleted = draft?.isDeleted ?? false;
+  const remoteBaseline =
+    draft?.remoteContent ??
+    (hasSourceDeletedPreview ? "" : (remoteContent ?? ""));
+  const isDeleted = draft?.isDeleted ?? Boolean(sourceDeletedBaseSha);
   const isMutationBlocked = readOnly || isDeleted;
   const hasLoadedInitial = draft != null || remoteContent !== undefined;
 
@@ -161,10 +167,17 @@ export function FormatEditor({
   }, [currentContent, hasLoadedInitial, parseRawToStructured]);
 
   useEffect(() => {
-    if (!readOnly && remoteContent !== undefined) {
+    if (!readOnly && remoteContent !== undefined && !hasSourceDeletedPreview) {
       draftStore.ensureDraft(filePath, remoteContent, baseSha, remoteContent);
     }
-  }, [baseSha, draftStore, filePath, readOnly, remoteContent]);
+  }, [
+    baseSha,
+    draftStore,
+    filePath,
+    hasSourceDeletedPreview,
+    readOnly,
+    remoteContent,
+  ]);
 
   const handleRawChange = (value: string) => {
     if (isMutationBlocked) {
@@ -230,7 +243,11 @@ export function FormatEditor({
   const isModified = draft ? draft.content !== draft.remoteContent : false;
   const fileName = filePath.split("/").pop() ?? filePath;
   const fileDirPath = filePath.split("/").slice(0, -1).join("/");
-  const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
+  const refName =
+    sourceDeletedBaseSha ??
+    sourceRef?.sha ??
+    sourceRef?.name ??
+    config.defaultBranch;
   const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
   const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
   const canUndo = draftStore.canUndo(filePath);
@@ -389,7 +406,13 @@ export function FormatEditor({
           <Button
             aria-label={t("editor.resetFileToSource")}
             disabled={!canResetFile}
-            onClick={() => draftStore.resetFileToRemote(filePath)}
+            onClick={() => {
+              if (sourceDeletedBaseSha) {
+                draftStore.setDraft(filePath, remoteContent ?? "", baseSha, "");
+                return;
+              }
+              draftStore.resetFileToRemote(filePath);
+            }}
             size="sm"
             type="button"
             variant="ghost"

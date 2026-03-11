@@ -1,3 +1,8 @@
+export type {
+  PullRequestChangedFile,
+  PullRequestWorkspaceResolution,
+} from "./client";
+
 export {
   approvePullRequest,
   createAuthenticatedOctokit,

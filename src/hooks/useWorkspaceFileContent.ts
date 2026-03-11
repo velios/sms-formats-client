@@ -1,18 +1,19 @@
 import { useEffect, useMemo } from "react";
-import { useFileContentStore } from "@/store/file-content-store";
 import { useSourceStore } from "@/store";
+import { useFileContentStore } from "@/store/file-content-store";
 
 export function useWorkspaceFileContent(params: {
   filePath: string;
   loadedFrom: "editor" | "search-index";
+  contentRefName?: string;
 }) {
-  const { filePath, loadedFrom } = params;
+  const { filePath, loadedFrom, contentRefName } = params;
   const repository = useSourceStore((state) => state.repository);
   const sourceRef = useSourceStore((state) => state.sourceRef);
   const prNumber =
     sourceRef?.type === "pr" && sourceRef.prNumber ? sourceRef.prNumber : null;
   const headSha = sourceRef?.sha ?? null;
-  const refName = sourceRef?.sha ?? sourceRef?.name ?? null;
+  const refName = contentRefName ?? sourceRef?.sha ?? sourceRef?.name ?? null;
 
   const entry = useFileContentStore(
     useMemo(
@@ -51,7 +52,17 @@ export function useWorkspaceFileContent(params: {
       headSha,
       loadedFrom,
     });
-  }, [data, entry?.lastResolvedHeadSha, entry?.status, filePath, headSha, loadedFrom, prNumber, refName, repository]);
+  }, [
+    data,
+    entry?.lastResolvedHeadSha,
+    entry?.status,
+    filePath,
+    headSha,
+    loadedFrom,
+    prNumber,
+    refName,
+    repository,
+  ]);
 
   return {
     data,

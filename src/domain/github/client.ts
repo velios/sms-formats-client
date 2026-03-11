@@ -76,6 +76,7 @@ export type PullRequestWorkspaceResolution =
       repository: RepoRef;
       prNumber: number;
       headSha: string;
+      baseSha: string;
       bankPath: string;
       writable: boolean;
       readOnlyReason: "no-write-access" | null;
@@ -100,6 +101,7 @@ interface PullRequestWorkspaceSnapshot {
   state: "open" | "closed";
   merged: boolean;
   headSha: string;
+  baseSha: string;
   canWriteRepository: boolean;
   maintainerCanModify: boolean | null;
   headRepository: RepoRef | null;
@@ -240,6 +242,7 @@ export function resolvePullRequestWorkspaceSnapshot(
     repository: snapshot.repository,
     prNumber: snapshot.prNumber,
     headSha: snapshot.headSha,
+    baseSha: snapshot.baseSha,
     bankPath: bankResolution.bankPath,
     writable,
     readOnlyReason: writable ? null : "no-write-access",
@@ -1216,6 +1219,7 @@ export async function resolvePullRequestWorkspace(
       state: pullRequest.data.state === "open" ? "open" : "closed",
       merged: pullRequest.data.merged === true,
       headSha: pullRequest.data.head.sha,
+      baseSha: pullRequest.data.base.sha,
       canWriteRepository,
       maintainerCanModify: pullRequest.data.maintainer_can_modify ?? null,
       headRepository,

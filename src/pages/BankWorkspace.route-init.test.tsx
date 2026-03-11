@@ -49,14 +49,12 @@ const mocks = vi.hoisted(() => {
 
   const sourceState = {
     repository: { owner: "zenmoney", repo: "sms-formats" },
-    sourceRef: null as
-      | {
-          type: "pr";
-          name: string;
-          sha: string;
-          prNumber: number;
-        }
-      | null,
+    sourceRef: null as {
+      type: "pr";
+      name: string;
+      sha: string;
+      prNumber: number;
+    } | null,
     sourceChangedFiles: [] as string[],
     tree: [] as typeof tree,
     banks: [] as typeof banks,
@@ -67,14 +65,12 @@ const mocks = vi.hoisted(() => {
     }),
     setSource: vi.fn(
       (
-        sourceRef:
-          | {
-              type: "pr";
-              name: string;
-              sha: string;
-              prNumber: number;
-            }
-          | null
+        sourceRef: {
+          type: "pr";
+          name: string;
+          sha: string;
+          prNumber: number;
+        } | null
       ) => {
         sourceState.sourceRef = sourceRef;
       }
@@ -96,9 +92,8 @@ const mocks = vi.hoisted(() => {
     }),
   };
 
-  const useSourceStore = (<T,>(
-    selector: (state: typeof sourceState) => T
-  ) => selector(sourceState)) as ((
+  const useSourceStore = (<T,>(selector: (state: typeof sourceState) => T) =>
+    selector(sourceState)) as ((
     selector: (state: typeof sourceState) => unknown
   ) => unknown) & { getState: () => typeof sourceState };
   useSourceStore.getState = () => sourceState;
@@ -169,7 +164,7 @@ const mocks = vi.hoisted(() => {
     routeState,
     saveWorkspaceSession: vi.fn(),
     sourceState,
-    subscribeGitHubAuthChange: vi.fn(() => () => {}),
+    subscribeGitHubAuthChange: vi.fn(() => () => undefined),
     tree,
     updatePullRequestHead: vi.fn(),
     useDraftStore,
@@ -188,7 +183,9 @@ vi.mock("react-router-dom", () => ({
   useLocation: () => mocks.routeState.location,
   useNavigate: () => mocks.routeState.navigate,
   useParams: () => mocks.routeState.params,
-  useSearchParams: () => [new URLSearchParams(mocks.routeState.location.search)],
+  useSearchParams: () => [
+    new URLSearchParams(mocks.routeState.location.search),
+  ],
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -218,8 +215,19 @@ vi.mock("@/components/ui/status-badge", () => ({
 }));
 
 vi.mock("@/features/format-editor/FormatEditor", () => ({
-  FormatEditor: ({ filePath }: { filePath: string }) => (
-    <div data-testid="format-editor">{filePath}</div>
+  FormatEditor: ({
+    filePath,
+    sourceDeletedBaseSha,
+  }: {
+    filePath: string;
+    sourceDeletedBaseSha?: string | null;
+  }) => (
+    <div
+      data-source-deleted-base-sha={sourceDeletedBaseSha ?? ""}
+      data-testid="format-editor"
+    >
+      {filePath}
+    </div>
   ),
 }));
 
@@ -263,9 +271,8 @@ vi.mock("@/store/file-content-store", () => ({
 }));
 
 vi.mock("@/domain/github", async () => {
-  const actual = await vi.importActual<typeof import("@/domain/github")>(
-    "@/domain/github"
-  );
+  const actual =
+    await vi.importActual<typeof import("@/domain/github")>("@/domain/github");
   return {
     ...actual,
     approvePullRequest: vi.fn(),
@@ -366,7 +373,7 @@ describe("BankWorkspace route init", () => {
     mocks.getGitHubAuthChangeVersion.mockReset();
     mocks.getGitHubAuthChangeVersion.mockReturnValue(0);
     mocks.subscribeGitHubAuthChange.mockReset();
-    mocks.subscribeGitHubAuthChange.mockReturnValue(() => {});
+    mocks.subscribeGitHubAuthChange.mockReturnValue(() => undefined);
     mocks.updatePullRequestHead.mockReset();
   });
 
@@ -387,12 +394,17 @@ describe("BankWorkspace route init", () => {
       repository: { owner: "zenmoney", repo: "sms-formats" },
       prNumber: 123,
       headSha: "head-sha",
+      baseSha: "base-sha",
       bankPath: "src/TBank_123",
       writable: true,
       readOnlyReason: null,
+      changedFiles: [
+        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        { kind: "modify", path: "src/TBank_123/formats/another.txt" },
+      ],
     });
     mocks.resolvePullRequestWorkspace.mockImplementation(
-      () => new Promise(() => {})
+      () => new Promise(() => undefined)
     );
 
     render(<BankWorkspace />);
@@ -403,6 +415,49 @@ describe("BankWorkspace route init", () => {
         "src/TBank_123/formats/current.txt"
       );
     });
+  });
+
+  it("reuses deleted-file metadata from the saved session and passes base SHA to the editor", async () => {
+    mocks.routeState.location.search =
+      "?file=src/TBank_123/formats/deleted.txt";
+    mocks.sourceState.sourceRef = {
+      type: "pr",
+      name: "pr-123",
+      sha: "head-sha",
+      prNumber: 123,
+    };
+    mocks.sourceState.sourceChangedFiles = [
+      "src/TBank_123/formats/deleted.txt",
+    ];
+    mocks.sourceState.tree = mocks.tree;
+    mocks.sourceState.banks = mocks.banks;
+    mocks.loadWorkspaceSession.mockReturnValue({
+      repository: { owner: "zenmoney", repo: "sms-formats" },
+      prNumber: 123,
+      headSha: "head-sha",
+      baseSha: "base-sha",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
+      changedFiles: [
+        { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
+      ],
+    });
+    mocks.resolvePullRequestWorkspace.mockImplementation(
+      () => new Promise(() => undefined)
+    );
+
+    render(<BankWorkspace />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/deleted.txt"
+      );
+    });
+    expect(screen.getByTestId("format-editor")).toHaveAttribute(
+      "data-source-deleted-base-sha",
+      "base-sha"
+    );
   });
 
   it("does not re-run PR route init when only the selected file changes", async () => {

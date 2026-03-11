@@ -28,18 +28,28 @@ describe("workspace-session", () => {
       repository: { owner: "zenmoney", repo: "sms-formats" },
       prNumber: 123,
       headSha: "abc123",
+      baseSha: "base456",
       bankPath: "src/TBank_123",
       writable: true,
       readOnlyReason: null,
+      changedFiles: [
+        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
+      ],
     });
 
     expect(loadWorkspaceSession()).toEqual({
       repository: { owner: "zenmoney", repo: "sms-formats" },
       prNumber: 123,
       headSha: "abc123",
+      baseSha: "base456",
       bankPath: "src/TBank_123",
       writable: true,
       readOnlyReason: null,
+      changedFiles: [
+        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
+      ],
     });
   });
 
@@ -64,9 +74,11 @@ describe("workspace-session", () => {
       repository: { owner: "zenmoney", repo: "sms-formats" },
       prNumber: 123,
       headSha: "abc123",
+      baseSha: "base456",
       bankPath: "src/TBank_123",
       writable: false,
       readOnlyReason: "no-write-access",
+      changedFiles: [],
     });
 
     clearWorkspaceSession();
