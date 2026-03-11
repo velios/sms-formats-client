@@ -6,11 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { PullRequestLabel } from "@/domain/types";
+import type { PullRequestLabel, RepoRef } from "@/domain/types";
 import { useOpenPRs } from "@/hooks/useGitHub";
-import { getPullRequestWorkspacePath } from "@/lib/pull-request-navigation";
+import {
+  getPullRequestGitHubUrl,
+  getPullRequestWorkspacePath,
+} from "@/lib/pull-request-navigation";
 import { cn } from "@/lib/utils";
-import { useSourceStore } from "@/store";
+import { useDraftStore, useSourceStore } from "@/store";
 
 interface OpenPullRequestItem {
   number: number;
@@ -39,6 +42,9 @@ const dashboardRowClassName = (isActive: boolean) =>
       : "hover:bg-[color:var(--c-bg-hover)]"
   );
 
+const dashboardIconLinkClassName =
+  "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[11px] leading-none text-[color:var(--c-text-dim)] no-underline hover:text-[color:var(--c-accent)] hover:no-underline";
+
 function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => {
     if (a.failedValidationCount !== b.failedValidationCount) {
@@ -51,9 +57,27 @@ function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   });
 }
 
+function getDraftPullRequestNumber(
+  sourceRef: string,
+  repository: RepoRef
+): number | null {
+  const prefix = `${repository.owner}/${repository.repo}:pr:`;
+  if (!sourceRef.startsWith(prefix)) {
+    return null;
+  }
+
+  const prNumber = Number.parseInt(sourceRef.slice(prefix.length), 10);
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    return null;
+  }
+
+  return prNumber;
+}
+
 export function Dashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const draftStore = useDraftStore();
   const repository = useSourceStore((state) => state.repository);
   const sourceRef = useSourceStore((state) => state.sourceRef);
   const [query, setQuery] = useState("");
@@ -69,6 +93,59 @@ export function Dashboard() {
     refetch: () => void;
   };
   const sortedPRs = useMemo(() => sortPRs(openPRs), [openPRs]);
+  const persistedDraftPullRequests = useMemo(() => {
+    if (!draftStore.hasHydrated) {
+      return new Set<number>();
+    }
+
+    const next = new Set<number>();
+    for (const [draftScopeKey, scopeDrafts] of Object.entries(
+      draftStore.storedDraftsByScope
+    )) {
+      const prNumber = getDraftPullRequestNumber(draftScopeKey, repository);
+      if (prNumber === null) {
+        continue;
+      }
+      const hasChanges = Object.values(scopeDrafts).some(
+        (draft) => draft.content !== draft.remoteContent || draft.isDeleted
+      );
+      if (hasChanges) {
+        next.add(prNumber);
+      }
+    }
+
+    return next;
+  }, [
+    draftStore.hasHydrated,
+    draftStore.storedDraftsByScope,
+    repository.owner,
+    repository.repo,
+  ]);
+  const localChangedFiles = useMemo(
+    () => draftStore.getChangedFiles().map((item) => item.filePath),
+    [draftStore, draftStore.drafts]
+  );
+  const activePullRequestHasLocalDrafts =
+    sourceRef?.type === "pr" && localChangedFiles.length > 0;
+  const pullRequestsWithLocalDrafts = useMemo(() => {
+    const next = new Set(persistedDraftPullRequests);
+    if (sourceRef?.type !== "pr" || typeof sourceRef.prNumber !== "number") {
+      return next;
+    }
+
+    if (activePullRequestHasLocalDrafts) {
+      next.add(sourceRef.prNumber);
+    } else {
+      next.delete(sourceRef.prNumber);
+    }
+
+    return next;
+  }, [
+    activePullRequestHasLocalDrafts,
+    persistedDraftPullRequests,
+    sourceRef?.prNumber,
+    sourceRef?.type,
+  ]);
   const normalizedQuery = query.trim().toLowerCase();
   const visiblePRs = useMemo(() => {
     if (!normalizedQuery) {
@@ -84,20 +161,13 @@ export function Dashboard() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="font-semibold text-xl">
-            {t("source.pullRequest", { defaultValue: "Pull Requests" })}
-          </h1>
-          <p className="text-[color:var(--c-text-muted)] text-sm">
-            {repository.owner}/{repository.repo}
-          </p>
-        </div>
+      <div className="flex justify-end">
         <div className="w-full max-w-md">
           <Input
             aria-label={t("source.search", {
               defaultValue: "Search pull requests",
             })}
+            className="bg-[color:var(--c-bg-input)]"
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("source.search", {
               defaultValue: "Search by title, branch, or PR number",
@@ -143,6 +213,16 @@ export function Dashboard() {
               const isActive =
                 sourceRef?.type === "pr" &&
                 sourceRef.prNumber === pullRequest.number;
+              const hasLocalDrafts = pullRequestsWithLocalDrafts.has(
+                pullRequest.number
+              );
+              const localDraftsTitle = t("source.unsavedDraftsInPr", {
+                defaultValue: "You have unsaved local changes in this PR",
+              });
+              const prUrl = getPullRequestGitHubUrl(
+                pullRequest.number,
+                repository
+              );
               return (
                 <div
                   className={dashboardRowClassName(isActive)}
@@ -173,9 +253,31 @@ export function Dashboard() {
                     #{pullRequest.number}
                   </span>
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="truncate text-sm">
-                      {pullRequest.title}
-                    </span>
+                    <div className="inline-flex max-w-full min-w-0 items-center gap-1">
+                      <span className="min-w-0 truncate text-sm">
+                        {pullRequest.title}
+                      </span>
+                      {hasLocalDrafts && (
+                        <StatusBadge
+                          className="h-4 min-w-4 shrink-0 px-1 text-[10px] leading-none"
+                          title={localDraftsTitle}
+                          variant="modified"
+                        >
+                          ●
+                        </StatusBadge>
+                      )}
+                      <a
+                        aria-label={`PR #${pullRequest.number}`}
+                        className={dashboardIconLinkClassName}
+                        href={prUrl}
+                        onClick={(event) => event.stopPropagation()}
+                        rel="noreferrer"
+                        target="_blank"
+                        title={prUrl}
+                      >
+                        ↗
+                      </a>
+                    </div>
                     <span className="truncate text-[color:var(--c-text-dim)] text-xs">
                       {pullRequest.headRef}
                     </span>

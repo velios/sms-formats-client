@@ -46,17 +46,6 @@ export interface FileEntry {
   type: "blob" | "tree";
 }
 
-export interface DraftFile {
-  sourceRef: string;
-  bankPath: string;
-  filePath: string;
-  baseSha: string;
-  baseHeadSha: string;
-  content: string;
-  isDeleted?: boolean;
-  timestamp: number;
-}
-
 export interface PublishPreflight {
   canPublish: boolean;
   changedBanks: string[];
