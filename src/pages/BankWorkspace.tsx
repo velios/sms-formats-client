@@ -106,6 +106,36 @@ function buildQuickCheckContextFromEntry(
   };
 }
 
+function normalizeIntersectionExample(example: string): string {
+  return example.trim();
+}
+
+function buildCachedFormatEntryFromEditorContext(params: {
+  filePath: string;
+  regex: string;
+  examples: string[];
+}): CachedFormatEntry {
+  const { filePath, regex, examples } = params;
+  return {
+    filePath,
+    fileName: extractFormatFileName(filePath),
+    regex: regex.trim(),
+    examples: examples.map(normalizeIntersectionExample).filter(Boolean),
+    source: "draft",
+    fingerprint: `draft-live:${Date.now()}`,
+  };
+}
+
+function resolveVisibleIntersectionEntries(params: {
+  entriesByPath: Map<string, CachedFormatEntry>;
+  deletedFormatFiles: Set<string>;
+}): CachedFormatEntry[] {
+  const { entriesByPath, deletedFormatFiles } = params;
+  return Array.from(entriesByPath.values()).filter(
+    (entry) => !deletedFormatFiles.has(entry.filePath)
+  );
+}
+
 const formatIntersectionMetricClassName =
   "inline-flex h-4 shrink-0 items-center justify-center rounded px-1 align-middle leading-none";
 
@@ -746,6 +776,11 @@ function renderWorkspaceContent(params: {
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
   onFormatSearchContextChange: (context: ActiveFormatSearchContext) => void;
+  onFormatRegexBlurAfterEdit: (context: {
+    filePath: string;
+    regex: string;
+    examples: string[];
+  }) => void;
   onOpenTemplateBySms: () => void;
   onOpenSmsByTemplate: () => void;
   t: (key: string) => string;
@@ -759,6 +794,7 @@ function renderWorkspaceContent(params: {
     allFormatFiles,
     handleRenameFile,
     onFormatSearchContextChange,
+    onFormatRegexBlurAfterEdit,
     onOpenTemplateBySms,
     onOpenSmsByTemplate,
     t,
@@ -772,6 +808,7 @@ function renderWorkspaceContent(params: {
         allFormatFiles={allFormatFiles}
         filePath={selectedFile}
         key={selectedFile}
+        onRegexBlurAfterEdit={onFormatRegexBlurAfterEdit}
         onOpenSmsByTemplate={onOpenSmsByTemplate}
         onOpenTemplateBySms={onOpenTemplateBySms}
         onRenameFile={handleRenameFile}
@@ -1076,7 +1113,7 @@ export function FormatsPanel(params: {
           const isSourceChanged = isSenders
             ? !localSendersChanged && sourceSendersChanged
             : !isLocalChanged && sourceChangedFormatFiles.has(path);
-          const intersectionStats = isSenders
+          const intersectionStats = isSenders || isDeleted
             ? null
             : (formatIntersectionStats.get(path) ?? null);
           const ownExamplesMatch =
@@ -2155,9 +2192,6 @@ export function BankWorkspace() {
   const [quickCheckAutoRunOnOpen, setQuickCheckAutoRunOnOpen] = useState(false);
   const [quickCheckMode, setQuickCheckMode] =
     useState<QuickCheckMode>("template-by-sms");
-  const [formatIntersectionStats, setFormatIntersectionStats] = useState<
-    Map<string, FormatIntersectionStat>
-  >(new Map());
   const [intersectionFormatEntries, setIntersectionFormatEntries] = useState<
     Map<string, CachedFormatEntry>
   >(new Map());
@@ -2314,9 +2348,21 @@ export function BankWorkspace() {
   const quickCheckFormatPaths = useMemo(
     () =>
       allFormatFiles.filter(
-        (filePath) => !localDeletedFormatFiles.has(filePath)
+        (filePath) => !visibleDeletedFormatFiles.has(filePath)
       ),
-    [allFormatFiles, localDeletedFormatFiles]
+    [allFormatFiles, visibleDeletedFormatFiles]
+  );
+  const visibleIntersectionEntries = useMemo(
+    () =>
+      resolveVisibleIntersectionEntries({
+        entriesByPath: intersectionFormatEntries,
+        deletedFormatFiles: visibleDeletedFormatFiles,
+      }),
+    [intersectionFormatEntries, visibleDeletedFormatFiles]
+  );
+  const formatIntersectionStats = useMemo(
+    () => calculateFormatIntersectionStats(visibleIntersectionEntries),
+    [visibleIntersectionEntries]
   );
 
   const sourceHeadSha = sourceRef?.sha ?? null;
@@ -2375,7 +2421,6 @@ export function BankWorkspace() {
 
   useEffect(() => {
     intersectionRunIdRef.current += 1;
-    setFormatIntersectionStats(new Map());
     setIntersectionFormatEntries(new Map());
     setHasCalculatedIntersections(false);
     setIntersectionLoadErrorsCount(0);
@@ -2383,12 +2428,15 @@ export function BankWorkspace() {
     setIsCalculatingIntersections(false);
   }, [
     bankPath,
-    draftStore.drafts,
-    quickCheckFormatPaths,
     repository.owner,
     repository.repo,
     sourceRefNameForContent,
   ]);
+
+  useEffect(() => {
+    intersectionRunIdRef.current += 1;
+    setIsCalculatingIntersections(false);
+  }, [draftStore.drafts, quickCheckFormatPaths]);
 
   useEffect(() => {
     if (routeInitState.status !== "ready") {
@@ -2544,7 +2592,6 @@ export function BankWorkspace() {
 
     if (!sourceRefNameForContent) {
       setCalculateIntersectionsError(t("quickCheck.noSource"));
-      setFormatIntersectionStats(new Map());
       setIntersectionLoadErrorsCount(0);
       setIsCalculatingIntersections(false);
       return;
@@ -2571,9 +2618,6 @@ export function BankWorkspace() {
         return;
       }
 
-      setFormatIntersectionStats(
-        calculateFormatIntersectionStats(prepared.entries)
-      );
       setIntersectionFormatEntries(
         new Map(prepared.entries.map((entry) => [entry.filePath, entry]))
       );
@@ -2583,9 +2627,6 @@ export function BankWorkspace() {
       if (intersectionRunIdRef.current !== runId) {
         return;
       }
-      setFormatIntersectionStats(new Map());
-      setIntersectionFormatEntries(new Map());
-      setHasCalculatedIntersections(true);
       setIntersectionLoadErrorsCount(0);
       setCalculateIntersectionsError(
         t("quickCheck.intersectionsUnexpectedError")
@@ -2619,6 +2660,26 @@ export function BankWorkspace() {
       setShowQuickCheck(true);
     },
     [intersectionFormatEntries]
+  );
+
+  const handleFormatRegexBlurAfterEdit = useCallback(
+    (context: { filePath: string; regex: string; examples: string[] }) => {
+      if (
+        !hasCalculatedIntersections ||
+        visibleDeletedFormatFiles.has(context.filePath)
+      ) {
+        return;
+      }
+
+      const nextEntry = buildCachedFormatEntryFromEditorContext(context);
+      setIntersectionFormatEntries((prev) => {
+        const next = new Map(prev);
+        next.set(context.filePath, nextEntry);
+        return next;
+      });
+      setCalculateIntersectionsError(null);
+    },
+    [hasCalculatedIntersections, visibleDeletedFormatFiles]
   );
 
   const quickCheckActiveFormatContext =
@@ -2973,6 +3034,7 @@ export function BankWorkspace() {
           allFormatFiles,
           handleRenameFile,
           onFormatSearchContextChange: setActiveFormatSearchContext,
+          onFormatRegexBlurAfterEdit: handleFormatRegexBlurAfterEdit,
           onOpenSmsByTemplate: () => {
             setQuickCheckActiveFormatContextOverride(null);
             setQuickCheckAutoRunOnOpen(false);

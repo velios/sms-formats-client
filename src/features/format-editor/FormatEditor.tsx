@@ -21,6 +21,11 @@ interface Props {
   onRenameFile: (fromPath: string, toPath: string) => boolean;
   onOpenTemplateBySms?: () => void;
   onOpenSmsByTemplate?: () => void;
+  onRegexBlurAfterEdit?: (context: {
+    filePath: string;
+    regex: string;
+    examples: string[];
+  }) => void;
   onSearchContextChange?: (context: {
     filePath: string;
     regex: string;
@@ -64,6 +69,7 @@ export function FormatEditor({
   onRenameFile,
   onOpenTemplateBySms,
   onOpenSmsByTemplate,
+  onRegexBlurAfterEdit,
   onSearchContextChange,
 }: Props) {
   const { t } = useTranslation();
@@ -102,6 +108,9 @@ export function FormatEditor({
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [renameError, setRenameError] = useState<string | null>(null);
   const lastAppliedContentRef = useRef<string | null>(null);
+  const hasPendingRegexBlurRef = useRef(false);
+  const latestRegexRef = useRef("");
+  const latestExamplesRef = useRef<string[]>([]);
 
   const parseRawToStructured = useCallback(
     (raw: string, preserveActiveIndex: boolean) => {
@@ -119,6 +128,8 @@ export function FormatEditor({
       }
 
       const nextExamples = parsed.examples.length > 0 ? parsed.examples : [""];
+      latestRegexRef.current = parsed.regex;
+      latestExamplesRef.current = nextExamples;
       setRegex(parsed.regex);
       setColumns(parsed.columns);
       setExamples(nextExamples);
@@ -162,6 +173,7 @@ export function FormatEditor({
       return;
     }
     lastAppliedContentRef.current = currentContent;
+    hasPendingRegexBlurRef.current = false;
     setRawContent(currentContent);
     parseRawToStructured(currentContent, false);
   }, [currentContent, hasLoadedInitial, parseRawToStructured]);
@@ -190,8 +202,23 @@ export function FormatEditor({
   };
 
   const handleRegexChange = (value: string) => {
+    hasPendingRegexBlurRef.current = true;
+    latestRegexRef.current = value;
     setRegex(value);
     syncStructuredDraft(value, columns, examples);
+  };
+
+  const handleRegexBlur = () => {
+    if (!hasPendingRegexBlurRef.current) {
+      return;
+    }
+
+    hasPendingRegexBlurRef.current = false;
+    onRegexBlurAfterEdit?.({
+      filePath,
+      regex: latestRegexRef.current,
+      examples: latestExamplesRef.current,
+    });
   };
 
   const handleColumnsChange = (newCols: string[]) => {
@@ -202,6 +229,7 @@ export function FormatEditor({
   const handleExampleChange = (index: number, value: string) => {
     const newExamples = [...examples];
     newExamples[index] = value;
+    latestExamplesRef.current = newExamples;
     setExamples(newExamples);
     syncStructuredDraft(regex, columns, newExamples);
   };
@@ -211,6 +239,7 @@ export function FormatEditor({
       return;
     }
     const newExamples = [...examples, ""];
+    latestExamplesRef.current = newExamples;
     setExamples(newExamples);
     setActiveExampleIndex(newExamples.length - 1);
     syncStructuredDraft(regex, columns, newExamples);
@@ -224,6 +253,7 @@ export function FormatEditor({
       return;
     }
     const newExamples = examples.filter((_, i) => i !== index);
+    latestExamplesRef.current = newExamples;
     setExamples(newExamples);
     syncStructuredDraft(regex, columns, newExamples);
     if (activeExampleIndex >= newExamples.length) {
@@ -451,6 +481,7 @@ export function FormatEditor({
           onAddExample={handleAddExample}
           onColumnsChange={handleColumnsChange}
           onExampleChange={handleExampleChange}
+          onRegexBlur={handleRegexBlur}
           onOpenSmsByTemplate={onOpenSmsByTemplate}
           onOpenTemplateBySms={onOpenTemplateBySms}
           onRegexChange={handleRegexChange}

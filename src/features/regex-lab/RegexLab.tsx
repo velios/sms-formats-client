@@ -33,6 +33,7 @@ interface Props {
   regex: string;
   readOnly?: boolean;
   onRegexChange: (v: string) => void;
+  onRegexBlur?: () => void;
   examples: string[];
   activeExampleIndex: number;
   onActiveExampleChange: (i: number) => void;
@@ -112,6 +113,7 @@ export function RegexLab({
   regex,
   readOnly = false,
   onRegexChange,
+  onRegexBlur,
   examples,
   activeExampleIndex,
   onActiveExampleChange,
@@ -334,6 +336,7 @@ export function RegexLab({
             activeTokenIndex={activePatternTokenIndex}
             canHighlight={explanation.canHighlightPattern}
             key={readOnly ? "readonly" : "editable"}
+            onBlur={onRegexBlur}
             onRegexChange={onRegexChange}
             onSelectionChange={handlePatternSelectionChange}
             onTokenClick={handlePatternTokenActivate}

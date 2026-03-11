@@ -146,6 +146,7 @@ const singleLineFilter: Extension = EditorState.transactionFilter.of((tr) => {
 interface UnifiedRegexEditorProps {
   regex: string;
   readOnly?: boolean;
+  onBlur?: () => void;
   onRegexChange: (value: string) => void;
   tokens: RegexPatternToken[];
   canHighlight: boolean;
@@ -163,6 +164,7 @@ interface UnifiedRegexEditorProps {
 export function UnifiedRegexEditor({
   regex,
   readOnly = false,
+  onBlur,
   onRegexChange,
   tokens,
   canHighlight,
@@ -295,7 +297,10 @@ export function UnifiedRegexEditor({
   }, []);
 
   return (
-    <div className="flex items-stretch overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]">
+    <div
+      className="flex items-stretch overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]"
+      onBlur={onBlur}
+    >
       <span className="select-none px-1.5 pb-2 pt-2 text-[15px] text-[color:var(--c-text-dim)] font-[var(--font-mono)]">
         /
       </span>

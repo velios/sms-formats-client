@@ -14,14 +14,18 @@ import {
   resolveWorkspaceEntryMode,
 } from "@/pages/BankWorkspace";
 
-function renderFormatsPanel(intersectingOtherFormats: number) {
+function renderFormatsPanel(params: {
+  intersectingOtherFormats: number;
+  deletedFormatFiles?: Set<string>;
+}) {
+  const { intersectingOtherFormats, deletedFormatFiles = new Set() } = params;
   const handleSelectFile = vi.fn();
   const onOpenSmsByTemplateForIntersection = vi.fn();
 
   render(
     <FormatsPanel
       createFormatDisabled={false}
-      deletedFormatFiles={new Set()}
+      deletedFormatFiles={deletedFormatFiles}
       formatIntersectionStats={
         new Map([
           [
@@ -71,7 +75,7 @@ function renderFormatsPanel(intersectingOtherFormats: number) {
 describe("FormatsPanel intersections", () => {
   it("opens SMS-by-template quick check from active intersections badge", () => {
     const { handleSelectFile, onOpenSmsByTemplateForIntersection } =
-      renderFormatsPanel(2);
+      renderFormatsPanel({ intersectingOtherFormats: 2 });
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -86,12 +90,28 @@ describe("FormatsPanel intersections", () => {
   });
 
   it("does not render intersection action when there are no intersections", () => {
-    renderFormatsPanel(0);
+    renderFormatsPanel({ intersectingOtherFormats: 0 });
 
     expect(
       screen.queryByRole("button", {
         name: /quickCheck\.openIntersectingSmsByTemplate/,
       })
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render intersection indicators for deleted files", () => {
+    renderFormatsPanel({
+      intersectingOtherFormats: 2,
+      deletedFormatFiles: new Set(["banks/pumb/formats/example.txt"]),
+    });
+
+    expect(
+      screen.queryByRole("button", {
+        name: /quickCheck\.openIntersectingSmsByTemplate/,
+      })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/\b8\s*\/\s*8\s*\/\s*2\b/)
     ).not.toBeInTheDocument();
   });
 
