@@ -30,6 +30,7 @@ import {
 } from "@/domain/format";
 import {
   approvePullRequest,
+  fetchPullRequestApprovalByCurrentUser,
   fetchPullRequestFiles,
   fetchRepoTree,
   getCachedPullRequestApprovalPermission,
@@ -803,6 +804,7 @@ function BankActionsPanel(params: {
   publishError: string | null;
   publishActionLabel: string;
   publishDisabled: boolean;
+  isCheckingPullRequestApproval: boolean;
   isCalculatingIntersections: boolean;
   isPublishing: boolean;
   isApprovingPullRequest: boolean;
@@ -826,6 +828,7 @@ function BankActionsPanel(params: {
     publishError,
     publishActionLabel,
     publishDisabled,
+    isCheckingPullRequestApproval,
     isCalculatingIntersections,
     isPublishing,
     isApprovingPullRequest,
@@ -852,7 +855,11 @@ function BankActionsPanel(params: {
       {showApprovePullRequestButton && (
         <Button
           className={workspaceActionButtonClassName}
-          disabled={isApprovingPullRequest || isPullRequestApproved}
+          disabled={
+            isCheckingPullRequestApproval ||
+            isApprovingPullRequest ||
+            isPullRequestApproved
+          }
           onClick={onApprovePullRequest}
           type="button"
           variant={isPullRequestApproved ? "success" : "default"}
@@ -1314,6 +1321,8 @@ function usePullRequestApproval(params: {
   t: (key: string) => string;
 }) {
   const { canApprovePullRequest, repository, sourceRef, t } = params;
+  const [isCheckingPullRequestApproval, setIsCheckingPullRequestApproval] =
+    useState(false);
   const [isApprovingPullRequest, setIsApprovingPullRequest] = useState(false);
   const [isPullRequestApproved, setIsPullRequestApproved] = useState(false);
   const [approvePullRequestError, setApprovePullRequestError] = useState<
@@ -1321,13 +1330,57 @@ function usePullRequestApproval(params: {
   >(null);
 
   useEffect(() => {
+    setIsCheckingPullRequestApproval(false);
     setIsApprovingPullRequest(false);
     setIsPullRequestApproved(false);
     setApprovePullRequestError(null);
   }, [repository.owner, repository.repo, sourceRef?.prNumber, sourceRef?.type]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!(sourceRef?.type === "pr" && sourceRef.prNumber && canApprovePullRequest)) {
+      setIsCheckingPullRequestApproval(false);
+      setIsPullRequestApproved(false);
+      return;
+    }
+
+    setIsCheckingPullRequestApproval(true);
+    void fetchPullRequestApprovalByCurrentUser(
+      sourceRef.prNumber,
+      repository
+    )
+      .then((isApproved) => {
+        if (!cancelled) {
+          setIsPullRequestApproved(isApproved);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIsPullRequestApproved(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCheckingPullRequestApproval(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    canApprovePullRequest,
+    repository.owner,
+    repository.repo,
+    sourceRef?.prNumber,
+    sourceRef?.type,
+  ]);
+
   const handleApprovePullRequest = useCallback(async () => {
-    if (!(sourceRef?.type === "pr" && sourceRef.prNumber)) {
+    if (
+      !(sourceRef?.type === "pr" && sourceRef.prNumber) ||
+      isPullRequestApproved
+    ) {
       return;
     }
 
@@ -1344,7 +1397,7 @@ function usePullRequestApproval(params: {
     } finally {
       setIsApprovingPullRequest(false);
     }
-  }, [repository, sourceRef?.prNumber, sourceRef?.type, t]);
+  }, [isPullRequestApproved, repository, sourceRef?.prNumber, sourceRef?.type, t]);
 
   const showApprovePullRequestButton = Boolean(
     sourceRef?.type === "pr" && sourceRef.prNumber && canApprovePullRequest
@@ -1359,6 +1412,7 @@ function usePullRequestApproval(params: {
     approvePullRequestError,
     approvePullRequestLabel,
     handleApprovePullRequest,
+    isCheckingPullRequestApproval,
     isApprovingPullRequest,
     isPullRequestApproved,
     showApprovePullRequestButton,
@@ -2646,6 +2700,7 @@ export function BankWorkspace() {
     activeSession?.writable === false || staleWorkspaceSession !== null;
   const {
     showApprovePullRequestButton,
+    isCheckingPullRequestApproval,
     isApprovingPullRequest,
     isPullRequestApproved,
     approvePullRequestError,
@@ -2821,6 +2876,7 @@ export function BankWorkspace() {
               : null
           }
           canResetToSource={canResetToSource}
+          isCheckingPullRequestApproval={isCheckingPullRequestApproval}
           isApprovingPullRequest={isApprovingPullRequest}
           isCalculatingIntersections={isCalculatingIntersections}
           isPublishing={isPublishingQuickUpdate}

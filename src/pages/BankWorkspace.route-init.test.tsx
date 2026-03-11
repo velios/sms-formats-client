@@ -125,6 +125,7 @@ const mocks = vi.hoisted(() => {
   useDraftStore.getState = () => draftState;
 
   return {
+    fetchPullRequestApprovalByCurrentUser: vi.fn(() => Promise.resolve(false)),
     banks,
     clearWorkspaceSession: vi.fn(),
     draftState,
@@ -277,6 +278,8 @@ vi.mock("@/domain/github", async () => {
     ...actual,
     approvePullRequest: vi.fn(),
     fetchFileContent: vi.fn(() => Promise.resolve("")),
+    fetchPullRequestApprovalByCurrentUser:
+      mocks.fetchPullRequestApprovalByCurrentUser,
     fetchPullRequestFiles: mocks.fetchPullRequestFiles,
     fetchRepoTree: mocks.fetchRepoTree,
     getCachedPullRequestApprovalPermission:
@@ -343,6 +346,8 @@ describe("BankWorkspace route init", () => {
 
     mocks.fetchPullRequestFiles.mockReset();
     mocks.fetchPullRequestFiles.mockResolvedValue([]);
+    mocks.fetchPullRequestApprovalByCurrentUser.mockReset();
+    mocks.fetchPullRequestApprovalByCurrentUser.mockResolvedValue(false);
     mocks.fetchRepoTree.mockReset();
     mocks.fetchRepoTree.mockResolvedValue(mocks.tree);
     mocks.fileContentStore.getCachedFileContent.mockReset();
@@ -480,6 +485,51 @@ describe("BankWorkspace route init", () => {
       )
     );
     expect(mocks.resolvePullRequestWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores the existing approval state for the current user after page reload", async () => {
+    mocks.sourceState.sourceRef = {
+      type: "pr",
+      name: "pr-123",
+      sha: "head-sha",
+      prNumber: 123,
+    };
+    mocks.sourceState.sourceChangedFiles = [
+      "src/TBank_123/formats/current.txt",
+      "src/TBank_123/formats/another.txt",
+    ];
+    mocks.sourceState.tree = mocks.tree;
+    mocks.sourceState.banks = mocks.banks;
+    mocks.loadWorkspaceSession.mockReturnValue({
+      repository: { owner: "zenmoney", repo: "sms-formats" },
+      prNumber: 123,
+      headSha: "head-sha",
+      baseSha: "base-sha",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
+      changedFiles: [
+        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        { kind: "modify", path: "src/TBank_123/formats/another.txt" },
+      ],
+    });
+    mocks.resolvePullRequestWorkspace.mockImplementation(
+      () => new Promise(() => undefined)
+    );
+    mocks.refreshPullRequestApprovalPermission.mockResolvedValue(true);
+    mocks.fetchPullRequestApprovalByCurrentUser.mockResolvedValue(true);
+
+    render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "source.approvePrDone" })
+      ).toBeDisabled()
+    );
+    expect(mocks.fetchPullRequestApprovalByCurrentUser).toHaveBeenCalledWith(
+      123,
+      { owner: "zenmoney", repo: "sms-formats" }
+    );
   });
 
   it("keeps the current workspace visible and shows a stale notice when PR head changes with local drafts", async () => {

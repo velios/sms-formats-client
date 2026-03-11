@@ -1,7 +1,48 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RepoRef } from "../types";
+const octokitMocks = vi.hoisted(() => {
+  const createReview = vi.fn(() => Promise.resolve({}));
+  const getAuthenticated = vi.fn(() =>
+    Promise.resolve({ data: { login: "current-user" } })
+  );
+  const paginate = vi.fn<
+    (
+      ...args: unknown[]
+    ) => Promise<
+      Array<{
+        user?: { login?: string } | null;
+        state?: string | null;
+      }>
+    >
+  >(() => Promise.resolve([]));
+
+  return {
+    createReview,
+    getAuthenticated,
+    paginate,
+    Octokit: class MockOctokit {
+      pulls = {
+        createReview,
+        listReviews: vi.fn(),
+      };
+
+      users = {
+        getAuthenticated,
+      };
+
+      paginate = paginate;
+    },
+  };
+});
+
+vi.mock("@octokit/rest", () => ({
+  Octokit: octokitMocks.Octokit,
+}));
+
 import {
+  approvePullRequest,
   classifyPullRequestResolverError,
+  fetchPullRequestApprovalByCurrentUser,
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
   indexBanksFromTree,
@@ -60,6 +101,14 @@ describe("pull request approval permission cache", () => {
         storage.delete(key);
       },
     });
+    octokitMocks.createReview.mockReset();
+    octokitMocks.createReview.mockResolvedValue({});
+    octokitMocks.getAuthenticated.mockReset();
+    octokitMocks.getAuthenticated.mockResolvedValue({
+      data: { login: "current-user" },
+    });
+    octokitMocks.paginate.mockReset();
+    octokitMocks.paginate.mockResolvedValue([]);
     setGitHubUserToken(null);
   });
 
@@ -109,6 +158,41 @@ describe("pull request approval permission cache", () => {
     expect(getGitHubAuthChangeVersion()).toBe(initialVersion + 2);
 
     unsubscribe();
+  });
+});
+
+describe("pull request approvals", () => {
+  const repo: RepoRef = { owner: "zenmoney", repo: "sms-formats" };
+
+  beforeEach(() => {
+    setGitHubUserToken("ghp_test");
+  });
+
+  afterEach(() => {
+    setGitHubUserToken(null);
+  });
+
+  it("creates approve reviews without an auto-comment body", async () => {
+    await approvePullRequest(123, repo);
+
+    expect(octokitMocks.createReview).toHaveBeenCalledWith({
+      owner: "zenmoney",
+      repo: "sms-formats",
+      pull_number: 123,
+      event: "APPROVE",
+    });
+  });
+
+  it("detects an existing approval from the current user", async () => {
+    octokitMocks.paginate.mockResolvedValue([
+      { user: { login: "reviewer-a" }, state: "APPROVED" },
+      { user: { login: "current-user" }, state: "COMMENTED" },
+      { user: { login: "current-user" }, state: "APPROVED" },
+    ]);
+
+    await expect(
+      fetchPullRequestApprovalByCurrentUser(123, repo)
+    ).resolves.toBe(true);
   });
 });
 

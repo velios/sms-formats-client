@@ -14,6 +14,7 @@ export {
   fetchBranchSha,
   fetchFileContent,
   fetchOpenPRs,
+  fetchPullRequestApprovalByCurrentUser,
   fetchPullRequestCommits,
   fetchPullRequestFiles,
   fetchPullRequestHead,

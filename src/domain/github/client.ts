@@ -16,7 +16,6 @@ const sourceRepoRef: RepoRef = {
 const GITHUB_USER_TOKEN_STORAGE_KEY = "sms-formats-github-user-token";
 const PR_APPROVAL_PERMISSION_STORAGE_KEY =
   "sms-formats-pr-approval-permissions";
-const PR_APPROVAL_SIGNATURE = "From Zenmoney SMS Formats Client";
 
 interface PullRequestApprovalPermissionEntry {
   canApprove: boolean;
@@ -325,14 +324,7 @@ function countApprovedReviews(
     state?: string | null;
   }>
 ): number {
-  const latestStateByReviewer = new Map<string, string>();
-  for (const review of reviews) {
-    const login = review.user?.login;
-    if (!login) {
-      continue;
-    }
-    latestStateByReviewer.set(login, review.state ?? "");
-  }
+  const latestStateByReviewer = resolveLatestReviewStateByReviewer(reviews);
 
   let approvedCount = 0;
   for (const state of latestStateByReviewer.values()) {
@@ -341,6 +333,23 @@ function countApprovedReviews(
     }
   }
   return approvedCount;
+}
+
+function resolveLatestReviewStateByReviewer(
+  reviews: Array<{
+    user?: { login?: string } | null;
+    state?: string | null;
+  }>
+): Map<string, string> {
+  const latestStateByReviewer = new Map<string, string>();
+  for (const review of reviews) {
+    const login = review.user?.login;
+    if (!login) {
+      continue;
+    }
+    latestStateByReviewer.set(login, review.state ?? "");
+  }
+  return latestStateByReviewer;
 }
 
 function stripAnsiCodes(value: string): string {
@@ -1039,8 +1048,36 @@ export async function approvePullRequest(
     repo: repo.repo,
     pull_number: prNumber,
     event: "APPROVE",
-    body: PR_APPROVAL_SIGNATURE,
   });
+}
+
+export async function fetchPullRequestApprovalByCurrentUser(
+  prNumber: number,
+  repoRef?: RepoRef
+): Promise<boolean> {
+  if (!userToken) {
+    return false;
+  }
+
+  const repo = resolveRepo(repoRef);
+  const octokit = createAuthenticatedOctokit(userToken);
+  const [user, reviews] = await Promise.all([
+    octokit.users.getAuthenticated(),
+    octokit.paginate(octokit.pulls.listReviews, {
+      owner: repo.owner,
+      repo: repo.repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }),
+  ]);
+  const login = user.data.login?.trim();
+  if (!login) {
+    return false;
+  }
+
+  return (
+    resolveLatestReviewStateByReviewer(reviews).get(login) === "APPROVED"
+  );
 }
 
 // ─── Source loading ───
