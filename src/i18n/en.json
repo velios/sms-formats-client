@@ -37,6 +37,7 @@
     "tokenHint": "The token is stored locally in your browser and used for GitHub API requests.",
     "tokenSaved": "Custom token is saved",
     "tokenConfigured": "GitHub token is configured",
+    "hardReset": "Reset everything",
     "resetToken": "Reset token",
     "emptyToken": "Enter a GitHub token",
     "invalidToken": "Failed to validate token",

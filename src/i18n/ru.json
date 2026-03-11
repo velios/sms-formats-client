@@ -50,6 +50,7 @@
     "tokenHint": "Токен будет сохранён локально в браузере и использован для GitHub API запросов.",
     "tokenSaved": "Пользовательский токен сохранён",
     "tokenConfigured": "GitHub токен настроен",
+    "hardReset": "Сбросить всё",
     "resetToken": "Сбросить токен",
     "emptyToken": "Введите GitHub токен",
     "invalidToken": "Не удалось проверить токен",

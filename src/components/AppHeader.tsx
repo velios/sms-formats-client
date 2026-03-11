@@ -16,6 +16,7 @@ import {
   validateToken,
 } from "@/domain/github";
 import { SourceSelector } from "@/features/source-selector/SourceSelector";
+import { hardResetAppState } from "@/store/hard-reset";
 import { useSourceStore, useUIStore } from "@/store";
 
 export function AppHeader() {
@@ -43,6 +44,7 @@ export function AppHeader() {
     getCachedPullRequestApprovalPermission(repository)
   );
   const [isSavingGitHubToken, setIsSavingGitHubToken] = useState(false);
+  const [isHardResetting, setIsHardResetting] = useState(false);
   const [githubTokenError, setGithubTokenError] = useState<string | null>(null);
   const isDeveloperMode =
     location.pathname === "/" || location.pathname.startsWith("/repo/");
@@ -120,6 +122,12 @@ export function AppHeader() {
     setSavedGitHubToken("");
     setGithubTokenInput("");
     setGithubTokenError(null);
+  };
+
+  const handleHardReset = async () => {
+    setIsHardResetting(true);
+    setGithubTokenError(null);
+    await hardResetAppState();
   };
 
   return (
@@ -207,7 +215,18 @@ export function AppHeader() {
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <Button
-              disabled={!hasSavedGitHubToken || isSavingGitHubToken}
+              className="mr-auto"
+              disabled={isSavingGitHubToken || isHardResetting}
+              onClick={() => void handleHardReset()}
+              type="button"
+              variant="destructive"
+            >
+              {t("githubAuth.hardReset")}
+            </Button>
+            <Button
+              disabled={
+                !hasSavedGitHubToken || isSavingGitHubToken || isHardResetting
+              }
               onClick={() => void handleResetGitHubToken()}
               type="button"
               variant="destructive"
@@ -215,7 +234,7 @@ export function AppHeader() {
               {t("githubAuth.resetToken")}
             </Button>
             <Button
-              disabled={isSavingGitHubToken}
+              disabled={isSavingGitHubToken || isHardResetting}
               onClick={() => setGithubTokenModalOpen(false)}
               type="button"
               variant="ghost"
@@ -224,7 +243,9 @@ export function AppHeader() {
             </Button>
             <Button
               disabled={
-                isSavingGitHubToken || githubTokenInput.trim().length === 0
+                isSavingGitHubToken ||
+                isHardResetting ||
+                githubTokenInput.trim().length === 0
               }
               onClick={() => void handleSaveGitHubToken()}
               type="button"
