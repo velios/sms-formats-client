@@ -1695,6 +1695,10 @@ function useQuickPullRequestUpdate(params: {
         setPublishError(t("publish.updateError"));
         return;
       }
+      useFileContentStore.getState().invalidatePullRequestFileContents({
+        repository,
+        prNumber: sourceRef.prNumber,
+      });
       await onWorkspaceSynced(syncedResolution);
     } catch (error) {
       setPublishError(

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -295,6 +295,7 @@ vi.mock("@/domain/github", async () => {
   };
 });
 
+import { getGitHubUserToken } from "@/domain/github";
 import { BankWorkspace } from "./BankWorkspace";
 
 describe("BankWorkspace route init", () => {
@@ -643,5 +644,107 @@ describe("BankWorkspace route init", () => {
         prNumber: 123,
       })
     );
+  });
+
+  it("invalidates PR cache and reloads the workspace after a successful PR update", async () => {
+    vi.mocked(getGitHubUserToken).mockReturnValue("gh-token");
+    mocks.draftState.getChangedFiles.mockReturnValue([
+      {
+        filePath: "src/TBank_123/senders.txt",
+        content: "T-BANK",
+        isDeleted: false,
+        baseSha: "head-sha",
+      },
+    ]);
+    mocks.resolvePullRequestWorkspace
+      .mockResolvedValueOnce({
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "new-head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        ],
+      });
+    mocks.updatePullRequestHead.mockResolvedValue({
+      url: "https://github.com/zenmoney/sms-formats/pull/123",
+    });
+
+    render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      )
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "publish.updatePR" })
+    );
+
+    await waitFor(() =>
+      expect(mocks.updatePullRequestHead).toHaveBeenCalledWith(
+        "gh-token",
+        123,
+        [
+          {
+            path: "src/TBank_123/senders.txt",
+            content: "T-BANK",
+            delete: false,
+          },
+        ],
+        { owner: "zenmoney", repo: "sms-formats" }
+      )
+    );
+    await waitFor(() =>
+      expect(
+        mocks.fileContentStore.invalidatePullRequestFileContents
+      ).toHaveBeenCalledWith({
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+      })
+    );
+    await waitFor(() =>
+      expect(mocks.fetchRepoTree).toHaveBeenCalledWith("new-head-sha", {
+        owner: "zenmoney",
+        repo: "sms-formats",
+      })
+    );
+    await waitFor(() =>
+      expect(mocks.sourceState.setSource).toHaveBeenCalledWith({
+        type: "pr",
+        name: "pr-123",
+        sha: "new-head-sha",
+        prNumber: 123,
+      })
+    );
+    expect(mocks.draftState.discardAll).toHaveBeenCalled();
   });
 });
