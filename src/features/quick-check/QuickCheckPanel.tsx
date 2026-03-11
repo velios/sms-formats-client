@@ -289,6 +289,8 @@ export function QuickCheckPanel({
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const repository = useSourceStore((s) => s.repository);
   const sourceRefName = sourceRef?.sha ?? sourceRef?.name;
+  const prNumber =
+    sourceRef?.type === "pr" && sourceRef.prNumber ? sourceRef.prNumber : null;
 
   const [mode, setMode] = useState<QuickCheckMode>(initialMode);
   const [smsText, setSmsText] = useState(
@@ -375,9 +377,15 @@ export function QuickCheckPanel({
     setErrorMessage(null);
 
     try {
+      if (!prNumber) {
+        setErrorMessage(t("quickCheck.noSource"));
+        setRunState(null);
+        return;
+      }
       const prepared = await prepareFormatEntries({
         filePaths: formatPaths,
         draftStore,
+        prNumber,
         sourceRefName,
         repository,
       });
@@ -426,6 +434,7 @@ export function QuickCheckPanel({
     draftStore,
     formatPaths,
     mode,
+    prNumber,
     repository,
     smsText,
     sourceRefName,

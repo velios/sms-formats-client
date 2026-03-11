@@ -1,0 +1,542 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => {
+  const routeState = {
+    location: {
+      pathname: "/repo/zenmoney/sms-formats/pr/123",
+      search: "?file=src/TBank_123/formats/current.txt",
+    },
+    params: {
+      owner: "zenmoney",
+      repo: "sms-formats",
+      prNumber: "123",
+    },
+    navigate: vi.fn(),
+  };
+
+  const tree = [
+    { path: "src/TBank_123", sha: "tree-sha", type: "tree" as const },
+    {
+      path: "src/TBank_123/formats/current.txt",
+      sha: "current-sha",
+      type: "blob" as const,
+    },
+    {
+      path: "src/TBank_123/formats/another.txt",
+      sha: "another-sha",
+      type: "blob" as const,
+    },
+    {
+      path: "src/TBank_123/senders.txt",
+      sha: "senders-sha",
+      type: "blob" as const,
+    },
+  ];
+
+  const banks = [
+    {
+      displayName: "TBank",
+      folderPath: "src/TBank_123",
+      bankId: "123",
+      formatFiles: [
+        "src/TBank_123/formats/current.txt",
+        "src/TBank_123/formats/another.txt",
+      ],
+      hasSenders: true,
+    },
+  ];
+
+  const sourceState = {
+    repository: { owner: "zenmoney", repo: "sms-formats" },
+    sourceRef: null as
+      | {
+          type: "pr";
+          name: string;
+          sha: string;
+          prNumber: number;
+        }
+      | null,
+    sourceChangedFiles: [] as string[],
+    tree: [] as typeof tree,
+    banks: [] as typeof banks,
+    loading: false,
+    error: null as string | null,
+    setRepository: vi.fn((repository: { owner: string; repo: string }) => {
+      sourceState.repository = repository;
+    }),
+    setSource: vi.fn(
+      (
+        sourceRef:
+          | {
+              type: "pr";
+              name: string;
+              sha: string;
+              prNumber: number;
+            }
+          | null
+      ) => {
+        sourceState.sourceRef = sourceRef;
+      }
+    ),
+    setSourceChangedFiles: vi.fn((files: string[]) => {
+      sourceState.sourceChangedFiles = files;
+    }),
+    setTree: vi.fn((nextTree: typeof tree) => {
+      sourceState.tree = nextTree;
+    }),
+    setBanks: vi.fn((nextBanks: typeof banks) => {
+      sourceState.banks = nextBanks;
+    }),
+    setLoading: vi.fn((loading: boolean) => {
+      sourceState.loading = loading;
+    }),
+    setError: vi.fn((error: string | null) => {
+      sourceState.error = error;
+    }),
+  };
+
+  const useSourceStore = (<T,>(
+    selector: (state: typeof sourceState) => T
+  ) => selector(sourceState)) as ((
+    selector: (state: typeof sourceState) => unknown
+  ) => unknown) & { getState: () => typeof sourceState };
+  useSourceStore.getState = () => sourceState;
+
+  const draftState = {
+    drafts: new Map<string, unknown>(),
+    hasHydrated: true,
+    getStoredDraftsForScope: vi.fn(() => []),
+    activateScope: vi.fn(),
+    getChangedFiles: vi.fn<
+      () => Array<{
+        filePath: string;
+        content: string;
+        isDeleted: boolean;
+        baseSha: string;
+      }>
+    >(() => []),
+    getDeletedFiles: vi.fn(() => []),
+    getDraft: vi.fn(() => undefined),
+    resetBankToRemote: vi.fn(),
+    discardAll: vi.fn(),
+    clearAll: vi.fn(),
+    renameDraft: vi.fn(),
+  };
+
+  const useDraftStore = (() => draftState) as (() => typeof draftState) & {
+    getState: () => typeof draftState;
+  };
+  useDraftStore.getState = () => draftState;
+
+  return {
+    banks,
+    clearWorkspaceSession: vi.fn(),
+    draftState,
+    fetchPullRequestFiles: vi.fn(() => Promise.resolve([])),
+    fetchRepoTree: vi.fn(() => Promise.resolve(tree)),
+    fileContentStore: {
+      getCachedFileContent: vi.fn(() => undefined),
+      invalidatePullRequestFileContents: vi.fn(),
+      primeFileContent: vi.fn(() => Promise.resolve(null)),
+    },
+    getCachedPullRequestApprovalPermission: vi.fn(() => false),
+    getGitHubAuthChangeVersion: vi.fn(() => 0),
+    indexBanksFromTree: vi.fn(() => banks),
+    loadWorkspaceSession: vi.fn<() => unknown>(() => null),
+    resolvePullRequestWorkspace: vi.fn(() =>
+      Promise.resolve({
+        status: "supported" as const,
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          {
+            kind: "modify" as const,
+            path: "src/TBank_123/formats/current.txt",
+          },
+          {
+            kind: "modify" as const,
+            path: "src/TBank_123/formats/another.txt",
+          },
+        ],
+      })
+    ),
+    refreshPullRequestApprovalPermission: vi.fn(() => Promise.resolve(false)),
+    routeState,
+    saveWorkspaceSession: vi.fn(),
+    sourceState,
+    subscribeGitHubAuthChange: vi.fn(() => () => {}),
+    tree,
+    updatePullRequestHead: vi.fn(),
+    useDraftStore,
+    useSourceStore,
+  };
+});
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { defaultValue?: string }) =>
+      options?.defaultValue ?? key,
+  }),
+}));
+
+vi.mock("react-router-dom", () => ({
+  useLocation: () => mocks.routeState.location,
+  useNavigate: () => mocks.routeState.navigate,
+  useParams: () => mocks.routeState.params,
+  useSearchParams: () => [new URLSearchParams(mocks.routeState.location.search)],
+}));
+
+vi.mock("@/components/ui/button", () => ({
+  Button: ({
+    children,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props}>{children}</button>
+  ),
+}));
+
+vi.mock("@/components/ui/input", () => ({
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
+}));
+
+vi.mock("@/components/ui/spinner", () => ({
+  Spinner: () => <span>spinner</span>,
+}));
+
+vi.mock("@/components/ui/status-badge", () => ({
+  StatusBadge: ({
+    children,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+}));
+
+vi.mock("@/features/format-editor/FormatEditor", () => ({
+  FormatEditor: ({ filePath }: { filePath: string }) => (
+    <div data-testid="format-editor">{filePath}</div>
+  ),
+}));
+
+vi.mock("@/features/senders-editor/SendersEditor", () => ({
+  SendersEditor: () => <div data-testid="senders-editor" />,
+}));
+
+vi.mock("@/features/create-entity/CreateFormatModal", () => ({
+  CreateFormatModal: () => null,
+}));
+
+vi.mock("@/features/quick-check/QuickCheckPanel", () => ({
+  QuickCheckPanel: () => null,
+}));
+
+vi.mock("@/features/validation/ValidationPanel", () => ({
+  ValidationPanel: () => null,
+}));
+
+vi.mock("@/lib/utils", () => ({
+  cn: (...values: Array<string | false | null | undefined>) =>
+    values.filter(Boolean).join(" "),
+}));
+
+vi.mock("@/store", () => ({
+  useDraftStore: mocks.useDraftStore,
+  useSourceStore: mocks.useSourceStore,
+  waitForDraftStoreHydration: () => Promise.resolve(),
+}));
+
+vi.mock("@/store/workspace-session", () => ({
+  clearWorkspaceSession: mocks.clearWorkspaceSession,
+  loadWorkspaceSession: mocks.loadWorkspaceSession,
+  saveWorkspaceSession: mocks.saveWorkspaceSession,
+}));
+
+vi.mock("@/store/file-content-store", () => ({
+  useFileContentStore: {
+    getState: () => mocks.fileContentStore,
+  },
+}));
+
+vi.mock("@/domain/github", async () => {
+  const actual = await vi.importActual<typeof import("@/domain/github")>(
+    "@/domain/github"
+  );
+  return {
+    ...actual,
+    approvePullRequest: vi.fn(),
+    fetchFileContent: vi.fn(() => Promise.resolve("")),
+    fetchPullRequestFiles: mocks.fetchPullRequestFiles,
+    fetchRepoTree: mocks.fetchRepoTree,
+    getCachedPullRequestApprovalPermission:
+      mocks.getCachedPullRequestApprovalPermission,
+    getGitHubAuthChangeVersion: mocks.getGitHubAuthChangeVersion,
+    getGitHubUserToken: vi.fn(() => ""),
+    indexBanksFromTree: mocks.indexBanksFromTree,
+    refreshPullRequestApprovalPermission:
+      mocks.refreshPullRequestApprovalPermission,
+    resolvePullRequestWorkspace: mocks.resolvePullRequestWorkspace,
+    subscribeGitHubAuthChange: mocks.subscribeGitHubAuthChange,
+    updatePullRequestHead: mocks.updatePullRequestHead,
+  };
+});
+
+import { BankWorkspace } from "./BankWorkspace";
+
+describe("BankWorkspace route init", () => {
+  beforeEach(() => {
+    mocks.routeState.location.pathname = "/repo/zenmoney/sms-formats/pr/123";
+    mocks.routeState.location.search =
+      "?file=src/TBank_123/formats/current.txt";
+    mocks.routeState.params = {
+      owner: "zenmoney",
+      repo: "sms-formats",
+      prNumber: "123",
+    };
+    mocks.routeState.navigate.mockReset();
+
+    mocks.sourceState.repository = { owner: "zenmoney", repo: "sms-formats" };
+    mocks.sourceState.sourceRef = null;
+    mocks.sourceState.sourceChangedFiles = [];
+    mocks.sourceState.tree = [];
+    mocks.sourceState.banks = [];
+    mocks.sourceState.loading = false;
+    mocks.sourceState.error = null;
+    mocks.sourceState.setRepository.mockClear();
+    mocks.sourceState.setSource.mockClear();
+    mocks.sourceState.setSourceChangedFiles.mockClear();
+    mocks.sourceState.setTree.mockClear();
+    mocks.sourceState.setBanks.mockClear();
+    mocks.sourceState.setLoading.mockClear();
+    mocks.sourceState.setError.mockClear();
+
+    mocks.draftState.drafts = new Map();
+    mocks.draftState.getStoredDraftsForScope.mockReset();
+    mocks.draftState.getStoredDraftsForScope.mockReturnValue([]);
+    mocks.draftState.activateScope.mockReset();
+    mocks.draftState.getChangedFiles.mockReset();
+    mocks.draftState.getChangedFiles.mockReturnValue([]);
+    mocks.draftState.getDeletedFiles.mockReset();
+    mocks.draftState.getDeletedFiles.mockReturnValue([]);
+    mocks.draftState.getDraft.mockReset();
+    mocks.draftState.getDraft.mockReturnValue(undefined);
+    mocks.draftState.resetBankToRemote.mockReset();
+    mocks.draftState.discardAll.mockReset();
+    mocks.draftState.clearAll.mockReset();
+    mocks.draftState.renameDraft.mockReset();
+
+    mocks.clearWorkspaceSession.mockReset();
+    mocks.loadWorkspaceSession.mockReset();
+    mocks.loadWorkspaceSession.mockReturnValue(null);
+    mocks.saveWorkspaceSession.mockReset();
+
+    mocks.fetchPullRequestFiles.mockReset();
+    mocks.fetchPullRequestFiles.mockResolvedValue([]);
+    mocks.fetchRepoTree.mockReset();
+    mocks.fetchRepoTree.mockResolvedValue(mocks.tree);
+    mocks.fileContentStore.getCachedFileContent.mockReset();
+    mocks.fileContentStore.getCachedFileContent.mockReturnValue(undefined);
+    mocks.fileContentStore.invalidatePullRequestFileContents.mockReset();
+    mocks.fileContentStore.primeFileContent.mockReset();
+    mocks.fileContentStore.primeFileContent.mockResolvedValue(null);
+    mocks.indexBanksFromTree.mockReset();
+    mocks.indexBanksFromTree.mockReturnValue(mocks.banks);
+    mocks.resolvePullRequestWorkspace.mockReset();
+    mocks.resolvePullRequestWorkspace.mockResolvedValue({
+      status: "supported",
+      repository: { owner: "zenmoney", repo: "sms-formats" },
+      prNumber: 123,
+      headSha: "head-sha",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
+      changedFiles: [
+        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        { kind: "modify", path: "src/TBank_123/formats/another.txt" },
+      ],
+    });
+    mocks.refreshPullRequestApprovalPermission.mockReset();
+    mocks.refreshPullRequestApprovalPermission.mockResolvedValue(false);
+    mocks.getCachedPullRequestApprovalPermission.mockReset();
+    mocks.getCachedPullRequestApprovalPermission.mockReturnValue(false);
+    mocks.getGitHubAuthChangeVersion.mockReset();
+    mocks.getGitHubAuthChangeVersion.mockReturnValue(0);
+    mocks.subscribeGitHubAuthChange.mockReset();
+    mocks.subscribeGitHubAuthChange.mockReturnValue(() => {});
+    mocks.updatePullRequestHead.mockReset();
+  });
+
+  it("reuses the current PR workspace without showing a cold-start loader", async () => {
+    mocks.sourceState.sourceRef = {
+      type: "pr",
+      name: "pr-123",
+      sha: "head-sha",
+      prNumber: 123,
+    };
+    mocks.sourceState.sourceChangedFiles = [
+      "src/TBank_123/formats/current.txt",
+      "src/TBank_123/formats/another.txt",
+    ];
+    mocks.sourceState.tree = mocks.tree;
+    mocks.sourceState.banks = mocks.banks;
+    mocks.loadWorkspaceSession.mockReturnValue({
+      repository: { owner: "zenmoney", repo: "sms-formats" },
+      prNumber: 123,
+      headSha: "head-sha",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
+    });
+    mocks.resolvePullRequestWorkspace.mockImplementation(
+      () => new Promise(() => {})
+    );
+
+    render(<BankWorkspace />);
+
+    await waitFor(() => {
+      expect(screen.queryByText("app.loading")).not.toBeInTheDocument();
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      );
+    });
+  });
+
+  it("does not re-run PR route init when only the selected file changes", async () => {
+    const { rerender } = render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      )
+    );
+    expect(mocks.resolvePullRequestWorkspace).toHaveBeenCalledTimes(1);
+
+    mocks.routeState.location.search =
+      "?file=src/TBank_123/formats/another.txt";
+    rerender(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/another.txt"
+      )
+    );
+    expect(mocks.resolvePullRequestWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the current workspace visible and shows a stale notice when PR head changes with local drafts", async () => {
+    mocks.draftState.getChangedFiles.mockReturnValue([
+      {
+        filePath: "src/TBank_123/formats/current.txt",
+        content: "LOCAL",
+        isDeleted: false,
+        baseSha: "head-sha",
+      },
+    ]);
+    mocks.resolvePullRequestWorkspace
+      .mockResolvedValueOnce({
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "new-head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        ],
+      });
+
+    render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      )
+    );
+
+    window.dispatchEvent(new Event("focus"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "PR changed since your last local edits. You're viewing the cached previous version. Discard local changes and refresh the PR to continue."
+        )
+      ).toBeInTheDocument()
+    );
+    expect(screen.getByTestId("format-editor")).toBeInTheDocument();
+    expect(
+      mocks.fileContentStore.invalidatePullRequestFileContents
+    ).not.toHaveBeenCalled();
+  });
+
+  it("invalidates PR file cache and refreshes the workspace when head changes without local drafts", async () => {
+    mocks.resolvePullRequestWorkspace
+      .mockResolvedValueOnce({
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "new-head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        ],
+      });
+
+    render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      )
+    );
+
+    window.dispatchEvent(new Event("focus"));
+
+    await waitFor(() =>
+      expect(
+        mocks.fileContentStore.invalidatePullRequestFileContents
+      ).toHaveBeenCalledWith({
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+      })
+    );
+    await waitFor(() =>
+      expect(mocks.sourceState.setSource).toHaveBeenCalledWith({
+        type: "pr",
+        name: "pr-123",
+        sha: "new-head-sha",
+        prNumber: 123,
+      })
+    );
+  });
+});

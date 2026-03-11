@@ -30,7 +30,6 @@ import {
 } from "@/domain/format";
 import {
   approvePullRequest,
-  fetchFileContent,
   fetchPullRequestFiles,
   fetchRepoTree,
   getCachedPullRequestApprovalPermission,
@@ -60,11 +59,16 @@ import {
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
 import { cn } from "@/lib/utils";
-import { useDraftStore, useSourceStore } from "@/store";
+import {
+  useDraftStore,
+  useSourceStore,
+  waitForDraftStoreHydration,
+} from "@/store";
+import { useFileContentStore } from "@/store/file-content-store";
 import { makeDraftSourceKey } from "@/store/draft-scope";
-import { loadAllDrafts } from "@/store/persistence";
 import {
   clearWorkspaceSession,
+  loadWorkspaceSession,
   saveWorkspaceSession,
 } from "@/store/workspace-session";
 
@@ -372,8 +376,9 @@ function useBankFormatSearch(params: {
   formatSearch: string;
   formatTab: "all" | "recent";
   bankPath: string;
+  prNumber: number | null;
   repository: { owner: string; repo: string };
-  sourceRefNameForContent: string | undefined;
+  sourceHeadSha: string | null;
 }) {
   const {
     allFormatFiles,
@@ -382,8 +387,9 @@ function useBankFormatSearch(params: {
     formatSearch,
     formatTab,
     bankPath,
+    prNumber,
     repository,
-    sourceRefNameForContent,
+    sourceHeadSha,
   } = params;
   const [searchDocsByPath, setSearchDocsByPath] = useState<
     Map<string, FormatSearchDoc>
@@ -408,7 +414,7 @@ function useBankFormatSearch(params: {
     formatSearch,
     formatTab
   );
-  const searchSessionId = `${repository.owner}/${repository.repo}:${sourceRefNameForContent ?? ""}:${bankPath}`;
+  const searchSessionId = `${repository.owner}/${repository.repo}:${sourceHeadSha ?? ""}:${bankPath}`;
 
   useEffect(() => {
     indexingSessionRef.current = searchSessionId;
@@ -419,17 +425,31 @@ function useBankFormatSearch(params: {
 
   const loadRemoteSearchDoc = useCallback(
     async (path: string, sessionId: string) => {
-      if (!sourceRefNameForContent) {
+      if (!(prNumber && sourceHeadSha)) {
         return;
       }
       try {
-        const remoteContent = await fetchFileContent(
-          path,
-          sourceRefNameForContent,
-          repository
-        );
+        await useFileContentStore.getState().primeFileContent({
+          repository,
+          prNumber,
+          filePath: path,
+          refName: sourceHeadSha,
+          headSha: sourceHeadSha,
+          loadedFrom: "search-index",
+        });
         if (indexingSessionRef.current !== sessionId) {
           return;
+        }
+        const remoteContent = useFileContentStore.getState().getCachedFileContent(
+          {
+            repository,
+            prNumber,
+            filePath: path,
+            headSha: sourceHeadSha,
+          }
+        );
+        if (typeof remoteContent !== "string") {
+          throw new Error("missing-file-cache-entry");
         }
         const exampleText = extractExamplesForSearch(remoteContent, path);
         setSearchDocsByPath((prev) =>
@@ -448,11 +468,11 @@ function useBankFormatSearch(params: {
         }
       }
     },
-    [repository, sourceRefNameForContent]
+    [prNumber, repository, sourceHeadSha]
   );
 
   useEffect(() => {
-    if (!(shouldIndexExamples && sourceRefNameForContent)) {
+    if (!(shouldIndexExamples && prNumber && sourceHeadSha)) {
       return;
     }
 
@@ -490,7 +510,8 @@ function useBankFormatSearch(params: {
     loadRemoteSearchDoc,
     searchDocsByPath,
     shouldIndexExamples,
-    sourceRefNameForContent,
+    prNumber,
+    sourceHeadSha,
   ]);
 
   const indexedScopeSummary = useMemo(() => {
@@ -742,6 +763,7 @@ function BankActionsPanel(params: {
   canResetToSource: boolean;
   publishError: string | null;
   publishActionLabel: string;
+  publishDisabled: boolean;
   isCalculatingIntersections: boolean;
   isPublishing: boolean;
   isApprovingPullRequest: boolean;
@@ -764,6 +786,7 @@ function BankActionsPanel(params: {
     canResetToSource,
     publishError,
     publishActionLabel,
+    publishDisabled,
     isCalculatingIntersections,
     isPublishing,
     isApprovingPullRequest,
@@ -776,7 +799,7 @@ function BankActionsPanel(params: {
     <div className="flex flex-col gap-1.5">
       <Button
         className={workspaceActionButtonClassName}
-        disabled={isPublishing}
+        disabled={publishDisabled || isPublishing}
         onClick={onPublish}
         type="button"
         variant="primary"
@@ -867,6 +890,7 @@ export function FormatsPanel(params: {
   formatTab: "all" | "recent";
   setFormatTab: (value: "all" | "recent") => void;
   recentFiles: string[];
+  createFormatDisabled: boolean;
   setShowCreateFormat: (value: boolean) => void;
   formatSearch: string;
   setFormatSearch: (value: string) => void;
@@ -896,6 +920,7 @@ export function FormatsPanel(params: {
     formatTab,
     setFormatTab,
     recentFiles,
+    createFormatDisabled,
     setShowCreateFormat,
     formatSearch,
     setFormatSearch,
@@ -953,6 +978,7 @@ export function FormatsPanel(params: {
         </span>
         <Button
           aria-label={t("bank.createFormat")}
+          disabled={createFormatDisabled}
           onClick={() => setShowCreateFormat(true)}
           size="sm"
           type="button"
@@ -1681,6 +1707,73 @@ export function resolveWorkspaceEntryMode(params: {
   return persistedDrafts.length > 0 ? "draft" : "clean";
 }
 
+function isSameRepository(left: RepoRef, right: RepoRef): boolean {
+  return left.owner === right.owner && left.repo === right.repo;
+}
+
+function resolveReusableRouteInitState(params: {
+  parsedRoute: { repository: RepoRef; prNumber: number } | null;
+  legacyRedirectTarget: string | null;
+  currentRepository: RepoRef;
+  currentSourceRef: SourceRef | null;
+  currentSourceChangedFiles: string[];
+  hasTree: boolean;
+  hasBanks: boolean;
+}) {
+  const {
+    parsedRoute,
+    legacyRedirectTarget,
+    currentRepository,
+    currentSourceRef,
+    currentSourceChangedFiles,
+    hasTree,
+    hasBanks,
+  } = params;
+  if (legacyRedirectTarget || !parsedRoute) {
+    return null;
+  }
+
+  const persistedSession = loadWorkspaceSession();
+  if (!persistedSession) {
+    return null;
+  }
+
+  if (
+    !(
+      isSameRepository(parsedRoute.repository, persistedSession.repository) &&
+      isSameRepository(parsedRoute.repository, currentRepository) &&
+      currentSourceRef?.type === "pr" &&
+      currentSourceRef.prNumber === parsedRoute.prNumber &&
+      persistedSession.prNumber === parsedRoute.prNumber &&
+      currentSourceRef.sha === persistedSession.headSha &&
+      hasTree &&
+      hasBanks
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    status: "ready" as const,
+    session: {
+      status: "supported" as const,
+      repository: persistedSession.repository,
+      prNumber: persistedSession.prNumber,
+      headSha: persistedSession.headSha,
+      bankPath: persistedSession.bankPath,
+      writable: persistedSession.writable,
+      readOnlyReason: persistedSession.readOnlyReason,
+      changedFiles: currentSourceChangedFiles.map((path) => ({
+        kind: "modify" as const,
+        path,
+      })),
+    },
+    mode: (persistedSession.writable ? "clean" : "read-only") as
+      | "clean"
+      | "read-only",
+  };
+}
+
 function usePullRequestRouteInit(params: {
   locationPathname: string;
   locationSearch: string;
@@ -1697,7 +1790,6 @@ function usePullRequestRouteInit(params: {
   const setBanks = useSourceStore((state) => state.setBanks);
   const setLoading = useSourceStore((state) => state.setLoading);
   const setError = useSourceStore((state) => state.setError);
-  const [state, setState] = useState<RouteInitState>({ status: "loading" });
   const showStaleSession = useCallback((session: ActiveRouteSession) => {
     setState({
       status: "stale",
@@ -1730,12 +1822,30 @@ function usePullRequestRouteInit(params: {
       }),
     [routeParams.owner, routeParams.prNumber, routeParams.repo]
   );
+  const legacyRedirectTarget = useMemo(
+    () => getLegacyRouteRedirectPath(locationPathname, locationSearch),
+    [locationPathname, locationSearch]
+  );
+  const reusableState = useMemo(
+    () => {
+      const sourceState = useSourceStore.getState();
+      return resolveReusableRouteInitState({
+        parsedRoute,
+        legacyRedirectTarget,
+        currentRepository: sourceState.repository,
+        currentSourceRef: sourceState.sourceRef,
+        currentSourceChangedFiles: sourceState.sourceChangedFiles,
+        hasTree: sourceState.tree.length > 0,
+        hasBanks: sourceState.banks.length > 0,
+      });
+    },
+    [legacyRedirectTarget, parsedRoute]
+  );
+  const [state, setState] = useState<RouteInitState>(
+    () => reusableState ?? { status: "loading" }
+  );
 
   useEffect(() => {
-    const legacyRedirectTarget = getLegacyRouteRedirectPath(
-      locationPathname,
-      locationSearch
-    );
     if (legacyRedirectTarget) {
       clearWorkspaceSession();
       navigate(legacyRedirectTarget, { replace: true });
@@ -1744,16 +1854,26 @@ function usePullRequestRouteInit(params: {
     if (!parsedRoute) {
       clearWorkspaceSession();
       navigate("/", { replace: true });
+    }
+  }, [legacyRedirectTarget, navigate, parsedRoute]);
+
+  useEffect(() => {
+    if (legacyRedirectTarget || !parsedRoute) {
       return;
     }
 
     let cancelled = false;
-    setState({ status: "loading" });
-    setLoading(true);
+    if (!reusableState) {
+      setState({ status: "loading" });
+      setLoading(true);
+    } else {
+      setLoading(false);
+    }
     setError(null);
 
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: route init intentionally handles all PR-only entry branches in one place.
     const loadWorkspace = async () => {
+      const sourceState = useSourceStore.getState();
       try {
         const resolution = await resolvePullRequestWorkspace(
           parsedRoute.prNumber,
@@ -1777,10 +1897,14 @@ function usePullRequestRouteInit(params: {
           return;
         }
 
-        const tree = await fetchRepoTree(
-          resolution.headSha,
-          parsedRoute.repository
-        );
+        const canReuseCurrentWorkspaceData =
+          reusableState?.status === "ready" &&
+          reusableState.session.headSha === resolution.headSha &&
+          sourceState.tree.length > 0 &&
+          sourceState.banks.length > 0;
+        const tree = canReuseCurrentWorkspaceData
+          ? sourceState.tree
+          : await fetchRepoTree(resolution.headSha, parsedRoute.repository);
         if (cancelled) {
           return;
         }
@@ -1799,17 +1923,20 @@ function usePullRequestRouteInit(params: {
           },
           parsedRoute.repository
         );
-        const persistedDrafts = await loadAllDrafts(draftScopeKey);
+        await waitForDraftStoreHydration();
         if (cancelled) {
           return;
         }
+        const persistedDrafts =
+          useDraftStore.getState().getStoredDraftsForScope(draftScopeKey);
 
-        useDraftStore.getState().clearAll();
         setRepository(parsedRoute.repository);
         setSource(sourceRef);
         setSourceChangedFiles(resolution.changedFiles.map((file) => file.path));
-        setTree(tree);
-        setBanks(indexBanksFromTree(tree));
+        if (!canReuseCurrentWorkspaceData) {
+          setTree(tree);
+          setBanks(indexBanksFromTree(tree));
+        }
         saveActiveRouteSession(parsedRoute.repository, resolution);
         const entryMode = resolveWorkspaceEntryMode({
           headSha: resolution.headSha,
@@ -1817,20 +1944,19 @@ function usePullRequestRouteInit(params: {
           writable: resolution.writable,
         });
         if (entryMode === "stale") {
+          useDraftStore.getState().activateScope(draftScopeKey, false);
           showStaleSession(resolution);
           return;
         }
         if (entryMode === "read-only") {
+          useDraftStore.getState().activateScope(draftScopeKey, false);
           showReadOnlySession(resolution);
           return;
         }
 
-        if (persistedDrafts.length > 0) {
-          await useDraftStore.getState().restoreFromDB(draftScopeKey);
-          if (cancelled) {
-            return;
-          }
-        }
+        useDraftStore
+          .getState()
+          .activateScope(draftScopeKey, entryMode === "draft");
 
         showReadySession(resolution, entryMode);
       } catch (error) {
@@ -1856,9 +1982,9 @@ function usePullRequestRouteInit(params: {
     };
   }, [
     locationPathname,
-    locationSearch,
     navigate,
     parsedRoute,
+    reusableState,
     setBanks,
     setError,
     setLoading,
@@ -1915,6 +2041,8 @@ export function BankWorkspace() {
   );
   const activeSession =
     routeInitState.status === "ready" ? routeInitState.session : null;
+  const [staleWorkspaceSession, setStaleWorkspaceSession] =
+    useState<ActiveRouteSession | null>(null);
   const tree = useSourceStore((s) => s.tree);
   const [showCreateFormat, setShowCreateFormat] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
@@ -2052,6 +2180,7 @@ export function BankWorkspace() {
     [allFormatFiles, localDeletedFormatFiles]
   );
 
+  const sourceHeadSha = sourceRef?.sha ?? null;
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
   const updateSourceFromSession = useCallback(
     (session: ActiveRouteSession) => {
@@ -2069,6 +2198,7 @@ export function BankWorkspace() {
   );
   const handleWorkspaceStale = useCallback(
     (session: ActiveRouteSession) => {
+      setStaleWorkspaceSession(null);
       updateSourceFromSession(session);
       routeInit.showStaleSession(session);
     },
@@ -2076,6 +2206,7 @@ export function BankWorkspace() {
   );
   const handleWorkspaceReadOnly = useCallback(
     (session: ActiveRouteSession) => {
+      setStaleWorkspaceSession(null);
       updateSourceFromSession(session);
       routeInit.showReadOnlySession(session);
     },
@@ -2084,6 +2215,7 @@ export function BankWorkspace() {
   const handleWorkspaceSynced = useCallback(
     async (session: ActiveRouteSession) => {
       const tree = await fetchRepoTree(session.headSha, repository);
+      setStaleWorkspaceSession(null);
       updateSourceFromSession(session);
       setTree(tree);
       setBanks(indexBanksFromTree(tree));
@@ -2095,6 +2227,12 @@ export function BankWorkspace() {
     },
     [repository, routeInit, setBanks, setTree, updateSourceFromSession]
   );
+
+  useEffect(() => {
+    if (routeInitState.status !== "ready") {
+      setStaleWorkspaceSession(null);
+    }
+  }, [routeInitState.status]);
 
   useEffect(() => {
     intersectionRunIdRef.current += 1;
@@ -2134,9 +2272,18 @@ export function BankWorkspace() {
           return;
         }
         if (resolution.headSha !== routeInitState.session.headSha) {
-          handleWorkspaceStale(resolution);
+          if (useDraftStore.getState().getChangedFiles().length > 0) {
+            setStaleWorkspaceSession(resolution);
+            return;
+          }
+          useFileContentStore.getState().invalidatePullRequestFileContents({
+            repository,
+            prNumber: routeInitState.session.prNumber,
+          });
+          await handleWorkspaceSynced(resolution);
           return;
         }
+        setStaleWorkspaceSession(null);
         if (!resolution.writable && routeInitState.session.writable) {
           handleWorkspaceReadOnly(resolution);
         }
@@ -2162,8 +2309,8 @@ export function BankWorkspace() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [
+    handleWorkspaceSynced,
     handleWorkspaceReadOnly,
-    handleWorkspaceStale,
     repository,
     routeInitState,
   ]);
@@ -2201,8 +2348,9 @@ export function BankWorkspace() {
     formatSearch,
     formatTab,
     bankPath,
+    prNumber: sourceRef?.type === "pr" ? (sourceRef.prNumber ?? null) : null,
     repository,
-    sourceRefNameForContent,
+    sourceHeadSha,
   });
 
   const recentFiles = useMemo(() => {
@@ -2253,9 +2401,15 @@ export function BankWorkspace() {
     setIntersectionLoadErrorsCount(0);
 
     try {
+      const prNumber =
+        sourceRef?.type === "pr" && sourceRef.prNumber ? sourceRef.prNumber : 0;
+      if (!prNumber) {
+        throw new Error("missing-pr-number");
+      }
       const prepared = await prepareFormatEntries({
         filePaths: quickCheckFormatPaths,
         draftStore,
+        prNumber,
         sourceRefName: sourceRefNameForContent,
         repository,
       });
@@ -2388,6 +2542,8 @@ export function BankWorkspace() {
     repository,
     sourceRef,
   });
+  const workspaceReadOnly =
+    activeSession?.writable === false || staleWorkspaceSession !== null;
   const {
     showApprovePullRequestButton,
     isApprovingPullRequest,
@@ -2420,8 +2576,19 @@ export function BankWorkspace() {
       ? (sourceRef as typeof sourceRef & { sha: string })
       : null,
     t,
-    writable: activeSession?.writable ?? false,
+    writable: (activeSession?.writable ?? false) && !workspaceReadOnly,
   });
+  const handleDiscardLocalChangesAndRefresh = useCallback(() => {
+    if (!staleWorkspaceSession) {
+      return;
+    }
+    useDraftStore.getState().discardAll();
+    useFileContentStore.getState().invalidatePullRequestFileContents({
+      repository,
+      prNumber: staleWorkspaceSession.prNumber,
+    });
+    void handleWorkspaceSynced(staleWorkspaceSession);
+  }, [handleWorkspaceSynced, repository, staleWorkspaceSession]);
 
   useAutoSelectFormat({
     workspaceReady: routeInitState.status === "ready",
@@ -2580,12 +2747,14 @@ export function BankWorkspace() {
           onPublish={handlePublishAction}
           onResetToSource={handleResetToSource}
           publishActionLabel={publishActionLabel}
+          publishDisabled={workspaceReadOnly}
           publishError={publishError}
           showApprovePullRequestButton={showApprovePullRequestButton}
           t={t}
         />
 
         <FormatsPanel
+          createFormatDisabled={workspaceReadOnly}
           deletedFormatFiles={localDeletedFormatFiles}
           formatIntersectionStats={formatIntersectionStats}
           formatSearch={formatSearch}
@@ -2620,10 +2789,29 @@ export function BankWorkspace() {
 
       {/* ─── Main content ─── */}
       <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
+        {staleWorkspaceSession && (
+          <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--c-warning)] bg-[color:var(--c-warning-soft)] px-4 py-3 text-sm text-[color:var(--c-warning)]">
+            <span>
+              {t("workspace.cachedStaleNotice", {
+                defaultValue:
+                  "PR changed since your last local edits. You're viewing the cached previous version. Discard local changes and refresh the PR to continue.",
+              })}
+            </span>
+            <Button
+              onClick={handleDiscardLocalChangesAndRefresh}
+              type="button"
+              variant="ghost"
+            >
+              {t("workspace.discardAndRefresh", {
+                defaultValue: "Discard local changes and refresh PR",
+              })}
+            </Button>
+          </div>
+        )}
         {renderWorkspaceContent({
           showSenders,
           bankPath,
-          readOnly: activeSession?.writable === false,
+          readOnly: workspaceReadOnly,
           selectedFile,
           allFormatFiles,
           handleRenameFile,
@@ -2653,7 +2841,7 @@ export function BankWorkspace() {
             handleSelectFile(path);
             setShowCreateFormat(false);
           }}
-          readOnly={activeSession?.writable === false}
+          readOnly={workspaceReadOnly}
         />
       )}
       {false}

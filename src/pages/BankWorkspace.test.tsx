@@ -35,6 +35,7 @@ function renderFormatsPanel(intersectingOtherFormats: number) {
       }
       formatSearch=""
       formatTab="all"
+      createFormatDisabled={false}
       handleSelectFile={handleSelectFile}
       handleSelectSenders={vi.fn()}
       localChangedFormatFiles={new Set()}

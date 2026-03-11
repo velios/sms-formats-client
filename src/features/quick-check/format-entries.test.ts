@@ -12,6 +12,40 @@ describe("prepareFormatEntries", () => {
     fetchFileContentMock.mockReset();
   });
 
+  it("reuses remote content from the shared file content store", async () => {
+    const { useFileContentStore } = await import("@/store/file-content-store");
+    useFileContentStore.setState({ entries: {} });
+    useFileContentStore.getState().setFileContentEntry({
+      repository: { owner: "zenmoney", repo: "sms-formats" },
+      prNumber: 123,
+      filePath: "src/Bank/formats/cached.txt",
+      content:
+        "^(PAY .*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nPAY 100",
+      lastResolvedHeadSha: "head-sha",
+      loadedFrom: "editor",
+      status: "ready",
+    });
+
+    const result = await prepareFormatEntries({
+      filePaths: ["src/Bank/formats/cached.txt"],
+      draftStore: {
+        getDraft() {
+          return undefined;
+        },
+      },
+      prNumber: 123,
+      sourceRefName: "head-sha",
+      repository: { owner: "zenmoney", repo: "sms-formats" },
+    });
+
+    expect(result.remoteFetchedCount).toBe(0);
+    expect(result.cachedCount).toBe(1);
+    expect(result.entries.map((entry) => entry.filePath)).toEqual([
+      "src/Bank/formats/cached.txt",
+    ]);
+    expect(fetchFileContentMock).not.toHaveBeenCalled();
+  });
+
   it("skips formats deleted in local drafts", async () => {
     const draftStore = {
       getDraft(filePath: string) {
@@ -37,9 +71,9 @@ describe("prepareFormatEntries", () => {
         "src/Bank/formats/active.txt",
       ],
       draftStore,
+      prNumber: 123,
       sourceRefName: "main",
       repository: { owner: "zenmoney", repo: "sms-formats" },
-      cache: new Map(),
     });
 
     expect(result.entries.map((entry) => entry.filePath)).toEqual([

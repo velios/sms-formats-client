@@ -26,7 +26,7 @@ vi.mock("@/store", () => ({
   useSourceStore: (selector: (state: unknown) => unknown) =>
     selector({
       repository: { owner: "flocktory", repo: "sms-formats-client" },
-      sourceRef: { name: "main" },
+      sourceRef: { type: "pr", name: "pr-123", sha: "head-sha", prNumber: 123 },
     }),
 }));
 
@@ -82,8 +82,9 @@ describe("QuickCheckPanel", () => {
     expect(prepareFormatEntriesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePaths: ["banks/pumb/formats/match.txt"],
+        prNumber: 123,
         repository: { owner: "flocktory", repo: "sms-formats-client" },
-        sourceRefName: "main",
+        sourceRefName: "head-sha",
       })
     );
 

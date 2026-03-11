@@ -1,9 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  fetchFileContent,
-  fetchOpenPRs,
-  fetchSourceRepoForks,
-} from "@/domain/github";
+import { fetchOpenPRs, fetchSourceRepoForks } from "@/domain/github";
 import type { RepoRef } from "@/domain/types";
 import { useDraftStore, useSourceStore } from "@/store";
 import { clearWorkspaceSession } from "@/store/workspace-session";
@@ -33,24 +29,6 @@ export function useAvailableSourceRepos(enabled = true) {
     enabled,
     staleTime: SOURCE_CACHE_STALE_MS,
     gcTime: SOURCE_CACHE_GC_MS,
-  });
-}
-
-export function useFileContent(
-  path: string | undefined,
-  ref: string | undefined
-) {
-  const repository = useSourceStore((state) => state.repository);
-  return useQuery({
-    queryKey: ["file", repoKey(repository), path, ref],
-    queryFn: async () => {
-      if (!(path && ref)) {
-        throw new Error("Missing path or ref");
-      }
-      return fetchFileContent(path, ref, repository);
-    },
-    enabled: !!path && !!ref,
-    staleTime: 5 * 60_000,
   });
 }
 

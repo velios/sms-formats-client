@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { config } from "@/config";
 import { parseFormatFile, serializeFormat } from "@/domain/format";
 import { RegexLab } from "@/features/regex-lab/RegexLab";
-import { useFileContent } from "@/hooks/useGitHub";
+import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
 import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
@@ -69,11 +69,14 @@ export function FormatEditor({
   const repository = useSourceStore((s) => s.repository);
   const draftStore = useDraftStore();
 
-  // Load remote content
-  const { data: remoteContent, isLoading } = useFileContent(
+  const {
+    data: remoteContent,
+    isLoading,
+    error: remoteContentError,
+  } = useWorkspaceFileContent({
     filePath,
-    sourceRef?.sha ?? sourceRef?.name
-  );
+    loadedFrom: "editor",
+  });
 
   const draft = draftStore.getDraft(filePath);
   const currentContent = draft?.content ?? remoteContent ?? "";
@@ -289,6 +292,9 @@ export function FormatEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      {remoteContentError && (
+        <StatusBadge variant="error">{remoteContentError}</StatusBadge>
+      )}
       {/* Compact header: mode tabs + file name + actions */}
       <div className="flex min-h-[52px] shrink-0 flex-wrap items-center gap-2">
         <div className="shrink-0 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-1">

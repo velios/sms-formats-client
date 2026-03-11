@@ -5,7 +5,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { config } from "@/config";
-import { useFileContent } from "@/hooks/useGitHub";
+import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
 import { useDraftStore, useSourceStore } from "@/store";
 
 interface Props {
@@ -20,10 +20,14 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
   const draftStore = useDraftStore();
   const filePath = `${bankPath}/senders.txt`;
 
-  const { data: remoteContent, isLoading } = useFileContent(
+  const {
+    data: remoteContent,
+    isLoading,
+    error: remoteContentError,
+  } = useWorkspaceFileContent({
     filePath,
-    sourceRef?.sha ?? sourceRef?.name
-  );
+    loadedFrom: "editor",
+  });
 
   const draft = draftStore.getDraft(filePath);
   const currentContent = draft?.content ?? remoteContent ?? "";
@@ -75,6 +79,9 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      {remoteContentError && (
+        <StatusBadge variant="error">{remoteContentError}</StatusBadge>
+      )}
       <div className="flex min-h-[52px] shrink-0 flex-wrap items-center gap-2">
         <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
           <span className="font-medium font-mono">{fileName}</span>

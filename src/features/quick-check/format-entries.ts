@@ -1,8 +1,6 @@
 import { parseFormatFile } from "@/domain/format";
-import { fetchFileContent } from "@/domain/github";
 import type { RepoRef } from "@/domain/types";
-
-const QUICK_CHECK_PARALLELISM = 4;
+import { useFileContentStore } from "@/store/file-content-store";
 
 export type RegexSource = "draft" | "remote";
 
@@ -35,30 +33,10 @@ export interface PreparedFormatEntries {
 interface LocalFormatPreparation {
   preparedEntries: CachedFormatEntry[];
   remotePathsToLoad: string[];
-  cachedCount: number;
 }
-
-interface RemoteLoadResult {
-  entries: CachedFormatEntry[];
-  loadErrorsCount: number;
-}
-
-export const sharedFormatEntryCache = new Map<string, CachedFormatEntry>();
 
 function extractFormatFileName(path: string): string {
   return path.split("/").pop() ?? path;
-}
-
-function buildDraftFingerprint(timestamp: number): string {
-  return `draft:${timestamp}`;
-}
-
-function buildRemoteFingerprint(refName: string): string {
-  return `remote:${refName}`;
-}
-
-function buildCacheKey(repository: RepoRef, filePath: string): string {
-  return `${repository.owner}/${repository.repo}:${filePath}`;
 }
 
 function normalizeExampleText(value: string): string {
@@ -87,27 +65,15 @@ function parseFormatEntry(params: {
 function collectLocalFormatEntries(params: {
   filePaths: string[];
   draftStore: DraftStoreLike;
-  cache: Map<string, CachedFormatEntry>;
-  sourceRefName: string;
-  repository: RepoRef;
 }): LocalFormatPreparation {
-  const { filePaths, draftStore, cache, sourceRefName, repository } = params;
+  const { filePaths, draftStore } = params;
   const preparedEntries: CachedFormatEntry[] = [];
   const remotePathsToLoad: string[] = [];
-  let cachedCount = 0;
 
   for (const filePath of filePaths) {
-    const cacheKey = buildCacheKey(repository, filePath);
     const draft = draftStore.getDraft(filePath);
     if (draft) {
       if (draft.isDeleted) {
-        continue;
-      }
-      const draftFingerprint = buildDraftFingerprint(draft.timestamp);
-      const cached = cache.get(cacheKey);
-      if (cached && cached.fingerprint === draftFingerprint) {
-        preparedEntries.push(cached);
-        cachedCount += 1;
         continue;
       }
 
@@ -115,18 +81,9 @@ function collectLocalFormatEntries(params: {
         filePath,
         content: draft.content,
         source: "draft",
-        fingerprint: draftFingerprint,
+        fingerprint: `draft:${draft.timestamp}`,
       });
-      cache.set(cacheKey, parsedDraftEntry);
       preparedEntries.push(parsedDraftEntry);
-      continue;
-    }
-
-    const remoteFingerprint = buildRemoteFingerprint(sourceRefName);
-    const cached = cache.get(cacheKey);
-    if (cached && cached.fingerprint === remoteFingerprint) {
-      preparedEntries.push(cached);
-      cachedCount += 1;
       continue;
     }
 
@@ -136,83 +93,54 @@ function collectLocalFormatEntries(params: {
   return {
     preparedEntries,
     remotePathsToLoad,
-    cachedCount,
   };
-}
-
-async function loadRemoteFormatEntries(params: {
-  filePaths: string[];
-  refName: string;
-  repository: RepoRef;
-  cache: Map<string, CachedFormatEntry>;
-}): Promise<RemoteLoadResult> {
-  const { filePaths, refName, repository, cache } = params;
-  const fingerprint = buildRemoteFingerprint(refName);
-  const queue = [...filePaths];
-  const entries: CachedFormatEntry[] = [];
-  let loadErrorsCount = 0;
-
-  const workerCount = Math.min(QUICK_CHECK_PARALLELISM, queue.length);
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (queue.length > 0) {
-      const filePath = queue.shift();
-      if (!filePath) {
-        break;
-      }
-
-      try {
-        const content = await fetchFileContent(filePath, refName, repository);
-        const parsedEntry = parseFormatEntry({
-          filePath,
-          content,
-          source: "remote",
-          fingerprint,
-        });
-        cache.set(buildCacheKey(repository, filePath), parsedEntry);
-        entries.push(parsedEntry);
-      } catch {
-        loadErrorsCount += 1;
-      }
-    }
-  });
-
-  await Promise.all(workers);
-  return { entries, loadErrorsCount };
 }
 
 export async function prepareFormatEntries(params: {
   filePaths: string[];
   draftStore: DraftStoreLike;
+  prNumber: number;
   sourceRefName: string;
   repository: RepoRef;
-  cache?: Map<string, CachedFormatEntry>;
 }): Promise<PreparedFormatEntries> {
-  const {
-    filePaths,
-    draftStore,
-    sourceRefName,
-    repository,
-    cache = sharedFormatEntryCache,
-  } = params;
+  const { filePaths, draftStore, prNumber, sourceRefName, repository } = params;
 
   const localPreparation = collectLocalFormatEntries({
     filePaths,
     draftStore,
-    cache,
-    sourceRefName,
-    repository,
   });
-  const remoteLoad = await loadRemoteFormatEntries({
+  const remoteLoad = await useFileContentStore.getState().primeFileContents({
+    repository,
+    prNumber,
     filePaths: localPreparation.remotePathsToLoad,
     refName: sourceRefName,
-    repository,
-    cache,
+    headSha: sourceRefName,
+    loadedFrom: "quick-check",
+  });
+  const remoteEntries = localPreparation.remotePathsToLoad.flatMap((filePath) => {
+    const content = useFileContentStore.getState().getCachedFileContent({
+      repository,
+      prNumber,
+      filePath,
+      headSha: sourceRefName,
+    });
+    if (typeof content !== "string") {
+      return [];
+    }
+    return [
+      parseFormatEntry({
+        filePath,
+        content,
+        source: "remote",
+        fingerprint: `remote:${sourceRefName}`,
+      }),
+    ];
   });
 
   return {
-    entries: [...localPreparation.preparedEntries, ...remoteLoad.entries],
+    entries: [...localPreparation.preparedEntries, ...remoteEntries],
     loadErrorsCount: remoteLoad.loadErrorsCount,
-    remoteFetchedCount: localPreparation.remotePathsToLoad.length,
-    cachedCount: localPreparation.cachedCount,
+    remoteFetchedCount: remoteLoad.remoteFetchedCount,
+    cachedCount: remoteLoad.cachedCount,
   };
 }

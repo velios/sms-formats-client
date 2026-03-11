@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { parseFormatFile } from "@/domain/format";
-import { fetchFileContent } from "@/domain/github";
 import type { BankInfo, RepoRef, ValidationIssue } from "@/domain/types";
 import {
   checkCrossFormatCollisions,
   validateFormat,
 } from "@/domain/validation";
+import { useFileContentStore } from "@/store/file-content-store";
 import { useDraftStore, useSourceStore } from "@/store";
 
 interface Props {
@@ -29,11 +29,12 @@ interface ValidationDraftStore {
 
 async function loadLatestFormatContent(params: {
   path: string;
+  prNumber: number;
   sourceRefName: string | null;
   repository: RepoRef;
   draftStore: ValidationDraftStore;
 }): Promise<string | null> {
-  const { path, sourceRefName, repository, draftStore } = params;
+  const { path, prNumber, sourceRefName, repository, draftStore } = params;
   const draft = draftStore.getDraft(path);
   if (draft && draft.content !== draft.remoteContent) {
     return draft.content;
@@ -41,24 +42,40 @@ async function loadLatestFormatContent(params: {
   if (!sourceRefName) {
     return draft?.content ?? null;
   }
-  try {
-    return await fetchFileContent(path, sourceRefName, repository);
-  } catch {
-    return draft?.content ?? null;
-  }
+  await useFileContentStore.getState().primeFileContent({
+    repository,
+    prNumber,
+    filePath: path,
+    refName: sourceRefName,
+    headSha: sourceRefName,
+    loadedFrom: "validation",
+  });
+  return (
+    useFileContentStore.getState().getCachedFileContent({
+      repository,
+      prNumber,
+      filePath: path,
+      headSha: sourceRefName,
+    }) ??
+    draft?.content ??
+    null
+  );
 }
 
 async function collectChangedFormatContents(params: {
   changedFormatPaths: string[];
+  prNumber: number;
   sourceRefName: string | null;
   repository: RepoRef;
   draftStore: ValidationDraftStore;
 }): Promise<Map<string, string>> {
-  const { changedFormatPaths, sourceRefName, repository, draftStore } = params;
+  const { changedFormatPaths, prNumber, sourceRefName, repository, draftStore } =
+    params;
   const entries = await Promise.all(
     changedFormatPaths.map(async (path) => {
       const latestContent = await loadLatestFormatContent({
         path,
+        prNumber,
         sourceRefName,
         repository,
         draftStore,
@@ -129,13 +146,20 @@ export function ValidationPanel({
       }
 
       const sourceRefName = sourceRef?.sha ?? sourceRef?.name ?? null;
+      const prNumber =
+        sourceRef?.type === "pr" && sourceRef.prNumber ? sourceRef.prNumber : 0;
       if (changedFormatPaths.length === 0) {
+        setIssues([]);
+        return;
+      }
+      if (!prNumber) {
         setIssues([]);
         return;
       }
 
       const formatContents = await collectChangedFormatContents({
         changedFormatPaths,
+        prNumber,
         sourceRefName,
         repository,
         draftStore,
