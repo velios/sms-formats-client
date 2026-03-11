@@ -75,13 +75,25 @@ vi.mock("@/lib/utils", () => ({
 function RegexLabHarness() {
   const [activeExampleIndex, setActiveExampleIndex] = React.useState(0);
   const [examples, setExamples] = React.useState(["PAY 100", "PAY 200"]);
+  const handleOpenIntersectionFileInApp = vi.fn();
 
   return (
     <RegexLab
       activeExampleIndex={activeExampleIndex}
       columns={[]}
       examples={examples}
-      intersectionExamples={["PAY 300", "PAY 400"]}
+      intersectionExamples={[
+        {
+          fileName: "another.txt",
+          filePath: "banks/pumb/formats/another.txt",
+          text: "PAY 300",
+        },
+        {
+          fileName: "third.txt",
+          filePath: "banks/pumb/formats/third.txt",
+          text: "PAY 400",
+        },
+      ]}
       onActiveExampleChange={setActiveExampleIndex}
       onAddExample={() => undefined}
       onColumnsChange={() => undefined}
@@ -93,6 +105,7 @@ function RegexLabHarness() {
         )
       }
       onRegexChange={() => undefined}
+      onOpenIntersectionFileInApp={handleOpenIntersectionFileInApp}
       onRemoveExample={() => undefined}
       regex="^PAY (\\d+)$"
     />
@@ -125,7 +138,7 @@ describe("RegexLab intersection example toggle", () => {
     expect(textarea).toHaveValue("PAY 300");
     expect(textarea).toHaveAttribute("readonly");
 
-    fireEvent.click(screen.getByRole("button", { name: /#2/ }));
+    fireEvent.click(screen.getByRole("button", { name: "#2" }));
 
     expect(textarea).toHaveValue("PAY 400");
 
@@ -133,5 +146,45 @@ describe("RegexLab intersection example toggle", () => {
 
     expect(textarea).toHaveValue("PAY 100");
     expect(textarea).not.toHaveAttribute("readonly");
+  });
+
+  it("opens the linked file from an intersection tab action", () => {
+    const handleOpenIntersectionFileInApp = vi.fn();
+
+    render(
+      <RegexLab
+        activeExampleIndex={0}
+        columns={[]}
+        examples={["PAY 100"]}
+        intersectionExamples={[
+          {
+            fileName: "another.txt",
+            filePath: "banks/pumb/formats/another.txt",
+            text: "PAY 300",
+          },
+        ]}
+        onActiveExampleChange={() => undefined}
+        onAddExample={() => undefined}
+        onColumnsChange={() => undefined}
+        onExampleChange={() => undefined}
+        onOpenIntersectionFileInApp={handleOpenIntersectionFileInApp}
+        onRegexChange={() => undefined}
+        onRemoveExample={() => undefined}
+        regex="^PAY (\\d+)$"
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "editor.showIntersections" })
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "quickCheck.openInApp: another.txt",
+      })
+    );
+
+    expect(handleOpenIntersectionFileInApp).toHaveBeenCalledWith(
+      "banks/pumb/formats/another.txt"
+    );
   });
 });

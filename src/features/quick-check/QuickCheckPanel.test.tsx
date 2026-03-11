@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { prepareFormatEntriesMock } = vi.hoisted(() => ({
@@ -89,5 +89,47 @@ describe("QuickCheckPanel", () => {
     );
 
     expect(await screen.findByText("match.txt")).toBeInTheDocument();
+  });
+
+  it("opens a matched file in app and closes the panel", async () => {
+    prepareFormatEntriesMock.mockResolvedValue({
+      entries: [
+        {
+          examples: ["Matched SMS text"],
+          fileName: "match.txt",
+          filePath: "banks/pumb/formats/match.txt",
+          fingerprint: "remote:main",
+          regex: "Matched SMS text",
+          source: "remote",
+        },
+      ],
+      loadErrorsCount: 0,
+      remoteFetchedCount: 1,
+      cachedCount: 0,
+    });
+    const onClose = vi.fn();
+    const onOpenFileInApp = vi.fn();
+
+    render(
+      <QuickCheckPanel
+        activeFormatContext={{
+          activeExampleIndex: 0,
+          activeSmsText: "Matched SMS text",
+          filePath: "banks/pumb/formats/source.txt",
+          regex: "Matched SMS text",
+        }}
+        autoRunOnOpen
+        bankName="ПУМБ-ua"
+        formatPaths={["banks/pumb/formats/match.txt"]}
+        initialMode="sms-by-template"
+        onClose={onClose}
+        onOpenFileInApp={onOpenFileInApp}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "quickCheck.openInApp" }));
+
+    expect(onOpenFileInApp).toHaveBeenCalledWith("banks/pumb/formats/match.txt");
+    expect(onClose).toHaveBeenCalled();
   });
 });

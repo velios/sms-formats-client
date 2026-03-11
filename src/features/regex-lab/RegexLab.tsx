@@ -35,7 +35,11 @@ interface Props {
   onRegexChange: (v: string) => void;
   onRegexBlur?: () => void;
   examples: string[];
-  intersectionExamples?: string[];
+  intersectionExamples?: Array<{
+    text: string;
+    filePath: string;
+    fileName: string;
+  }>;
   activeExampleIndex: number;
   onActiveExampleChange: (i: number) => void;
   onExampleChange: (index: number, value: string) => void;
@@ -45,6 +49,7 @@ interface Props {
   onColumnsChange: (columns: string[]) => void;
   onOpenTemplateBySms?: () => void;
   onOpenSmsByTemplate?: () => void;
+  onOpenIntersectionFileInApp?: (filePath: string) => void;
 }
 
 interface PatternSelection {
@@ -127,6 +132,7 @@ export function RegexLab({
   onColumnsChange,
   onOpenTemplateBySms,
   onOpenSmsByTemplate,
+  onOpenIntersectionFileInApp,
 }: Props) {
   const { t, i18n } = useTranslation();
   const [exampleSourceMode, setExampleSourceMode] =
@@ -136,16 +142,16 @@ export function RegexLab({
   const hasIntersectionExamples = intersectionExamples.length > 0;
   const isShowingIntersectionExamples =
     hasIntersectionExamples && exampleSourceMode === "intersections";
-  const visibleExamples = isShowingIntersectionExamples
-    ? intersectionExamples
+  const visibleExampleTexts = isShowingIntersectionExamples
+    ? intersectionExamples.map((item) => item.text)
     : examples;
   const visibleActiveExampleIndex = isShowingIntersectionExamples
     ? Math.min(
         activeIntersectionExampleIndex,
-        Math.max(visibleExamples.length - 1, 0)
+        Math.max(visibleExampleTexts.length - 1, 0)
       )
     : activeExampleIndex;
-  const activeExample = visibleExamples[visibleActiveExampleIndex] ?? "";
+  const activeExample = visibleExampleTexts[visibleActiveExampleIndex] ?? "";
   const isExampleInputReadOnly = readOnly || isShowingIntersectionExamples;
   const [hoveredGroup, setHoveredGroup] = useState<number | null>(null);
   const [rightPaneTab, setRightPaneTab] = useState<RightPaneTab>("explanation");
@@ -167,8 +173,8 @@ export function RegexLab({
     [regex, activeExample]
   );
   const exampleMatchStates = useMemo(
-    () => visibleExamples.map((example) => testRegex(regex, example ?? "")),
-    [regex, visibleExamples]
+    () => visibleExampleTexts.map((example) => testRegex(regex, example ?? "")),
+    [regex, visibleExampleTexts]
   );
   const explanationLocale = i18n.resolvedLanguage?.startsWith("ru")
     ? "ru"
@@ -277,7 +283,7 @@ export function RegexLab({
       block: "nearest",
       inline: "nearest",
     });
-  }, [visibleActiveExampleIndex, visibleExamples.length]);
+  }, [visibleActiveExampleIndex, visibleExampleTexts.length]);
 
   const handleGroupHover = useCallback((groupIndex: number | null) => {
     setHoveredGroup(groupIndex);
@@ -462,7 +468,7 @@ export function RegexLab({
             </div>
           </div>
           <div className="flex flex-wrap border-b border-[color:var(--c-border)]">
-            {visibleExamples.map((_, i) => (
+            {visibleExampleTexts.map((_, i) => (
               <div className="flex items-center" key={i}>
                 <button
                   className={regexLabTabClassName(i === visibleActiveExampleIndex)}
@@ -483,7 +489,7 @@ export function RegexLab({
                   type="button"
                 >
                   #{i + 1}
-                  {regex && (
+                  {!isShowingIntersectionExamples && regex && (
                     <span
                       className={cn(
                         "ml-1",
@@ -496,7 +502,27 @@ export function RegexLab({
                     </span>
                   )}
                 </button>
-                {!isShowingIntersectionExamples && visibleExamples.length > 1 && (
+                {isShowingIntersectionExamples &&
+                  intersectionExamples[i]?.filePath &&
+                  onOpenIntersectionFileInApp && (
+                    <Button
+                      aria-label={`${t("quickCheck.openInApp")}: ${intersectionExamples[i]!.fileName}`}
+                      className="px-1 py-0.5 text-[11px] text-[color:var(--c-text-dim)]"
+                      onClick={() =>
+                        onOpenIntersectionFileInApp(
+                          intersectionExamples[i]!.filePath
+                        )
+                      }
+                      size="sm"
+                      title={`${t("quickCheck.openInApp")}: ${intersectionExamples[i]!.fileName}`}
+                      type="button"
+                      variant="ghost"
+                    >
+                      ↗
+                    </Button>
+                  )}
+                {!isShowingIntersectionExamples &&
+                  visibleExampleTexts.length > 1 && (
                   <Button
                     aria-label={t("editor.removeExample")}
                     className="px-1 py-0.5 text-[11px] text-[color:var(--c-text-dim)]"

@@ -45,7 +45,9 @@ function renderFormatsPanel(params: {
       handleSelectSenders={vi.fn()}
       localChangedFormatFiles={new Set()}
       localSendersChanged={false}
+      onFocusedFilePathHandled={vi.fn()}
       onOpenSmsByTemplateForIntersection={onOpenSmsByTemplateForIntersection}
+      pendingFocusedFilePath={null}
       recentFiles={[]}
       refName="main"
       repository={{ owner: "flocktory", repo: "sms-formats-client" }}

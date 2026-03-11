@@ -1,5 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const scrollIntoViewMock = vi.fn();
+const localStorageState = new Map<string, string>();
 
 const mocks = vi.hoisted(() => {
   const routeState = {
@@ -206,10 +209,12 @@ vi.mock("@/features/format-editor/FormatEditor", () => ({
   FormatEditor: ({
     filePath,
     intersectionExamples,
+    onOpenIntersectionFileInApp,
     onRegexBlurAfterEdit,
   }: {
     filePath: string;
-    intersectionExamples?: string[];
+    intersectionExamples?: Array<{ text: string }>;
+    onOpenIntersectionFileInApp?: (filePath: string) => void;
     onRegexBlurAfterEdit?: (context: {
       filePath: string;
       regex: string;
@@ -219,8 +224,16 @@ vi.mock("@/features/format-editor/FormatEditor", () => ({
     <div data-testid="format-editor">
       {filePath}
       <div data-testid="format-editor-intersection-examples">
-        {(intersectionExamples ?? []).join("|")}
+        {(intersectionExamples ?? []).map((item) => item.text).join("|")}
       </div>
+      <button
+        onClick={() =>
+          onOpenIntersectionFileInApp?.("src/TBank_123/formats/another.txt")
+        }
+        type="button"
+      >
+        open-intersection-file-in-app
+      </button>
       <button
         onClick={() =>
           onRegexBlurAfterEdit?.({
@@ -242,7 +255,20 @@ vi.mock("@/features/create-entity/CreateFormatModal", () => ({
 }));
 
 vi.mock("@/features/quick-check/QuickCheckPanel", () => ({
-  QuickCheckPanel: () => null,
+  QuickCheckPanel: ({
+    onOpenFileInApp,
+  }: {
+    onOpenFileInApp?: (filePath: string) => void;
+  }) => (
+    <button
+      onClick={() =>
+        onOpenFileInApp?.("src/TBank_123/formats/another.txt")
+      }
+      type="button"
+    >
+      quick-check-open-in-app
+    </button>
+  ),
 }));
 
 vi.mock("@/features/quick-check/format-entries", () => ({
@@ -305,6 +331,22 @@ vi.mock("@/domain/github", async () => {
 
 import { BankWorkspace } from "./BankWorkspace";
 
+beforeAll(() => {
+  window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => localStorageState.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        localStorageState.set(key, value);
+      },
+      removeItem: (key: string) => {
+        localStorageState.delete(key);
+      },
+    },
+  });
+});
+
 function getFormatRow(fileName: string) {
   const label = screen.getByText(fileName);
   const row = label.closest('[role="button"]');
@@ -316,6 +358,9 @@ function getFormatRow(fileName: string) {
 
 describe("BankWorkspace intersections behavior", () => {
   beforeEach(() => {
+    localStorageState.clear();
+    localStorageState.set("sms-formats-recent-formats", "{}");
+    scrollIntoViewMock.mockClear();
     mocks.routeState.location.pathname = "/repo/zenmoney/sms-formats/pr/123";
     mocks.routeState.location.search =
       "?file=src/TBank_123/formats/current.txt";
@@ -325,6 +370,11 @@ describe("BankWorkspace intersections behavior", () => {
       prNumber: "123",
     };
     mocks.routeState.navigate.mockReset();
+    mocks.routeState.navigate.mockImplementation((nextPath: string) => {
+      const [pathname, search = ""] = nextPath.split("?");
+      mocks.routeState.location.pathname = pathname ?? "";
+      mocks.routeState.location.search = search ? `?${search}` : "";
+    });
 
     mocks.sourceState.repository = { owner: "zenmoney", repo: "sms-formats" };
     mocks.sourceState.sourceRef = {
@@ -560,5 +610,104 @@ describe("BankWorkspace intersections behavior", () => {
     expect(getFormatRow("current.txt")).toHaveTextContent("2 / 2 / 1");
 
     confirmSpy.mockRestore();
+  });
+
+  it("reveals the target file in the list when opening from intersections", async () => {
+    localStorageState.set(
+      "sms-formats-recent-formats",
+      JSON.stringify({
+        src: ["src/TBank_123/formats/current.txt"],
+        "src/TBank_123": ["src/TBank_123/formats/current.txt"],
+      })
+    );
+
+    render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      )
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "bank.recentFiles" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "bank.searchFile" }), {
+      target: { value: "current" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "quickCheck.calculateIntersections" })
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("format-editor-intersection-examples")
+      ).toHaveTextContent("PAY 300")
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "open-intersection-file-in-app" })
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/another.txt"
+      )
+    );
+
+    expect(
+      screen.getByRole("textbox", { name: "bank.searchFile" })
+    ).toHaveValue("");
+    expect(
+      screen.getByRole("button", { name: "bank.allFiles" }).className
+    ).toContain("border-b-[color:var(--c-accent)]");
+    expect(getFormatRow("another.txt").className).toContain(
+      "text-[color:var(--c-accent)]"
+    );
+    expect(scrollIntoViewMock).toHaveBeenCalled();
+  });
+
+  it("reveals the target file in the list when opening from quick check", async () => {
+    localStorageState.set(
+      "sms-formats-recent-formats",
+      JSON.stringify({
+        src: ["src/TBank_123/formats/current.txt"],
+        "src/TBank_123": ["src/TBank_123/formats/current.txt"],
+      })
+    );
+
+    render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      )
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "bank.recentFiles" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "bank.searchFile" }), {
+      target: { value: "current" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "quickCheck.openSmsByTemplate" })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "quick-check-open-in-app" })
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/another.txt"
+      )
+    );
+
+    expect(
+      screen.getByRole("textbox", { name: "bank.searchFile" })
+    ).toHaveValue("");
+    expect(
+      screen.getByRole("button", { name: "bank.allFiles" }).className
+    ).toContain("border-b-[color:var(--c-accent)]");
+    expect(getFormatRow("another.txt").className).toContain(
+      "text-[color:var(--c-accent)]"
+    );
+    expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 });

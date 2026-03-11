@@ -87,6 +87,12 @@ interface ActiveFormatSearchContext {
   activeExampleIndex: number;
 }
 
+interface IntersectionExampleItem {
+  text: string;
+  filePath: string;
+  fileName: string;
+}
+
 function getActiveExampleText(
   context: ActiveFormatSearchContext | null
 ): string {
@@ -131,14 +137,14 @@ function collectIntersectingExamples(params: {
   activeFilePath: string | null;
   activeRegex: string;
   entries: CachedFormatEntry[];
-}): string[] {
+}): IntersectionExampleItem[] {
   const { activeFilePath, activeRegex, entries } = params;
   if (!activeFilePath || !activeRegex.trim()) {
     return [];
   }
 
   const seenExamples = new Set<string>();
-  const result: string[] = [];
+  const result: IntersectionExampleItem[] = [];
 
   for (const entry of entries) {
     if (entry.filePath === activeFilePath) {
@@ -147,7 +153,8 @@ function collectIntersectingExamples(params: {
 
     for (const example of entry.examples) {
       const normalizedExample = normalizeIntersectionExample(example);
-      if (!normalizedExample || seenExamples.has(normalizedExample)) {
+      const dedupeKey = `${entry.filePath}\u0000${normalizedExample}`;
+      if (!normalizedExample || seenExamples.has(dedupeKey)) {
         continue;
       }
 
@@ -155,8 +162,12 @@ function collectIntersectingExamples(params: {
         continue;
       }
 
-      seenExamples.add(normalizedExample);
-      result.push(normalizedExample);
+      seenExamples.add(dedupeKey);
+      result.push({
+        text: normalizedExample,
+        filePath: entry.filePath,
+        fileName: entry.fileName,
+      });
     }
   }
 
@@ -809,7 +820,7 @@ function renderWorkspaceContent(params: {
   bankPath: string;
   readOnly: boolean;
   selectedFile: string | null;
-  selectedFileIntersectionExamples: string[];
+  selectedFileIntersectionExamples: IntersectionExampleItem[];
   selectedFileSourceDeletedBaseSha: string | null;
   allFormatFiles: string[];
   handleRenameFile: (fromPath: string, toPath: string) => boolean;
@@ -819,6 +830,7 @@ function renderWorkspaceContent(params: {
     regex: string;
     examples: string[];
   }) => void;
+  onOpenIntersectionFileInApp: (filePath: string) => void;
   onOpenTemplateBySms: () => void;
   onOpenSmsByTemplate: () => void;
   t: (key: string) => string;
@@ -834,6 +846,7 @@ function renderWorkspaceContent(params: {
     handleRenameFile,
     onFormatSearchContextChange,
     onFormatRegexBlurAfterEdit,
+    onOpenIntersectionFileInApp,
     onOpenTemplateBySms,
     onOpenSmsByTemplate,
     t,
@@ -848,6 +861,7 @@ function renderWorkspaceContent(params: {
         filePath={selectedFile}
         intersectionExamples={selectedFileIntersectionExamples}
         key={selectedFile}
+        onOpenIntersectionFileInApp={onOpenIntersectionFileInApp}
         onRegexBlurAfterEdit={onFormatRegexBlurAfterEdit}
         onOpenSmsByTemplate={onOpenSmsByTemplate}
         onOpenTemplateBySms={onOpenTemplateBySms}
@@ -1024,6 +1038,8 @@ export function FormatsPanel(params: {
   localChangedFormatFiles: Set<string>;
   sourceChangedFormatFiles: Set<string>;
   formatIntersectionStats: Map<string, FormatIntersectionStat>;
+  pendingFocusedFilePath: string | null;
+  onFocusedFilePathHandled: (filePath: string) => void;
   selectedFile: string | null;
   showSenders: boolean;
   handleSelectSenders: () => void;
@@ -1054,6 +1070,8 @@ export function FormatsPanel(params: {
     localChangedFormatFiles,
     sourceChangedFormatFiles,
     formatIntersectionStats,
+    pendingFocusedFilePath,
+    onFocusedFilePathHandled,
     selectedFile,
     showSenders,
     handleSelectSenders,
@@ -1066,6 +1084,7 @@ export function FormatsPanel(params: {
     localSendersChanged,
     sourceSendersChanged,
   } = params;
+  const fileRowRefs = useRef(new Map<string, HTMLDivElement>());
   const normalizedSearch = formatSearch.trim().toLowerCase();
   const visibleFormatSet = new Set(visibleFormats);
   const sendersMatchesSearch =
@@ -1089,6 +1108,35 @@ export function FormatsPanel(params: {
   });
   const filesForRender = formatTab === "recent" ? recentFilesVisible : allFiles;
   const showNoResults = filesForRender.length === 0;
+
+  useEffect(() => {
+    if (!pendingFocusedFilePath) {
+      return;
+    }
+
+    const isTargetSelected =
+      pendingFocusedFilePath === sendersPath
+        ? showSenders
+        : selectedFile === pendingFocusedFilePath;
+    if (!isTargetSelected) {
+      return;
+    }
+
+    const row = fileRowRefs.current.get(pendingFocusedFilePath);
+    if (!row) {
+      return;
+    }
+
+    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    onFocusedFilePathHandled(pendingFocusedFilePath);
+  }, [
+    onFocusedFilePathHandled,
+    pendingFocusedFilePath,
+    selectedFile,
+    sendersPath,
+    showSenders,
+    filesForRender,
+  ]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
@@ -1175,6 +1223,13 @@ export function FormatsPanel(params: {
                 isSelected,
               })}
               key={path}
+              ref={(element) => {
+                if (element) {
+                  fileRowRefs.current.set(path, element);
+                } else {
+                  fileRowRefs.current.delete(path);
+                }
+              }}
               onClick={() => {
                 if (isSenders) {
                   handleSelectSenders();
@@ -2250,6 +2305,9 @@ export function BankWorkspace() {
   const intersectionRunIdRef = useRef(0);
   const [activeFormatSearchContext, setActiveFormatSearchContext] =
     useState<ActiveFormatSearchContext | null>(null);
+  const [pendingFocusedFilePath, setPendingFocusedFilePath] = useState<
+    string | null
+  >(null);
   const [
     quickCheckActiveFormatContextOverride,
     setQuickCheckActiveFormatContextOverride,
@@ -2470,6 +2528,7 @@ export function BankWorkspace() {
     setIntersectionLoadErrorsCount(0);
     setCalculateIntersectionsError(null);
     setIsCalculatingIntersections(false);
+    setPendingFocusedFilePath(null);
   }, [
     bankPath,
     repository.owner,
@@ -2634,6 +2693,16 @@ export function BankWorkspace() {
       addRecentFile(bankPath, f);
     },
     [bankPath, navigateToRequestedFile, requestedFile]
+  );
+
+  const handleOpenFileInApp = useCallback(
+    (filePath: string) => {
+      setFormatTab("all");
+      setFormatSearch("");
+      setPendingFocusedFilePath(filePath);
+      handleSelectFile(filePath);
+    },
+    [handleSelectFile]
   );
 
   const handleSelectSenders = useCallback(() => {
@@ -3044,9 +3113,15 @@ export function BankWorkspace() {
           handleSelectSenders={handleSelectSenders}
           localChangedFormatFiles={localChangedFormatFiles}
           localSendersChanged={localSendersChanged}
+          onFocusedFilePathHandled={(filePath) =>
+            setPendingFocusedFilePath((current) =>
+              current === filePath ? null : current
+            )
+          }
           onOpenSmsByTemplateForIntersection={
             handleOpenSmsByTemplateForIntersection
           }
+          pendingFocusedFilePath={pendingFocusedFilePath}
           recentFiles={recentFiles}
           refName={refName}
           repository={repository}
@@ -3100,6 +3175,7 @@ export function BankWorkspace() {
           handleRenameFile,
           onFormatSearchContextChange: setActiveFormatSearchContext,
           onFormatRegexBlurAfterEdit: handleFormatRegexBlurAfterEdit,
+          onOpenIntersectionFileInApp: handleOpenFileInApp,
           onOpenSmsByTemplate: () => {
             setQuickCheckActiveFormatContextOverride(null);
             setQuickCheckAutoRunOnOpen(false);
@@ -3148,7 +3224,7 @@ export function BankWorkspace() {
             setQuickCheckAutoRunOnOpen(false);
             setShowQuickCheck(false);
           }}
-          onOpenFileInApp={handleSelectFile}
+          onOpenFileInApp={handleOpenFileInApp}
         />
       )}
     </div>

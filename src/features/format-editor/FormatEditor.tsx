@@ -16,12 +16,17 @@ type EditorMode = "structured" | "raw";
 interface Props {
   filePath: string;
   allFormatFiles: string[];
-  intersectionExamples?: string[];
+  intersectionExamples?: Array<{
+    text: string;
+    filePath: string;
+    fileName: string;
+  }>;
   readOnly?: boolean;
   sourceDeletedBaseSha?: string | null;
   onRenameFile: (fromPath: string, toPath: string) => boolean;
   onOpenTemplateBySms?: () => void;
   onOpenSmsByTemplate?: () => void;
+  onOpenIntersectionFileInApp?: (filePath: string) => void;
   onRegexBlurAfterEdit?: (context: {
     filePath: string;
     regex: string;
@@ -71,6 +76,7 @@ export function FormatEditor({
   onRenameFile,
   onOpenTemplateBySms,
   onOpenSmsByTemplate,
+  onOpenIntersectionFileInApp,
   onRegexBlurAfterEdit,
   onSearchContextChange,
 }: Props) {
@@ -484,6 +490,7 @@ export function FormatEditor({
           onAddExample={handleAddExample}
           onColumnsChange={handleColumnsChange}
           onExampleChange={handleExampleChange}
+          onOpenIntersectionFileInApp={onOpenIntersectionFileInApp}
           onRegexBlur={handleRegexBlur}
           onOpenSmsByTemplate={onOpenSmsByTemplate}
           onOpenTemplateBySms={onOpenTemplateBySms}
