@@ -22,3 +22,4 @@ export {
   resolveTokenCaptureGroup,
   resolveTokenMatchRange,
 } from "./token-capture-map";
+export { isBankFormatFilePath } from "./file-path";

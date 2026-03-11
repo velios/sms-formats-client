@@ -8,6 +8,7 @@ vi.mock("@/store", () => ({
 
 import {
   collectAllFormatFiles,
+  collectUnsupportedSourceFiles,
   FormatsPanel,
   resolveAutoSelectFile,
   resolveVisibleDeletedFormatFiles,
@@ -17,12 +18,26 @@ import {
 function renderFormatsPanel(params: {
   intersectingOtherFormats: number;
   deletedFormatFiles?: Set<string>;
+  localChangedFormatFiles?: Set<string>;
+  sourceFileStatuses?: Map<
+    string,
+    "add" | "modify" | "delete" | "rename" | "unsupported"
+  >;
+  unsupportedSourceFiles?: string[];
+  visibleFormats?: string[];
 }) {
-  const { intersectingOtherFormats, deletedFormatFiles = new Set() } = params;
+  const {
+    intersectingOtherFormats,
+    deletedFormatFiles = new Set(),
+    localChangedFormatFiles = new Set(),
+    sourceFileStatuses = new Map(),
+    unsupportedSourceFiles = [],
+    visibleFormats = ["banks/pumb/formats/example.txt"],
+  } = params;
   const handleSelectFile = vi.fn();
   const onOpenSmsByTemplateForIntersection = vi.fn();
 
-  render(
+  const view = render(
     <FormatsPanel
       createFormatDisabled={false}
       deletedFormatFiles={deletedFormatFiles}
@@ -43,7 +58,7 @@ function renderFormatsPanel(params: {
       formatTab="all"
       handleSelectFile={handleSelectFile}
       handleSelectSenders={vi.fn()}
-      localChangedFormatFiles={new Set()}
+      localChangedFormatFiles={localChangedFormatFiles}
       localSendersChanged={false}
       onFocusedFilePathHandled={vi.fn()}
       onOpenSmsByTemplateForIntersection={onOpenSmsByTemplateForIntersection}
@@ -60,18 +75,19 @@ function renderFormatsPanel(params: {
       setShowCreateFormat={vi.fn()}
       showSearchIndexStatus={false}
       showSenders={false}
-      sourceChangedFormatFiles={new Set()}
+      sourceFileStatuses={sourceFileStatuses}
       sourceSendersChanged={false}
       t={(key) => key}
-      totalFilesCount={1}
+      totalFilesCount={visibleFormats.length + unsupportedSourceFiles.length}
       tTemplate={(key, options) =>
         `${key}:${String(options?.file)}:${String(options?.count)}`
       }
-      visibleFormats={["banks/pumb/formats/example.txt"]}
+      unsupportedSourceFiles={unsupportedSourceFiles}
+      visibleFormats={visibleFormats}
     />
   );
 
-  return { handleSelectFile, onOpenSmsByTemplateForIntersection };
+  return { ...view, handleSelectFile, onOpenSmsByTemplateForIntersection };
 }
 
 describe("FormatsPanel intersections", () => {
@@ -129,6 +145,77 @@ describe("FormatsPanel intersections", () => {
       "banks/pumb/formats/deleted-in-pr.txt",
       "banks/pumb/formats/existing.txt",
     ]);
+  });
+
+  it("collects changed PR files that do not match the format-file rule", () => {
+    expect(
+      collectUnsupportedSourceFiles({
+        bankPath: "banks/pumb",
+        sendersPath: "banks/pumb/senders.txt",
+        changedFiles: [
+          { kind: "add", path: "banks/pumb/formats/existing.txt" },
+          { kind: "add", path: "banks/pumb/formats/no-extension" },
+          { kind: "modify", path: "banks/pumb/notes.md" },
+          { kind: "modify", path: "banks/pumb/senders.txt" },
+          { kind: "modify", path: "banks/other/formats/skip.txt" },
+        ],
+      })
+    ).toEqual([
+      "banks/pumb/formats/no-extension",
+      "banks/pumb/notes.md",
+    ]);
+  });
+
+  it("renders unsupported PR files first and applies source/local status colors", () => {
+    const { container } = renderFormatsPanel({
+      intersectingOtherFormats: 0,
+      localChangedFormatFiles: new Set(["banks/pumb/formats/local-draft.txt"]),
+      sourceFileStatuses: new Map([
+        ["banks/pumb/formats/local-draft.txt", "modify"],
+        ["banks/pumb/formats/source-added.txt", "add"],
+        ["banks/pumb/formats/source-modified.txt", "modify"],
+        ["banks/pumb/formats/unsupported", "unsupported"],
+      ]),
+      unsupportedSourceFiles: ["banks/pumb/formats/unsupported"],
+      visibleFormats: [
+        "banks/pumb/formats/source-added.txt",
+        "banks/pumb/formats/source-modified.txt",
+        "banks/pumb/formats/local-draft.txt",
+      ],
+    });
+
+    const renderedPaths = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-file-path]")
+    ).map((element) => element.dataset.filePath);
+
+    expect(renderedPaths).toEqual([
+      "banks/pumb/formats/unsupported",
+      "banks/pumb/senders.txt",
+      "banks/pumb/formats/source-added.txt",
+      "banks/pumb/formats/source-modified.txt",
+      "banks/pumb/formats/local-draft.txt",
+    ]);
+
+    expect(
+      container
+        .querySelector('[data-file-path="banks/pumb/formats/unsupported"] [data-slot="badge"]')
+        ?.getAttribute("data-variant")
+    ).toBe("error");
+    expect(
+      container
+        .querySelector('[data-file-path="banks/pumb/formats/local-draft.txt"] [data-slot="badge"]')
+        ?.getAttribute("data-variant")
+    ).toBe("modified");
+    expect(
+      container
+        .querySelector('[data-file-path="banks/pumb/formats/source-added.txt"] [data-slot="badge"]')
+        ?.getAttribute("data-variant")
+    ).toBe("success");
+    expect(
+      container
+        .querySelector('[data-file-path="banks/pumb/formats/source-modified.txt"] [data-slot="badge"]')
+        ?.getAttribute("data-variant")
+    ).toBe("warning");
   });
 
   it("keeps source-deleted files struck through until a local draft overrides them", () => {

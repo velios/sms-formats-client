@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { isBankFormatFilePath } from "@/domain/format";
 import {
   resolvePullRequestWorkspace,
   updatePullRequestHead,
@@ -87,9 +88,8 @@ function buildFormatContents(changedFiles: ChangedFile[]): Map<string, string> {
     if (file.isDeleted) {
       continue;
     }
-    if (
-      !(file.filePath.endsWith(".txt") && file.filePath.includes("/formats/"))
-    ) {
+    const bankPath = file.filePath.split("/formats/")[0];
+    if (!(bankPath && isBankFormatFilePath(file.filePath, bankPath))) {
       continue;
     }
     formatContents.set(file.filePath, file.content);

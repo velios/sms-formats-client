@@ -26,6 +26,7 @@ import {
 import {
   calculateFormatIntersectionStats,
   type FormatIntersectionStat,
+  isBankFormatFilePath,
   parseFormatFile,
   testRegex,
 } from "@/domain/format";
@@ -92,6 +93,8 @@ interface IntersectionExampleItem {
   filePath: string;
   fileName: string;
 }
+
+type SourceFileStatus = PullRequestChangedFile["kind"] | "unsupported";
 
 function getActiveExampleText(
   context: ActiveFormatSearchContext | null
@@ -305,8 +308,8 @@ function collectChangedFormatFiles(
   changedFilesInBank: Set<string>
 ): Set<string> {
   return new Set(
-    Array.from(changedFilesInBank).filter(
-      (path) => path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")
+    Array.from(changedFilesInBank).filter((path) =>
+      isBankFormatFilePath(path, bankPath)
     )
   );
 }
@@ -319,9 +322,7 @@ export function collectSourceDeletedFormatFiles(
     changedFiles
       .filter(
         (file) =>
-          file.kind === "delete" &&
-          file.path.startsWith(`${bankPath}/formats/`) &&
-          file.path.endsWith(".txt")
+          file.kind === "delete" && isBankFormatFilePath(file.path, bankPath)
       )
       .map((file) => file.path)
   );
@@ -362,6 +363,20 @@ function sortFormatPaths(
   });
 }
 
+function sortFilePathsByDisplayName(paths: string[]): string[] {
+  return [...paths].sort((a, b) => {
+    const byName = extractFormatFileName(a).localeCompare(
+      extractFormatFileName(b),
+      undefined,
+      { sensitivity: "base" }
+    );
+    if (byName !== 0) {
+      return byName;
+    }
+    return a.localeCompare(b, undefined, { sensitivity: "base" });
+  });
+}
+
 export function collectAllFormatFiles(
   bankPath: string,
   remoteFormatFiles: string[],
@@ -371,7 +386,7 @@ export function collectAllFormatFiles(
   const remoteFiles = new Set(remoteFormatFiles);
   const draftFiles = new Set<string>();
   for (const path of draftPaths) {
-    if (path.startsWith(`${bankPath}/formats/`) && path.endsWith(".txt")) {
+    if (isBankFormatFilePath(path, bankPath)) {
       draftFiles.add(path);
     }
   }
@@ -379,6 +394,47 @@ export function collectAllFormatFiles(
     Array.from(new Set([...remoteFiles, ...draftFiles, ...changedFormatFiles])),
     changedFormatFiles
   );
+}
+
+export function collectUnsupportedSourceFiles(params: {
+  bankPath: string;
+  sendersPath: string;
+  changedFiles: PullRequestChangedFile[];
+}): string[] {
+  const { bankPath, sendersPath, changedFiles } = params;
+  return sortFilePathsByDisplayName(
+    Array.from(
+      new Set(
+        changedFiles
+          .filter((file) => file.path.startsWith(`${bankPath}/`))
+          .filter((file) => file.path !== sendersPath)
+          .filter((file) => !isBankFormatFilePath(file.path, bankPath))
+          .map((file) => file.path)
+      )
+    )
+  );
+}
+
+function collectSourceFileStatuses(params: {
+  bankPath: string;
+  sendersPath: string;
+  changedFiles: PullRequestChangedFile[];
+}): Map<string, SourceFileStatus> {
+  const { bankPath, sendersPath, changedFiles } = params;
+  const result = new Map<string, SourceFileStatus>();
+  for (const file of changedFiles) {
+    if (!file.path.startsWith(`${bankPath}/`)) {
+      continue;
+    }
+    if (file.path === sendersPath) {
+      continue;
+    }
+    result.set(
+      file.path,
+      isBankFormatFilePath(file.path, bankPath) ? file.kind : "unsupported"
+    );
+  }
+  return result;
 }
 
 function extractFormatFileName(path: string): string {
@@ -1034,9 +1090,10 @@ export function FormatsPanel(params: {
   showSearchIndexStatus: boolean;
   searchIndexingLabel: string;
   visibleFormats: string[];
+  unsupportedSourceFiles: string[];
   deletedFormatFiles: Set<string>;
   localChangedFormatFiles: Set<string>;
-  sourceChangedFormatFiles: Set<string>;
+  sourceFileStatuses: Map<string, SourceFileStatus>;
   formatIntersectionStats: Map<string, FormatIntersectionStat>;
   pendingFocusedFilePath: string | null;
   onFocusedFilePathHandled: (filePath: string) => void;
@@ -1066,9 +1123,10 @@ export function FormatsPanel(params: {
     showSearchIndexStatus,
     searchIndexingLabel,
     visibleFormats,
+    unsupportedSourceFiles,
     deletedFormatFiles,
     localChangedFormatFiles,
-    sourceChangedFormatFiles,
+    sourceFileStatuses,
     formatIntersectionStats,
     pendingFocusedFilePath,
     onFocusedFilePathHandled,
@@ -1087,13 +1145,22 @@ export function FormatsPanel(params: {
   const fileRowRefs = useRef(new Map<string, HTMLDivElement>());
   const normalizedSearch = formatSearch.trim().toLowerCase();
   const visibleFormatSet = new Set(visibleFormats);
+  const visibleUnsupportedSourceFiles = unsupportedSourceFiles.filter((path) => {
+    if (normalizedSearch.length === 0) {
+      return true;
+    }
+    return (
+      extractFormatFileName(path).toLowerCase().includes(normalizedSearch) ||
+      path.toLowerCase().includes(normalizedSearch)
+    );
+  });
   const sendersMatchesSearch =
     normalizedSearch.length === 0 ||
     "senders.txt".includes(normalizedSearch) ||
     t("bank.senders").toLowerCase().includes(normalizedSearch);
   const allFiles = sendersMatchesSearch
-    ? [sendersPath, ...visibleFormats]
-    : visibleFormats;
+    ? [...visibleUnsupportedSourceFiles, sendersPath, ...visibleFormats]
+    : [...visibleUnsupportedSourceFiles, ...visibleFormats];
   const recentFilesVisible = recentFiles.filter((path) => {
     if (path === sendersPath) {
       return sendersMatchesSearch;
@@ -1190,18 +1257,34 @@ export function FormatsPanel(params: {
         {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keeping list rendering inline avoids a broader panel refactor. */}
         {filesForRender.map((path) => {
           const isSenders = path === sendersPath;
+          const sourceFileStatus = isSenders
+            ? undefined
+            : sourceFileStatuses.get(path);
+          const isUnsupportedSourceFile = sourceFileStatus === "unsupported";
           const displayName = isSenders
             ? "senders.txt"
             : extractFormatFileName(path);
-          const isSelected = isSenders ? showSenders : selectedFile === path;
-          const isDeleted = !isSenders && deletedFormatFiles.has(path);
-          const isLocalChanged = isSenders
+          const isInteractive = !isUnsupportedSourceFile;
+          const isSelected =
+            isInteractive && (isSenders ? showSenders : selectedFile === path);
+          const isDeleted =
+            !isSenders && !isUnsupportedSourceFile && deletedFormatFiles.has(path);
+          const isLocalChanged = !isUnsupportedSourceFile && (isSenders
             ? localSendersChanged
-            : localChangedFormatFiles.has(path);
-          const isSourceChanged = isSenders
-            ? !localSendersChanged && sourceSendersChanged
-            : !isLocalChanged && sourceChangedFormatFiles.has(path);
-          const intersectionStats = isSenders || isDeleted
+            : localChangedFormatFiles.has(path));
+          const sourceIndicatorVariant =
+            isSenders
+              ? !localSendersChanged && sourceSendersChanged
+                ? "warning"
+                : null
+              : !isLocalChanged && sourceFileStatus === "unsupported"
+                ? "error"
+                : !isLocalChanged && sourceFileStatus === "add"
+                  ? "success"
+                  : !isLocalChanged && sourceFileStatus
+                    ? "warning"
+                    : null;
+          const intersectionStats = isSenders || isDeleted || isUnsupportedSourceFile
             ? null
             : (formatIntersectionStats.get(path) ?? null);
           const ownExamplesMatch =
@@ -1218,10 +1301,15 @@ export function FormatsPanel(params: {
           const repoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
           return (
             <div
-              className={workspaceFileRowClassName({
-                isDeleted,
-                isSelected,
-              })}
+              className={cn(
+                workspaceFileRowClassName({
+                  isDeleted,
+                  isSelected,
+                }),
+                !isInteractive &&
+                  "cursor-default text-[color:var(--c-error)] hover:bg-transparent"
+              )}
+              data-file-path={path}
               key={path}
               ref={(element) => {
                 if (element) {
@@ -1230,25 +1318,33 @@ export function FormatsPanel(params: {
                   fileRowRefs.current.delete(path);
                 }
               }}
-              onClick={() => {
-                if (isSenders) {
-                  handleSelectSenders();
-                  return;
-                }
-                handleSelectFile(path);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  if (isSenders) {
-                    handleSelectSenders();
-                    return;
-                  }
-                  handleSelectFile(path);
-                }
-              }}
-              role="button"
-              tabIndex={0}
+              onClick={
+                isInteractive
+                  ? () => {
+                      if (isSenders) {
+                        handleSelectSenders();
+                        return;
+                      }
+                      handleSelectFile(path);
+                    }
+                  : undefined
+              }
+              onKeyDown={
+                isInteractive
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        if (isSenders) {
+                          handleSelectSenders();
+                          return;
+                        }
+                        handleSelectFile(path);
+                      }
+                    }
+                  : undefined
+              }
+              role={isInteractive ? "button" : undefined}
+              tabIndex={isInteractive ? 0 : undefined}
             >
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <span className="truncate font-mono text-sm">
@@ -1295,8 +1391,8 @@ export function FormatsPanel(params: {
                   ●
                 </StatusBadge>
               )}
-              {isSourceChanged && (
-                <StatusBadge className="text-xs" variant="warning">
+              {!isLocalChanged && sourceIndicatorVariant && (
+                <StatusBadge className="text-xs" variant={sourceIndicatorVariant}>
                   ●
                 </StatusBadge>
               )}
@@ -1355,7 +1451,7 @@ function renameDraftFormat(params: {
   if (fromPath === toPath) {
     return true;
   }
-  if (!(toPath.startsWith(`${bankPath}/formats/`) && toPath.endsWith(".txt"))) {
+  if (!isBankFormatFilePath(toPath, bankPath)) {
     return false;
   }
   if (allFormatFiles.includes(toPath)) {
@@ -1623,9 +1719,8 @@ function buildPublishFormatContents(
     if (file.isDeleted) {
       continue;
     }
-    if (
-      !(file.filePath.endsWith(".txt") && file.filePath.includes("/formats/"))
-    ) {
+    const bankPath = file.filePath.split("/formats/")[0];
+    if (!(bankPath && isBankFormatFilePath(file.filePath, bankPath))) {
       continue;
     }
     formatContents.set(file.filePath, file.content);
@@ -2396,11 +2491,7 @@ export function BankWorkspace() {
       new Set(
         draftStore
           .getDeletedFiles()
-          .filter(
-            (entry) =>
-              entry.filePath.startsWith(`${bankPath}/formats/`) &&
-              entry.filePath.endsWith(".txt")
-          )
+          .filter((entry) => isBankFormatFilePath(entry.filePath, bankPath))
           .map((entry) => entry.filePath)
       ),
     [bankPath, draftStore, draftStore.drafts]
@@ -2425,6 +2516,24 @@ export function BankWorkspace() {
   const sourceChangedFormatFiles = useMemo(
     () => collectChangedFormatFiles(bankPath, sourceChangedFilesInBank),
     [bankPath, sourceChangedFilesInBank]
+  );
+  const sourceFileStatuses = useMemo(
+    () =>
+      collectSourceFileStatuses({
+        bankPath,
+        sendersPath,
+        changedFiles: activeSession?.changedFiles ?? [],
+      }),
+    [activeSession?.changedFiles, bankPath, sendersPath]
+  );
+  const unsupportedSourceFiles = useMemo(
+    () =>
+      collectUnsupportedSourceFiles({
+        bankPath,
+        sendersPath,
+        changedFiles: activeSession?.changedFiles ?? [],
+      }),
+    [activeSession?.changedFiles, bankPath, sendersPath]
   );
   const changedFormatFiles = useMemo(
     () =>
@@ -3134,11 +3243,12 @@ export function BankWorkspace() {
           setShowCreateFormat={setShowCreateFormat}
           showSearchIndexStatus={showSearchIndexStatus}
           showSenders={showSenders}
-          sourceChangedFormatFiles={sourceChangedFormatFiles}
+          sourceFileStatuses={sourceFileStatuses}
           sourceSendersChanged={sourceSendersChanged}
           t={t}
-          totalFilesCount={allFormatFiles.length + 1}
+          totalFilesCount={allFormatFiles.length + unsupportedSourceFiles.length + 1}
           tTemplate={t}
+          unsupportedSourceFiles={unsupportedSourceFiles}
           visibleFormats={filteredFormatFiles}
         />
       </div>
