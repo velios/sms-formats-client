@@ -1,4 +1,4 @@
-import { cleanText } from "./regex";
+import { smsesByRegex } from "./recognition";
 
 export interface FormatIntersectionInput {
   filePath: string;
@@ -13,71 +13,36 @@ export interface FormatIntersectionStat {
   intersectingOtherFormats: number;
 }
 
-function compileRegex(pattern: string): RegExp | null {
-  if (!pattern.trim()) {
-    return null;
-  }
-
-  try {
-    return new RegExp(pattern);
-  } catch {
-    return null;
-  }
-}
-
-function countMatchedExamples(regex: RegExp, examples: string[]): number {
-  let matchedExamples = 0;
-
-  for (const example of examples) {
-    if (regex.test(cleanText(example))) {
-      matchedExamples += 1;
-    }
-  }
-
-  return matchedExamples;
-}
-
 export function calculateFormatIntersectionStats(
   formats: FormatIntersectionInput[]
 ): Map<string, FormatIntersectionStat> {
-  const compiledRegexByPath = new Map(
-    formats.map((format) => [format.filePath, compileRegex(format.regex)])
-  );
-
   return new Map(
     formats.map((format) => {
-      const compiledRegex = compiledRegexByPath.get(format.filePath) ?? null;
-      let ownMatchedExamples = 0;
-      let intersectingOtherFormats = 0;
+      const ownMatched = smsesByRegex(format.examples, format.regex);
 
-      if (compiledRegex) {
-        ownMatchedExamples = countMatchedExamples(
-          compiledRegex,
-          format.examples
-        );
-
-        for (const otherFormat of formats) {
-          if (otherFormat.filePath === format.filePath) {
-            continue;
-          }
-
-          if (
-            otherFormat.examples.some((example) =>
-              compiledRegex.test(cleanText(example))
-            )
-          ) {
-            intersectingOtherFormats += 1;
-          }
+      const otherExamples = formats.flatMap((other, otherIndex) =>
+        other.filePath === format.filePath
+          ? []
+          : other.examples.map((example) => ({ example, otherIndex }))
+      );
+      const otherMatched = smsesByRegex(
+        otherExamples.map((entry) => entry.example),
+        format.regex
+      );
+      const intersectingFormatIndexes = new Set<number>();
+      otherMatched.matched.forEach((isMatch, i) => {
+        if (isMatch) {
+          intersectingFormatIndexes.add(otherExamples[i]!.otherIndex);
         }
-      }
+      });
 
       return [
         format.filePath,
         {
           filePath: format.filePath,
           totalExamples: format.examples.length,
-          ownMatchedExamples,
-          intersectingOtherFormats,
+          ownMatchedExamples: ownMatched.matched.filter(Boolean).length,
+          intersectingOtherFormats: intersectingFormatIndexes.size,
         },
       ];
     })

@@ -1,4 +1,4 @@
-import { cleanText, countCaptureGroups, parseFormatFile } from "../format";
+import { countCaptureGroups, parseFormatFile, smsesByRegex } from "../format";
 import type { BankInfo, ParsedFormat, ValidationIssue } from "../types";
 import { ALLOWED_COLUMN_NAMES } from "../types";
 
@@ -11,27 +11,19 @@ export function validateFormat(
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [...parsed.parseIssues];
 
-  // Check regex validity
+  // Check regex validity and that examples match it
   if (parsed.regex) {
-    try {
-      new RegExp(parsed.regex);
-    } catch {
+    const recognition = smsesByRegex(parsed.examples, parsed.regex);
+    if (recognition.error) {
       issues.push({
         code: "INVALID_REGEX",
         level: "error",
         filePath,
         message: "Invalid regular expression syntax",
       });
-    }
-  }
-
-  // Check examples match regex
-  if (parsed.regex && parsed.examples.length > 0) {
-    try {
-      const re = new RegExp(parsed.regex);
-      for (let i = 0; i < parsed.examples.length; i++) {
-        const ex = parsed.examples[i]!;
-        if (!re.test(cleanText(ex))) {
+    } else {
+      recognition.matched.forEach((isMatch, i) => {
+        if (!isMatch) {
           issues.push({
             code: "EXAMPLE_NO_MATCH",
             level: "error",
@@ -39,9 +31,7 @@ export function validateFormat(
             message: `Example ${i + 1} does not match the format regex`,
           });
         }
-      }
-    } catch {
-      // Already reported
+      });
     }
   }
 
@@ -74,26 +64,21 @@ export function validateFormat(
   return issues;
 }
 
-function compileRegex(pattern: string): RegExp | null {
-  try {
-    return new RegExp(pattern);
-  } catch {
-    return null;
-  }
-}
-
 function buildCollisionIssuesForPair(
   source: { filePath: string; parsed: ParsedFormat },
-  target: { filePath: string; parsed: ParsedFormat },
-  targetRegex: RegExp
+  target: { filePath: string; parsed: ParsedFormat }
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const targetName = target.filePath.split("/").pop() ?? target.filePath;
 
-  for (let i = 0; i < source.parsed.examples.length; i++) {
-    const example = cleanText(source.parsed.examples[i] ?? "");
-    if (!targetRegex.test(example)) {
-      continue;
+  const recognition = smsesByRegex(source.parsed.examples, target.parsed.regex);
+  if (recognition.error) {
+    return issues;
+  }
+
+  recognition.matched.forEach((isMatch, i) => {
+    if (!isMatch) {
+      return;
     }
     issues.push({
       code: "EXAMPLE_COLLISION",
@@ -101,7 +86,7 @@ function buildCollisionIssuesForPair(
       filePath: source.filePath,
       message: `Example ${i + 1} matches regex of ${targetName}`,
     });
-  }
+  });
 
   return issues;
 }
@@ -127,12 +112,7 @@ export function checkCrossFormatCollisions(
         continue;
       }
 
-      const targetRegex = compileRegex(target.parsed.regex);
-      if (!targetRegex) {
-        continue;
-      }
-
-      issues.push(...buildCollisionIssuesForPair(source, target, targetRegex));
+      issues.push(...buildCollisionIssuesForPair(source, target));
     }
   }
 
