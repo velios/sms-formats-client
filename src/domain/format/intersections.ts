@@ -1,3 +1,5 @@
+import { cleanText } from "./regex";
+
 export interface FormatIntersectionInput {
   filePath: string;
   regex: string;
@@ -27,7 +29,7 @@ function countMatchedExamples(regex: RegExp, examples: string[]): number {
   let matchedExamples = 0;
 
   for (const example of examples) {
-    if (regex.test(example.trim())) {
+    if (regex.test(cleanText(example))) {
       matchedExamples += 1;
     }
   }
@@ -49,7 +51,10 @@ export function calculateFormatIntersectionStats(
       let intersectingOtherFormats = 0;
 
       if (compiledRegex) {
-        ownMatchedExamples = countMatchedExamples(compiledRegex, format.examples);
+        ownMatchedExamples = countMatchedExamples(
+          compiledRegex,
+          format.examples
+        );
 
         for (const otherFormat of formats) {
           if (otherFormat.filePath === format.filePath) {
@@ -58,7 +63,7 @@ export function calculateFormatIntersectionStats(
 
           if (
             otherFormat.examples.some((example) =>
-              compiledRegex.test(example.trim())
+              compiledRegex.test(cleanText(example))
             )
           ) {
             intersectingOtherFormats += 1;

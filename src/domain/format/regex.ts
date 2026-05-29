@@ -15,6 +15,64 @@ type ExecMatchWithIndices = RegExpExecArray & {
   indices?: Array<[number, number] | undefined>;
 };
 
+/**
+ * Normalize subject text before recognition, identical to the mobile app's
+ * `_clean_text`: collapse runs of `\n`/`\r` to a single space, then trim edges.
+ */
+export function cleanText(text: string): string {
+  return text.replace(/[\n\r]+/g, " ").trim();
+}
+
+interface NormalizedTextMapping {
+  normalized: string;
+  toOriginal: (offset: number) => number;
+}
+
+/**
+ * Build `cleanText(original)` while tracking how each normalized offset maps
+ * back to the original string. A collapsed `[\n\r]+` run (k chars → 1 space)
+ * maps its single space's start to the run's start and its end to the run's
+ * end; trimmed leading whitespace shifts subsequent offsets.
+ */
+function buildNormalizedTextMapping(text: string): NormalizedTextMapping {
+  let collapsed = "";
+  const collapsedToOriginal: number[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (ch === "\n" || ch === "\r") {
+      const runStart = i;
+      while (i < text.length && (text[i] === "\n" || text[i] === "\r")) {
+        i++;
+      }
+      collapsedToOriginal[collapsed.length] = runStart;
+      collapsed += " ";
+    } else {
+      collapsedToOriginal[collapsed.length] = i;
+      collapsed += ch;
+      i++;
+    }
+  }
+  collapsedToOriginal[collapsed.length] = text.length;
+
+  const leadingMatch = collapsed.match(/^\s+/);
+  const trimStart = leadingMatch ? leadingMatch[0].length : 0;
+  const trailingMatch = collapsed.match(/\s+$/);
+  const trimEnd = Math.max(
+    trimStart,
+    collapsed.length - (trailingMatch ? trailingMatch[0].length : 0)
+  );
+  const normalized = collapsed.slice(trimStart, trimEnd);
+
+  return {
+    normalized,
+    toOriginal: (offset: number) => {
+      const clamped = Math.max(0, Math.min(offset, normalized.length));
+      return collapsedToOriginal[trimStart + clamped]!;
+    },
+  };
+}
+
 function emptyMatchResult(error: string | null = null): RegexMatchResult {
   return {
     matched: false,
@@ -121,28 +179,37 @@ export function testRegex(pattern: string, testStr: string): RegexMatchResult {
     return emptyMatchResult(compiled.error);
   }
 
-  const match = compiled.regex.exec(testStr) as ExecMatchWithIndices | null;
+  const mapping = buildNormalizedTextMapping(testStr);
+  const normalized = mapping.normalized;
+  const match = compiled.regex.exec(normalized) as ExecMatchWithIndices | null;
   if (!match) {
     return emptyMatchResult();
   }
 
   const fullMatch = match[0] ?? null;
-  const matchStart = match.index ?? 0;
-  const matchEnd =
-    fullMatch == null ? matchStart : matchStart + fullMatch.length;
+  const normMatchStart = match.index ?? 0;
+  const normMatchEnd =
+    fullMatch == null ? normMatchStart : normMatchStart + fullMatch.length;
+
+  const normGroups = extractMatchGroups(
+    match,
+    compiled.supportsIndices,
+    normalized,
+    normMatchStart,
+    normMatchEnd
+  );
 
   return {
     matched: true,
     fullMatch,
-    matchStart,
-    matchEnd,
-    groups: extractMatchGroups(
-      match,
-      compiled.supportsIndices,
-      testStr,
-      matchStart,
-      matchEnd
-    ),
+    matchStart: mapping.toOriginal(normMatchStart),
+    matchEnd: mapping.toOriginal(normMatchEnd),
+    groups: normGroups.map((group) => ({
+      index: group.index,
+      value: group.value,
+      start: mapping.toOriginal(group.start),
+      end: mapping.toOriginal(group.end),
+    })),
     error: null,
   };
 }

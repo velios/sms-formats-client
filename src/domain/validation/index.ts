@@ -1,4 +1,4 @@
-import { countCaptureGroups, parseFormatFile } from "../format";
+import { cleanText, countCaptureGroups, parseFormatFile } from "../format";
 import type { BankInfo, ParsedFormat, ValidationIssue } from "../types";
 import { ALLOWED_COLUMN_NAMES } from "../types";
 
@@ -31,7 +31,7 @@ export function validateFormat(
       const re = new RegExp(parsed.regex);
       for (let i = 0; i < parsed.examples.length; i++) {
         const ex = parsed.examples[i]!;
-        if (!re.test(ex.trim())) {
+        if (!re.test(cleanText(ex))) {
           issues.push({
             code: "EXAMPLE_NO_MATCH",
             level: "error",
@@ -91,7 +91,7 @@ function buildCollisionIssuesForPair(
   const targetName = target.filePath.split("/").pop() ?? target.filePath;
 
   for (let i = 0; i < source.parsed.examples.length; i++) {
-    const example = source.parsed.examples[i]?.trim() ?? "";
+    const example = cleanText(source.parsed.examples[i] ?? "");
     if (!targetRegex.test(example)) {
       continue;
     }

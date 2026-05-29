@@ -1,4 +1,4 @@
-import { parseFormatFile } from "@/domain/format";
+import { cleanText, parseFormatFile } from "@/domain/format";
 import type { RepoRef } from "@/domain/types";
 import { useFileContentStore } from "@/store/file-content-store";
 
@@ -39,10 +39,6 @@ function extractFormatFileName(path: string): string {
   return path.split("/").pop() ?? path;
 }
 
-function normalizeExampleText(value: string): string {
-  return value.trim();
-}
-
 function parseFormatEntry(params: {
   filePath: string;
   content: string;
@@ -56,7 +52,7 @@ function parseFormatEntry(params: {
     filePath,
     fileName: extractFormatFileName(filePath),
     regex: parsed.regex.trim(),
-    examples: parsed.examples.map(normalizeExampleText).filter(Boolean),
+    examples: parsed.examples.filter((ex) => cleanText(ex) !== ""),
     source,
     fingerprint,
   };
@@ -117,25 +113,27 @@ export async function prepareFormatEntries(params: {
     headSha: sourceRefName,
     loadedFrom: "quick-check",
   });
-  const remoteEntries = localPreparation.remotePathsToLoad.flatMap((filePath) => {
-    const content = useFileContentStore.getState().getCachedFileContent({
-      repository,
-      prNumber,
-      filePath,
-      headSha: sourceRefName,
-    });
-    if (typeof content !== "string") {
-      return [];
-    }
-    return [
-      parseFormatEntry({
+  const remoteEntries = localPreparation.remotePathsToLoad.flatMap(
+    (filePath) => {
+      const content = useFileContentStore.getState().getCachedFileContent({
+        repository,
+        prNumber,
         filePath,
-        content,
-        source: "remote",
-        fingerprint: `remote:${sourceRefName}`,
-      }),
-    ];
-  });
+        headSha: sourceRefName,
+      });
+      if (typeof content !== "string") {
+        return [];
+      }
+      return [
+        parseFormatEntry({
+          filePath,
+          content,
+          source: "remote",
+          fingerprint: `remote:${sourceRefName}`,
+        }),
+      ];
+    }
+  );
 
   return {
     entries: [...localPreparation.preparedEntries, ...remoteEntries],
