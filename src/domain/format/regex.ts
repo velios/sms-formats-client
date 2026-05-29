@@ -84,7 +84,13 @@ function emptyMatchResult(error: string | null = null): RegexMatchResult {
   };
 }
 
-function compileRegexForTest(pattern: string): {
+/**
+ * Compile a regex pattern once, preferring the `d` (indices) flag so callers
+ * can read group positions, falling back to a plain compile when unsupported.
+ * Single home for `new RegExp` shared by the rich (`testRegex`) and boolean
+ * (`recognition`) paths.
+ */
+export function tryCompile(pattern: string): {
   regex: RegExp | null;
   supportsIndices: boolean;
   error: string | null;
@@ -174,7 +180,7 @@ export function testRegex(pattern: string, testStr: string): RegexMatchResult {
     return emptyMatchResult();
   }
 
-  const compiled = compileRegexForTest(pattern);
+  const compiled = tryCompile(pattern);
   if (!compiled.regex) {
     return emptyMatchResult(compiled.error);
   }
