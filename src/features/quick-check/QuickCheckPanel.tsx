@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { testRegex } from "@/domain/format";
+import { recognizeSms, regexesBySms, smsesByRegex } from "@/domain/format";
 import type { RepoRef } from "@/domain/types";
 import { cn } from "@/lib/utils";
 import {
@@ -149,51 +149,48 @@ function evaluateTemplateBySms(
   entries: CachedFormatEntry[],
   smsText: string
 ): TemplateBySmsEvaluation {
-  const evaluated: TemplateBySmsResult[] = [];
-  let checkedRegexes = 0;
+  const entriesWithRegex = entries.filter((entry) => entry.regex);
+  const missingRegexCount = entries.length - entriesWithRegex.length;
+  const recognitions = regexesBySms(
+    entriesWithRegex.map((entry) => entry.regex),
+    smsText
+  );
+
   let matchedCount = 0;
   let invalidRegexCount = 0;
-  let missingRegexCount = 0;
 
-  for (const entry of entries) {
-    if (!entry.regex) {
-      missingRegexCount += 1;
-      continue;
-    }
-
-    checkedRegexes += 1;
-    const match = testRegex(entry.regex, smsText);
-    if (match.error) {
+  const evaluated: TemplateBySmsResult[] = entriesWithRegex.map((entry, i) => {
+    const { matched, error } = recognitions[i]!;
+    if (error) {
       invalidRegexCount += 1;
-      evaluated.push({
+      return {
         filePath: entry.filePath,
         fileName: entry.fileName,
         regex: entry.regex,
         source: entry.source,
         status: "invalid",
-        errorMessage: match.error,
-      });
-      continue;
+        errorMessage: error,
+      };
     }
 
-    const status: QuickCheckStatus = match.matched ? "match" : "no-match";
+    const status: QuickCheckStatus = matched ? "match" : "no-match";
     if (status === "match") {
       matchedCount += 1;
     }
 
-    evaluated.push({
+    return {
       filePath: entry.filePath,
       fileName: entry.fileName,
       regex: entry.regex,
       source: entry.source,
       status,
       errorMessage: null,
-    });
-  }
+    };
+  });
 
   return {
     summary: {
-      checkedRegexes,
+      checkedRegexes: entriesWithRegex.length,
       matchedCount,
       invalidRegexCount,
       missingRegexCount,
@@ -209,20 +206,19 @@ function evaluateSmsByTemplate(
   regex: string
 ): SmsByTemplateEvaluation {
   const evaluated: SmsByTemplateResult[] = entries.map((entry) => {
+    const { matched } = smsesByRegex(entry.examples, regex);
     let matchedExamples = 0;
     let firstMatchedExample: string | null = null;
 
-    for (const example of entry.examples) {
-      const result = testRegex(regex, example);
-      if (!result.matched) {
-        continue;
+    matched.forEach((isMatch, i) => {
+      if (!isMatch) {
+        return;
       }
-
       matchedExamples += 1;
       if (!firstMatchedExample) {
-        firstMatchedExample = example;
+        firstMatchedExample = entry.examples[i] ?? null;
       }
-    }
+    });
 
     return {
       filePath: entry.filePath,
@@ -361,7 +357,7 @@ export function QuickCheckPanel({
     }
 
     if (mode === "sms-by-template") {
-      const templateValidation = testRegex(templateRegex, "");
+      const templateValidation = recognizeSms(templateRegex, "");
       if (templateValidation.error) {
         setErrorMessage(
           t("quickCheck.invalidTemplateRegex", {
