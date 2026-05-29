@@ -156,13 +156,9 @@ function evaluateTemplateBySms(
     smsText
   );
 
-  let matchedCount = 0;
-  let invalidRegexCount = 0;
-
   const evaluated: TemplateBySmsResult[] = entriesWithRegex.map((entry, i) => {
     const { matched, error } = recognitions[i]!;
     if (error) {
-      invalidRegexCount += 1;
       return {
         filePath: entry.filePath,
         fileName: entry.fileName,
@@ -173,17 +169,12 @@ function evaluateTemplateBySms(
       };
     }
 
-    const status: QuickCheckStatus = matched ? "match" : "no-match";
-    if (status === "match") {
-      matchedCount += 1;
-    }
-
     return {
       filePath: entry.filePath,
       fileName: entry.fileName,
       regex: entry.regex,
       source: entry.source,
-      status,
+      status: matched ? "match" : "no-match",
       errorMessage: null,
     };
   });
@@ -191,8 +182,8 @@ function evaluateTemplateBySms(
   return {
     summary: {
       checkedRegexes: entriesWithRegex.length,
-      matchedCount,
-      invalidRegexCount,
+      matchedCount: evaluated.filter((r) => r.status === "match").length,
+      invalidRegexCount: evaluated.filter((r) => r.status === "invalid").length,
       missingRegexCount,
       remoteFetchedCount: 0,
       cachedCount: 0,
@@ -207,18 +198,9 @@ function evaluateSmsByTemplate(
 ): SmsByTemplateEvaluation {
   const evaluated: SmsByTemplateResult[] = entries.map((entry) => {
     const { matched } = smsesByRegex(entry.examples, regex);
-    let matchedExamples = 0;
-    let firstMatchedExample: string | null = null;
-
-    matched.forEach((isMatch, i) => {
-      if (!isMatch) {
-        return;
-      }
-      matchedExamples += 1;
-      if (!firstMatchedExample) {
-        firstMatchedExample = entry.examples[i] ?? null;
-      }
-    });
+    const matchedExamples = matched.filter(Boolean).length;
+    const firstMatchedExample =
+      entry.examples[matched.findIndex(Boolean)] ?? null;
 
     return {
       filePath: entry.filePath,
