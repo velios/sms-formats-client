@@ -9,5 +9,5 @@
 
 zenmoneysmsbot.zentable.ru {
     encode zstd gzip
-    reverse_proxy localhost:8080
+    reverse_proxy localhost:8470
 }

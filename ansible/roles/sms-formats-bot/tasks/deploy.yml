@@ -35,6 +35,7 @@
     system: yes
     create_home: no
     shell: /usr/sbin/nologin
+  when: bot_service_user_resolved != ansible_user
 
 - name: Ensure deploy directory exists
   file:

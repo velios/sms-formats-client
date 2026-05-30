@@ -10,6 +10,11 @@ export interface BotEnv {
   webhookPath: string;
   port: number;
   dryRun: boolean;
+  /**
+   * Optional HTTP proxy for outbound Telegram API calls. Needed where direct
+   * egress to api.telegram.org is blocked and a local bridge must be used.
+   */
+  proxyUrl?: string;
 }
 
 function required(name: string): string {
@@ -31,5 +36,6 @@ export function loadBotEnv(): BotEnv {
     webhookPath: normalizePath(required("RECOGNITION_BOT_WEBHOOK_PATH")),
     port: Number(process.env.RECOGNITION_BOT_PORT ?? "8080"),
     dryRun: process.env.RECOGNITION_BOT_DRY_RUN === "1",
+    proxyUrl: process.env.RECOGNITION_BOT_PROXY_URL || undefined,
   };
 }

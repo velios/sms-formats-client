@@ -23,7 +23,15 @@ const DRY_RUN_BOT_INFO: UserFromGetMe = {
   allows_users_to_create_topics: false,
 };
 
-const bot = new Bot(env.token, env.dryRun ? { botInfo: DRY_RUN_BOT_INFO } : {});
+// Outbound Telegram API calls (getMe, answerGuestQuery) go through a local
+// HTTP proxy when RECOGNITION_BOT_PROXY_URL is set; the inbound webhook served
+// by Bun.serve is unaffected.
+const bot = new Bot(env.token, {
+  ...(env.dryRun ? { botInfo: DRY_RUN_BOT_INFO } : {}),
+  ...(env.proxyUrl
+    ? { client: { baseFetchConfig: { proxy: env.proxyUrl } } }
+    : {}),
+});
 
 // Guest Mode (Bot API 10.0): an @mention or reply in any chat arrives as a
 // `guest_message`, answered exactly once via `answerGuestQuery`. We never log
