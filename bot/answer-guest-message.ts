@@ -1,0 +1,72 @@
+import type { InlineQueryResult } from "grammy/types";
+import type { CorpusFormat } from "./corpus";
+import type { MessageEntityLike } from "./extract-sms";
+import { respondToMessage } from "./respond";
+
+/**
+ * The slice of a grammY `guest_message` context this handler depends on. Kept
+ * minimal so the handler is unit-testable without constructing a real Bot — the
+ * full `Context` is structurally assignable to it.
+ */
+export interface GuestQueryContext {
+  guestMessage?: {
+    text?: string;
+    entities?: MessageEntityLike[];
+    reply_to_message?: { text?: string };
+  };
+  answerGuestQuery(result: InlineQueryResult): Promise<unknown>;
+}
+
+/**
+ * Answer one guest query, recognizing the SMS against the corpus. In dry-run the
+ * reply is printed instead of sent.
+ *
+ * `answerGuestQuery` is wrapped because a guest query expires within seconds:
+ * once it's too old (or its id is invalid) Telegram rejects the answer with a
+ * 400 and will never accept it on retry. Letting that throw makes
+ * `webhookCallback` return HTTP 500, on which Telegram keeps the offset and
+ * re-sends the same dead update forever — head-of-line poisoning that blocks
+ * every newer, answerable message behind it. One lost answer is acceptable
+ * degradation; a stuck queue is not. So we log and let the handler return
+ * normally, letting the webhook ack with 200. (Same isolate-one-failure
+ * principle as the per-PR corpus guard in d5e621a.)
+ */
+export async function answerGuestMessage(
+  ctx: GuestQueryContext,
+  corpus: CorpusFormat[],
+  options: { dryRun: boolean }
+): Promise<void> {
+  const message = ctx.guestMessage;
+  if (!message) {
+    return;
+  }
+
+  const body = respondToMessage(
+    {
+      text: message.text,
+      entities: message.entities,
+      replyToText: message.reply_to_message?.text,
+    },
+    corpus
+  );
+
+  if (options.dryRun) {
+    process.stdout.write(`${body}\n`);
+    return;
+  }
+
+  try {
+    await ctx.answerGuestQuery({
+      type: "article",
+      id: "recognition",
+      title: "Распознанные форматы",
+      input_message_content: {
+        message_text: body,
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+      },
+    });
+  } catch (error) {
+    process.stderr.write(`answerGuestQuery failed for one update: ${error}\n`);
+  }
+}

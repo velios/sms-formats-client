@@ -1,11 +1,11 @@
 import { serve } from "bun";
 import { Bot, webhookCallback } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
+import { answerGuestMessage } from "./answer-guest-message";
 import { buildMainCorpus, buildOpenPrsCorpus, openPrCount } from "./corpus";
 import { loadBotEnv } from "./env";
 import { ensureMainCheckout } from "./main-checkout";
 import { listOpenPullRequests } from "./pull-requests";
-import { respondToMessage } from "./respond";
 
 const env = loadBotEnv();
 
@@ -63,35 +63,11 @@ const bot = new Bot(env.token, {
 // Guest Mode (Bot API 10.0): an @mention or reply in any chat arrives as a
 // `guest_message`, answered exactly once via `answerGuestQuery`. We never log
 // the raw SMS; only the rendered format list (which contains no SMS content).
-bot.on("guest_message", async (ctx) => {
-  const message = ctx.guestMessage;
-  if (!message) {
-    return;
-  }
-  const body = respondToMessage(
-    {
-      text: message.text,
-      entities: message.entities,
-      replyToText: message.reply_to_message?.text,
-    },
-    corpus
-  );
-
-  if (env.dryRun) {
-    process.stdout.write(`${body}\n`);
-    return;
-  }
-  await ctx.answerGuestQuery({
-    type: "article",
-    id: "recognition",
-    title: "Распознанные форматы",
-    input_message_content: {
-      message_text: body,
-      parse_mode: "HTML",
-      link_preview_options: { is_disabled: true },
-    },
-  });
-});
+// A failed answer is swallowed inside the handler — see answer-guest-message.ts
+// for why webhookCallback must never return 500 here.
+bot.on("guest_message", (ctx) =>
+  answerGuestMessage(ctx, corpus, { dryRun: env.dryRun })
+);
 
 const handleUpdate = webhookCallback(bot, "std/http", {
   secretToken: env.webhookSecret,
