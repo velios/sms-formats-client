@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { CorpusFormat } from "./corpus";
 import type { RecognizedFormat } from "./recognize";
-import { renderResponse } from "./render";
+import {
+  CONFLICT_HINT,
+  DIRECT_USAGE_HINT,
+  GUEST_USAGE_HINT,
+  renderResponse,
+} from "./render";
 
 const SBER_URL =
   "https://github.com/zenmoney/sms-formats/blob/abc/src/sberbank/formats/12.txt";
@@ -25,6 +30,27 @@ const corpus: CorpusFormat[] = [
       "https://github.com/zenmoney/sms-formats/blob/abc/src/alfabank/formats/3.txt",
   },
 ];
+
+describe("usage hints", () => {
+  it("guest hint names the /sms trigger", () => {
+    expect(GUEST_USAGE_HINT).toContain("/sms");
+  });
+
+  it("direct hint offers bare text and the optional /sms", () => {
+    expect(DIRECT_USAGE_HINT).toContain("/sms");
+    expect(DIRECT_USAGE_HINT).toContain("просто сообщением");
+  });
+
+  it("conflict hint calls out the two-ways-at-once mistake", () => {
+    expect(CONFLICT_HINT).toContain("двумя способами");
+  });
+
+  it("the three hints are distinct strings", () => {
+    expect(
+      new Set([GUEST_USAGE_HINT, DIRECT_USAGE_HINT, CONFLICT_HINT]).size
+    ).toBe(3);
+  });
+});
 
 describe("renderResponse", () => {
   it("groups recognized formats by source, main first then PRs ascending, with PR titles, as file links", () => {

@@ -1,8 +1,20 @@
 import { type CorpusFormat, openPrCount, type Source } from "./corpus";
 import type { RecognizedFormat } from "./recognize";
 
-export const USAGE_HINT =
-  "Пришлите SMS — ответом на сообщение с ним или текстом после упоминания — и я покажу, какие форматы его распознают.";
+// Guest usage hint: a /sms call with neither a reply nor a payload. Mentions
+// /sms because in a guest chat that token is the required trigger.
+export const GUEST_USAGE_HINT =
+  "Чтобы распознать SMS: сделайте reply с сообщением @zenmoneysms_bot /sms или напишите @zenmoneysms_bot /sms <текст SMS>";
+
+// Conflict hint: /sms + a reply *and* a payload — the SMS is given two ways at
+// once, so we refuse to guess the source.
+export const CONFLICT_HINT =
+  "Вы указали SMS сразу двумя способами — в ответе на сообщение и текстом после /sms. Оставьте что-то одно.";
+
+// Direct usage hint: a private-chat call carrying no SMS. Doesn't mention
+// mentions/replies — in a DM bare text is enough, and /sms is optional.
+export const DIRECT_USAGE_HINT =
+  "Пришлите SMS текстом — просто сообщением или командой /sms <текст>, — и я покажу, какие форматы его распознают.";
 
 function noMatchMessage(corpus: CorpusFormat[]): string {
   const prCount = openPrCount(corpus);

@@ -20,9 +20,10 @@ const corpus: CorpusFormat[] = [
   },
 ];
 
-// A reply-to-SMS @mention — the shape Telegram delivers for a recognized query.
+// A reply to an SMS plus "@zenmoneysms_bot /sms" — the canonical guest call
+// that triggers recognition (ADR-0006: recognition requires the /sms token).
 const guestMessage = {
-  text: "@zenmoneysms_bot",
+  text: "@zenmoneysms_bot /sms",
   entities: [{ type: "mention", offset: 0, length: 16 }],
   reply_to_message: { text: DEMO_SMS },
 };
@@ -87,6 +88,47 @@ describe("answerGuestMessage", () => {
     };
     expect(result.input_message_content.message_text).toBe(
       INITIALIZING_MESSAGE
+    );
+  });
+
+  it("stays silent (no answerGuestQuery) when the call carries no /sms", async () => {
+    const answerGuestQuery = vi.fn().mockResolvedValue({});
+    const ctx: GuestQueryContext = {
+      // A mention + reply but no /sms token: someone talking about the bot, not
+      // summoning it. The handler must return without answering so the webhook
+      // still acks 200 (no head-of-line poisoning).
+      guestMessage: {
+        text: "@zenmoneysms_bot",
+        entities: [{ type: "mention", offset: 0, length: 16 }],
+        reply_to_message: { text: DEMO_SMS },
+      },
+      answerGuestQuery,
+    };
+
+    await answerGuestMessage(ctx, corpus, { dryRun: false });
+
+    expect(answerGuestQuery).not.toHaveBeenCalled();
+  });
+
+  it("prefers the quoted fragment of the replied-to message", async () => {
+    const answerGuestQuery = vi.fn().mockResolvedValue({});
+    const ctx: GuestQueryContext = {
+      guestMessage: {
+        text: "@zenmoneysms_bot /sms",
+        entities: [{ type: "mention", offset: 0, length: 16 }],
+        reply_to_message: { text: `шум перед: ${DEMO_SMS}` },
+        quote: { text: DEMO_SMS },
+      },
+      answerGuestQuery,
+    };
+
+    await answerGuestMessage(ctx, corpus, { dryRun: false });
+
+    const result = answerGuestQuery.mock.calls[0]?.[0] as {
+      input_message_content: { message_text: string };
+    };
+    expect(result.input_message_content.message_text).toBe(
+      `main:\n- <a href="${SBER_URL}">sberbank/12</a>`
     );
   });
 

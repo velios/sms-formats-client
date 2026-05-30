@@ -1,7 +1,7 @@
 import type { InlineQueryResult } from "grammy/types";
 import type { CorpusFormat } from "./corpus";
-import type { MessageEntityLike } from "./extract-sms";
-import { respondToMessage } from "./respond";
+import { extractSms, type MessageEntityLike } from "./extract-sms";
+import { respond } from "./respond";
 
 /**
  * The slice of a grammY `guest_message` context this handler depends on. Kept
@@ -13,6 +13,7 @@ export interface GuestQueryContext {
     text?: string;
     entities?: MessageEntityLike[];
     reply_to_message?: { text?: string };
+    quote?: { text?: string };
   };
   answerGuestQuery(result: InlineQueryResult): Promise<unknown>;
 }
@@ -51,17 +52,26 @@ export async function answerGuestMessage(
     return;
   }
 
+  const intent = extractSms({
+    text: message.text,
+    entities: message.entities,
+    replyToText: message.reply_to_message?.text,
+    quoteText: message.quote?.text,
+  });
+
+  // Cold start only blocks recognition — a hint needs no corpus, and silence is
+  // resolved below regardless of readiness.
   const body =
-    corpus === null
+    corpus === null && intent.kind === "sms"
       ? INITIALIZING_MESSAGE
-      : respondToMessage(
-          {
-            text: message.text,
-            entities: message.entities,
-            replyToText: message.reply_to_message?.text,
-          },
-          corpus
-        );
+      : respond(intent, corpus ?? []);
+
+  if (body === null) {
+    // Deliberate silence (ADR-0006): no /sms, so we skip answerGuestQuery and
+    // let the handler return. Unlike a *failed* send, an intentional non-answer
+    // still acks the webhook 200, so the queue can't head-of-line-poison.
+    return;
+  }
 
   if (options.dryRun) {
     process.stdout.write(`${body}\n`);

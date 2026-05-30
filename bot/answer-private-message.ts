@@ -1,6 +1,7 @@
 import { INITIALIZING_MESSAGE } from "./answer-guest-message";
 import type { CorpusFormat } from "./corpus";
-import { respondToDirectMessage } from "./respond";
+import { extractDirectSms } from "./extract-sms";
+import { respond } from "./respond";
 
 /**
  * The slice of a grammY message context this handler depends on. Kept minimal
@@ -37,10 +38,13 @@ export async function answerPrivateMessage(
   corpus: CorpusFormat[] | null,
   options: { dryRun: boolean }
 ): Promise<void> {
+  const intent = extractDirectSms(ctx.message?.text);
+  // Direct never goes silent, so `respond` always returns a string here; cold
+  // start only blocks recognition, not a hint.
   const body =
-    corpus === null
+    corpus === null && intent.kind === "sms"
       ? INITIALIZING_MESSAGE
-      : respondToDirectMessage(ctx.message?.text, corpus);
+      : respond(intent, corpus ?? []);
 
   if (options.dryRun) {
     process.stdout.write(`${body}\n`);

@@ -1,89 +1,161 @@
 import { describe, expect, it } from "vitest";
 import { extractDirectSms, extractSms } from "./extract-sms";
+import { CONFLICT_HINT, DIRECT_USAGE_HINT, GUEST_USAGE_HINT } from "./render";
 
-describe("extractSms", () => {
-  it("prefers reply_to_message over inline text", () => {
-    const result = extractSms({
-      text: "@zenmoneysms_bot",
-      entities: [{ type: "mention", offset: 0, length: 16 }],
-      replyToText: "Pokupka 1000 RUB",
-    });
-    expect(result).toEqual({ kind: "sms", sms: "Pokupka 1000 RUB" });
+// A leading @mention entity for "@zenmoneysms_bot" (16 chars at offset 0).
+const MENTION = { type: "mention", offset: 0, length: 16 };
+
+describe("extractSms (guest)", () => {
+  it("silences a bare mention with no /sms (talking about the bot)", () => {
+    expect(
+      extractSms({ text: "@zenmoneysms_bot", entities: [MENTION] })
+    ).toEqual({ kind: "silent" });
   });
 
-  it("keeps the replied-to SMS verbatim, including newlines", () => {
-    const result = extractSms({
-      replyToText: "Pokupka 1000 RUB\nDostupno 5000",
-    });
-    expect(result).toEqual({
-      kind: "sms",
-      sms: "Pokupka 1000 RUB\nDostupno 5000",
-    });
+  it("silences a mention with chatter but no /sms", () => {
+    expect(
+      extractSms({ text: "@zenmoneysms_bot попробуй его", entities: [MENTION] })
+    ).toEqual({ kind: "silent" });
   });
 
-  it("strips a leading @mention from inline text via entities", () => {
-    const result = extractSms({
-      text: "@zenmoneysms_bot Pokupka 1000 RUB",
-      entities: [{ type: "mention", offset: 0, length: 16 }],
-    });
-    expect(result).toEqual({ kind: "sms", sms: "Pokupka 1000 RUB" });
+  it("silences a reply when /sms is absent", () => {
+    expect(
+      extractSms({
+        text: "@zenmoneysms_bot",
+        entities: [MENTION],
+        replyToText: "Pokupka 1000 RUB",
+      })
+    ).toEqual({ kind: "silent" });
   });
 
-  it("strips a mention in the middle and collapses the gap", () => {
-    const result = extractSms({
-      text: "Pokupka @zenmoneysms_bot 1000 RUB",
-      entities: [{ type: "mention", offset: 8, length: 16 }],
-    });
-    expect(result).toEqual({ kind: "sms", sms: "Pokupka 1000 RUB" });
+  it("silences /smskaspi — no token boundary", () => {
+    expect(
+      extractSms({ text: "@zenmoneysms_bot /smskaspi", entities: [MENTION] })
+    ).toEqual({ kind: "silent" });
   });
 
-  it("strips @mentions textually when no entities are provided", () => {
-    const result = extractSms({ text: "@zenmoneysms_bot Spisanie 50 RUB" });
-    expect(result).toEqual({ kind: "sms", sms: "Spisanie 50 RUB" });
+  it("recognizes the reply text when /sms has no payload", () => {
+    expect(
+      extractSms({
+        text: "@zenmoneysms_bot /sms",
+        entities: [MENTION],
+        replyToText: "Pokupka 1000 RUB",
+      })
+    ).toEqual({ kind: "sms", sms: "Pokupka 1000 RUB" });
   });
 
-  it("reports empty when only a mention is present", () => {
-    const result = extractSms({
-      text: "@zenmoneysms_bot",
-      entities: [{ type: "mention", offset: 0, length: 16 }],
-    });
-    expect(result).toEqual({ kind: "empty" });
+  it("recognizes the payload after /sms when there is no reply", () => {
+    expect(
+      extractSms({
+        text: "@zenmoneysms_bot /sms Spisanie 50 RUB",
+        entities: [MENTION],
+      })
+    ).toEqual({ kind: "sms", sms: "Spisanie 50 RUB" });
   });
 
-  it("reports empty for a blank reply and blank inline text", () => {
-    expect(extractSms({ replyToText: "   ", text: "" })).toEqual({
-      kind: "empty",
-    });
+  it("returns the conflict hint when reply and payload are both given", () => {
+    expect(
+      extractSms({
+        text: "@zenmoneysms_bot /sms Spisanie 50 RUB",
+        entities: [MENTION],
+        replyToText: "Pokupka 1000 RUB",
+      })
+    ).toEqual({ kind: "hint", text: CONFLICT_HINT });
+  });
+
+  it("returns the guest usage hint for /sms with neither reply nor payload", () => {
+    expect(
+      extractSms({ text: "@zenmoneysms_bot /sms", entities: [MENTION] })
+    ).toEqual({ kind: "hint", text: GUEST_USAGE_HINT });
+  });
+
+  it("prefers the quoted fragment over the full replied-to text", () => {
+    expect(
+      extractSms({
+        text: "@zenmoneysms_bot /sms",
+        entities: [MENTION],
+        replyToText: "шум: Pokupka 1000 RUB",
+        quoteText: "Pokupka 1000 RUB",
+      })
+    ).toEqual({ kind: "sms", sms: "Pokupka 1000 RUB" });
+  });
+
+  it("matches /sms case-insensitively and keeps the reply verbatim with newlines", () => {
+    expect(
+      extractSms({
+        text: "@zenmoneysms_bot /SMS",
+        entities: [MENTION],
+        replyToText: "Pokupka 1000 RUB\nDostupno 5000",
+      })
+    ).toEqual({ kind: "sms", sms: "Pokupka 1000 RUB\nDostupno 5000" });
   });
 });
 
-describe("extractDirectSms", () => {
-  it("takes the whole message text verbatim, including newlines", () => {
-    const result = extractDirectSms("Pokupka 1000 RUB\nDostupno 5000");
-    expect(result).toEqual({
+describe("extractDirectSms (direct)", () => {
+  it("takes bare text verbatim, including newlines", () => {
+    expect(extractDirectSms("Pokupka 1000 RUB\nDostupno 5000")).toEqual({
       kind: "sms",
       sms: "Pokupka 1000 RUB\nDostupno 5000",
     });
   });
 
   it("does not strip @mentions — in a DM they are part of the SMS", () => {
-    const result = extractDirectSms("@zenmoneysms_bot Pokupka 1000 RUB");
-    expect(result).toEqual({
+    expect(extractDirectSms("@zenmoneysms_bot Pokupka 1000 RUB")).toEqual({
       kind: "sms",
       sms: "@zenmoneysms_bot Pokupka 1000 RUB",
     });
   });
 
-  it("reports empty for /start and /help", () => {
-    expect(extractDirectSms("/start")).toEqual({ kind: "empty" });
-    expect(extractDirectSms("/help")).toEqual({ kind: "empty" });
+  it("strips a leading /sms and recognizes the payload", () => {
+    expect(extractDirectSms("/sms Pokupka 1000 RUB")).toEqual({
+      kind: "sms",
+      sms: "Pokupka 1000 RUB",
+    });
   });
 
-  it("reports empty for a textless message", () => {
-    expect(extractDirectSms(undefined)).toEqual({ kind: "empty" });
+  it("strips the /sms@bot suffix form (equal to /sms in a DM)", () => {
+    expect(extractDirectSms("/sms@zenmoneysms_bot 100 RUB")).toEqual({
+      kind: "sms",
+      sms: "100 RUB",
+    });
   });
 
-  it("reports empty for blank text", () => {
-    expect(extractDirectSms("   ")).toEqual({ kind: "empty" });
+  it("recognizes /smskaspi verbatim — no token boundary", () => {
+    expect(extractDirectSms("/smskaspi купи")).toEqual({
+      kind: "sms",
+      sms: "/smskaspi купи",
+    });
+  });
+
+  it("returns the direct usage hint for an empty /sms", () => {
+    expect(extractDirectSms("/sms")).toEqual({
+      kind: "hint",
+      text: DIRECT_USAGE_HINT,
+    });
+  });
+
+  it("returns the direct usage hint for /start and /help", () => {
+    expect(extractDirectSms("/start")).toEqual({
+      kind: "hint",
+      text: DIRECT_USAGE_HINT,
+    });
+    expect(extractDirectSms("/help")).toEqual({
+      kind: "hint",
+      text: DIRECT_USAGE_HINT,
+    });
+  });
+
+  it("returns the direct usage hint for a textless message", () => {
+    expect(extractDirectSms(undefined)).toEqual({
+      kind: "hint",
+      text: DIRECT_USAGE_HINT,
+    });
+  });
+
+  it("returns the direct usage hint for blank text", () => {
+    expect(extractDirectSms("   ")).toEqual({
+      kind: "hint",
+      text: DIRECT_USAGE_HINT,
+    });
   });
 });

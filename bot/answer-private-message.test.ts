@@ -5,7 +5,7 @@ import {
   type PrivateMessageContext,
 } from "./answer-private-message";
 import type { CorpusFormat } from "./corpus";
-import { USAGE_HINT } from "./render";
+import { DIRECT_USAGE_HINT } from "./render";
 
 const DEMO_SMS = "Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB";
 const SBER_URL =
@@ -49,22 +49,45 @@ describe("answerPrivateMessage", () => {
     });
   });
 
-  it("answers the usage hint for /start", async () => {
+  it("strips a leading /sms and recognizes the payload", async () => {
+    const reply = vi.fn().mockResolvedValue({});
+    const ctx: PrivateMessageContext = {
+      message: { text: `/sms ${DEMO_SMS}` },
+      reply,
+    };
+
+    await answerPrivateMessage(ctx, corpus, { dryRun: false });
+
+    expect(reply.mock.calls[0]?.[0]).toBe(
+      `main:\n- <a href="${SBER_URL}">sberbank/12</a>`
+    );
+  });
+
+  it("answers the direct usage hint for /start", async () => {
     const reply = vi.fn().mockResolvedValue({});
     const ctx: PrivateMessageContext = { message: { text: "/start" }, reply };
 
     await answerPrivateMessage(ctx, corpus, { dryRun: false });
 
-    expect(reply.mock.calls[0]?.[0]).toBe(USAGE_HINT);
+    expect(reply.mock.calls[0]?.[0]).toBe(DIRECT_USAGE_HINT);
   });
 
-  it("answers the usage hint for a textless message", async () => {
+  it("answers the direct usage hint for an empty /sms", async () => {
+    const reply = vi.fn().mockResolvedValue({});
+    const ctx: PrivateMessageContext = { message: { text: "/sms" }, reply };
+
+    await answerPrivateMessage(ctx, corpus, { dryRun: false });
+
+    expect(reply.mock.calls[0]?.[0]).toBe(DIRECT_USAGE_HINT);
+  });
+
+  it("answers the direct usage hint for a textless message", async () => {
     const reply = vi.fn().mockResolvedValue({});
     const ctx: PrivateMessageContext = { message: {}, reply };
 
     await answerPrivateMessage(ctx, corpus, { dryRun: false });
 
-    expect(reply.mock.calls[0]?.[0]).toBe(USAGE_HINT);
+    expect(reply.mock.calls[0]?.[0]).toBe(DIRECT_USAGE_HINT);
   });
 
   it("answers the initializing stub when the corpus is not ready yet", async () => {

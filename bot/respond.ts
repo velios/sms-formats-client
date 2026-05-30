@@ -1,42 +1,23 @@
 import type { CorpusFormat } from "./corpus";
-import {
-  extractDirectSms,
-  extractSms,
-  type IncomingMessage,
-} from "./extract-sms";
+import type { DirectIntent, Intent } from "./extract-sms";
 import { recognize } from "./recognize";
-import { renderResponse, USAGE_HINT } from "./render";
+import { renderResponse } from "./render";
 
 /**
- * Full input→output pipeline as a pure function: a Telegram message plus the
- * corpus in, the bot's reply text out. Transport-agnostic so the whole contract
- * is testable without Telegram/grammY.
+ * Resolve an extracted `Intent` plus the corpus into the bot's reply text. The
+ * union fully encodes the outcome, so this is mode-agnostic: `silent → null`,
+ * `hint → text`, `sms → renderResponse(recognize(...))`. Only the guest adapter
+ * sees `null`; direct extraction never produces `silent`, so the overload lets
+ * the direct adapter treat the result as a plain string.
  */
-export function respondToMessage(
-  message: IncomingMessage,
-  corpus: CorpusFormat[]
-): string {
-  const extracted = extractSms(message);
-  if (extracted.kind === "empty") {
-    return USAGE_HINT;
+export function respond(intent: DirectIntent, corpus: CorpusFormat[]): string;
+export function respond(intent: Intent, corpus: CorpusFormat[]): string | null;
+export function respond(intent: Intent, corpus: CorpusFormat[]): string | null {
+  if (intent.kind === "silent") {
+    return null;
   }
-  const recognized = recognize(extracted.sms, corpus);
-  return renderResponse(recognized, corpus);
-}
-
-/**
- * Direct-invocation counterpart: the private-chat message text in, the bot's
- * reply out. Same recognition core and output contract as `respondToMessage`,
- * differing only in how the SMS is extracted (whole text verbatim).
- */
-export function respondToDirectMessage(
-  text: string | undefined,
-  corpus: CorpusFormat[]
-): string {
-  const extracted = extractDirectSms(text);
-  if (extracted.kind === "empty") {
-    return USAGE_HINT;
+  if (intent.kind === "hint") {
+    return intent.text;
   }
-  const recognized = recognize(extracted.sms, corpus);
-  return renderResponse(recognized, corpus);
+  return renderResponse(recognize(intent.sms, corpus), corpus);
 }
