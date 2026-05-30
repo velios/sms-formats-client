@@ -1,17 +1,25 @@
 /**
  * Corpus = the set of formats the Recognition Bot matches against (see Corpus,
- * Source in CONTEXT.md). This slice builds the `main` half of it from a real
- * git checkout of `zenmoney/sms-formats`: every format file on main becomes a
- * CorpusFormat with Source=main and a permalink to the file at the checked-out
- * SHA. Open-PR sources (and the duplication a PR introduces) come later.
+ * Source in CONTEXT.md). It has two halves, both built off one git checkout of
+ * `zenmoney/sms-formats`: every format file on `main` (Source=main), plus the
+ * formats added or modified in each open PR (Source=pr). A bank can appear twice
+ * — once from main and once as a pending proposal in a PR — and that's the point.
+ * Every format permalinks to its file at its own Source's SHA.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isBankFormatFilePath, parseFormatFile } from "@/domain/format";
-import type { MainCheckout } from "./main-checkout";
+import {
+  changedFiles,
+  type MainCheckout,
+  readFileAtPullRequestHead,
+} from "./main-checkout";
+import type { OpenPullRequest } from "./pull-requests";
 
-export type Source = { kind: "main" } | { kind: "pr"; number: number };
+export type Source =
+  | { kind: "main" }
+  | { kind: "pr"; number: number; title: string };
 
 export interface CorpusFormat {
   source: Source;
@@ -78,35 +86,101 @@ function blobUrl(repoSlug: string, sha: string, repoPath: string): string {
   return `https://github.com/${repoSlug}/blob/${sha}/${encodedPath}`;
 }
 
+/** A `src/<bank>/formats/*.txt` file — the only files that hold formats. */
+function isFormatFilePath(repoPath: string): boolean {
+  const bankPath = bankPathOf(repoPath);
+  return Boolean(bankPath && isBankFormatFilePath(repoPath, bankPath));
+}
+
 /**
- * Walk a main checkout into the `main` corpus: each `src/<bank>/formats/*.txt`
- * (identified by `isBankFormatFilePath`, so `senders.txt` is ignored) parsed by
- * `parseFormatFile`. Formats whose regex is empty are skipped — an empty regex
- * would spuriously match every SMS.
+ * One already-identified format file → a CorpusFormat, or null if its regex is
+ * empty (an empty regex would spuriously match every SMS). Shared by both
+ * halves; only the Source, raw content and permalink SHA differ.
  */
-export function buildMainCorpus(checkout: MainCheckout): CorpusFormat[] {
-  const formats: CorpusFormat[] = [];
-  for (const repoPath of listRepoFiles(checkout.dir)) {
-    const bankPath = bankPathOf(repoPath);
-    if (!(bankPath && isBankFormatFilePath(repoPath, bankPath))) {
-      continue;
-    }
-    const raw = readFileSync(join(checkout.dir, repoPath), "utf8");
-    const { regex } = parseFormatFile(raw, repoPath);
-    if (!regex) {
-      continue;
-    }
-    formats.push({
-      source: { kind: "main" },
-      bank: bankNameOf(bankPath),
-      formatId: formatIdOf(repoPath),
-      regex,
-      fileUrl: blobUrl(checkout.repoSlug, checkout.sha, repoPath),
-    });
+function toCorpusFormat(
+  source: Source,
+  repoPath: string,
+  raw: string,
+  repoSlug: string,
+  sha: string
+): CorpusFormat | null {
+  const { regex } = parseFormatFile(raw, repoPath);
+  if (!regex) {
+    return null;
   }
+  // bankPathOf is non-null here: the caller only passes format-file paths.
+  const bankPath = bankPathOf(repoPath) as string;
+  return {
+    source,
+    bank: bankNameOf(bankPath),
+    formatId: formatIdOf(repoPath),
+    regex,
+    fileUrl: blobUrl(repoSlug, sha, repoPath),
+  };
+}
+
+function sortByBankThenFormatId(formats: CorpusFormat[]): CorpusFormat[] {
   return formats.sort(
     (a, b) =>
       a.bank.localeCompare(b.bank) ||
       a.formatId.localeCompare(b.formatId, undefined, { numeric: true })
   );
+}
+
+/**
+ * The `main` half: every `src/<bank>/formats/*.txt` on the checked-out main
+ * (so `senders.txt` and non-format files are skipped), each Source=main and
+ * permalinked at the checkout SHA.
+ */
+export function buildMainCorpus(checkout: MainCheckout): CorpusFormat[] {
+  const formats: CorpusFormat[] = [];
+  for (const repoPath of listRepoFiles(checkout.dir)) {
+    if (!isFormatFilePath(repoPath)) {
+      continue;
+    }
+    const raw = readFileSync(join(checkout.dir, repoPath), "utf8");
+    const format = toCorpusFormat(
+      { kind: "main" },
+      repoPath,
+      raw,
+      checkout.repoSlug,
+      checkout.sha
+    );
+    if (format) {
+      formats.push(format);
+    }
+  }
+  return sortByBankThenFormatId(formats);
+}
+
+/**
+ * The PR half for one open PR: format files it adds or modifies (deleted files
+ * skipped — there's nothing to recognize), read at the PR head and permalinked
+ * there, each Source=pr. The editor's single-bank rule doesn't apply here, so a
+ * PR touching several banks contributes a format per bank. The PR head must
+ * already be fetched into `refs/pr/<N>` (see `fetchPullRequestHead`).
+ */
+export function buildPrCorpus(
+  checkout: MainCheckout,
+  pr: OpenPullRequest
+): CorpusFormat[] {
+  const source: Source = { kind: "pr", number: pr.number, title: pr.title };
+  const formats: CorpusFormat[] = [];
+  for (const change of changedFiles(checkout, pr.number)) {
+    if (change.status === "D" || !isFormatFilePath(change.repoPath)) {
+      continue;
+    }
+    const raw = readFileAtPullRequestHead(checkout, pr.number, change.repoPath);
+    const format = toCorpusFormat(
+      source,
+      change.repoPath,
+      raw,
+      checkout.repoSlug,
+      pr.headSha
+    );
+    if (format) {
+      formats.push(format);
+    }
+  }
+  return sortByBankThenFormatId(formats);
 }

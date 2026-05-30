@@ -10,14 +10,14 @@ const TINKOFF_URL =
 
 const corpus: CorpusFormat[] = [
   {
-    source: { kind: "pr", number: 45 },
+    source: { kind: "pr", number: 45, title: "Add Tinkoff format" },
     bank: "tinkoff",
     formatId: "24",
     regex: "x",
     fileUrl: TINKOFF_URL,
   },
   {
-    source: { kind: "pr", number: 50 },
+    source: { kind: "pr", number: 50, title: "Add Alfa format" },
     bank: "alfabank",
     formatId: "3",
     regex: "y",
@@ -27,10 +27,10 @@ const corpus: CorpusFormat[] = [
 ];
 
 describe("renderResponse", () => {
-  it("groups recognized formats by source, main first then PRs ascending, as file links", () => {
+  it("groups recognized formats by source, main first then PRs ascending, with PR titles, as file links", () => {
     const recognized: RecognizedFormat[] = [
       {
-        source: { kind: "pr", number: 45 },
+        source: { kind: "pr", number: 45, title: "Add Tinkoff format" },
         bank: "tinkoff",
         formatId: "24",
         fileUrl: TINKOFF_URL,
@@ -43,7 +43,21 @@ describe("renderResponse", () => {
       },
     ];
     expect(renderResponse(recognized, corpus)).toBe(
-      `main:\n- <a href="${SBER_URL}">sberbank/12</a>\nPR #45\n- <a href="${TINKOFF_URL}">tinkoff/24</a>`
+      `main:\n- <a href="${SBER_URL}">sberbank/12</a>\nPR #45 «Add Tinkoff format»\n- <a href="${TINKOFF_URL}">tinkoff/24</a>`
+    );
+  });
+
+  it("escapes HTML in the PR title", () => {
+    const recognized: RecognizedFormat[] = [
+      {
+        source: { kind: "pr", number: 7, title: "Fix <b> & co" },
+        bank: "tinkoff",
+        formatId: "24",
+        fileUrl: TINKOFF_URL,
+      },
+    ];
+    expect(renderResponse(recognized, corpus)).toBe(
+      `PR #7 «Fix &lt;b&gt; &amp; co»\n- <a href="${TINKOFF_URL}">tinkoff/24</a>`
     );
   });
 

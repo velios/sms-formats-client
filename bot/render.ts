@@ -14,7 +14,9 @@ function sourceKey(source: Source): string {
 }
 
 function sourceHeader(source: Source): string {
-  return source.kind === "main" ? "main:" : `PR #${source.number}`;
+  return source.kind === "main"
+    ? "main:"
+    : `PR #${source.number} «${escapeHtml(source.title)}»`;
 }
 
 function sourceOrder(source: Source): number {

@@ -11,7 +11,7 @@ const corpus: CorpusFormat[] = [
     fileUrl: "https://github.com/o/r/blob/sha/src/sberbank/formats/12.txt",
   },
   {
-    source: { kind: "pr", number: 45 },
+    source: { kind: "pr", number: 45, title: "Add Tinkoff format" },
     bank: "tinkoff",
     formatId: "24",
     regex: "Pokupka (\\d+) RUB",
@@ -36,7 +36,7 @@ describe("recognize", () => {
         fileUrl: "https://github.com/o/r/blob/sha/src/sberbank/formats/12.txt",
       },
       {
-        source: { kind: "pr", number: 45 },
+        source: { kind: "pr", number: 45, title: "Add Tinkoff format" },
         bank: "tinkoff",
         formatId: "24",
         fileUrl: "https://github.com/o/r/blob/sha/src/tinkoff/formats/24.txt",
@@ -62,7 +62,7 @@ describe("recognize", () => {
         fileUrl: "https://github.com/o/r/blob/sha/src/sberbank/formats/12.txt",
       },
       {
-        source: { kind: "pr", number: 45 },
+        source: { kind: "pr", number: 45, title: "Add Tinkoff format" },
         bank: "tinkoff",
         formatId: "24",
         fileUrl: "https://github.com/o/r/blob/sha/src/tinkoff/formats/24.txt",
