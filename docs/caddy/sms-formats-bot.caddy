@@ -6,8 +6,12 @@
 # The bot itself is the gatekeeper: it serves only the unguessable webhook path
 # and verifies X-Telegram-Bot-Api-Secret-Token, 404-ing everything else. So
 # Caddy can blindly proxy and the secret path never lands in Caddy config.
+#
+# The domain is read from $RECOGNITION_BOT_DOMAIN so the host stays out of the
+# repo. Either export it for the Caddy process (e.g. an EnvironmentFile on the
+# caddy.service) or substitute the literal domain when copying this in.
 
-zenmoneysmsbot.zentable.ru {
+{$RECOGNITION_BOT_DOMAIN} {
     encode zstd gzip
     reverse_proxy localhost:8470
 }

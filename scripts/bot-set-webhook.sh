@@ -3,7 +3,7 @@
 # bot/.env. Run after the bot is deployed and Caddy serves the domain over HTTPS.
 #
 # Usage: bash scripts/bot-set-webhook.sh [domain]
-#   domain defaults to zenmoneysmsbot.zentable.ru
+#   domain defaults to $RECOGNITION_BOT_DOMAIN from bot/.env
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -12,7 +12,7 @@ set -a
 source bot/.env
 set +a
 
-DOMAIN="${1:-zenmoneysmsbot.zentable.ru}"
+DOMAIN="${1:-${RECOGNITION_BOT_DOMAIN:?Set RECOGNITION_BOT_DOMAIN in bot/.env or pass the domain as the first argument}}"
 WEBHOOK_PATH="/${RECOGNITION_BOT_WEBHOOK_PATH#/}"
 URL="https://${DOMAIN}${WEBHOOK_PATH}"
 API="https://api.telegram.org/bot${RECOGNITION_BOT_TOKEN}"
