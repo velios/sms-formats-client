@@ -70,3 +70,17 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - This project does not require preserving backward compatibility at the code level. After aligning the solution with the user, breaking changes are allowed. Do not leave code paths, compatibility layers, or other artifacts that imply the old solution still exists. Rewrite code as if the new behavior had always been the intended one, and bring the surrounding codebase to a consistent state.
 - For design work, use pencil.dev approaches and keep the editable source of truth in `design/app.pen`. If the current Pencil state differs, sync it back into `design/` before continuing with UI changes.
 - For UI, UX, and screen-structure tasks, consult `design/notes/agent-design-guide.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live as GitHub issues in `velios/sms-formats-client` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
