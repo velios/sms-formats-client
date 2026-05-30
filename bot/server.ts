@@ -1,9 +1,9 @@
 import { serve } from "bun";
 import { Bot, webhookCallback } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
-import { buildMainCorpus, buildPrCorpus, openPrCount } from "./corpus";
+import { buildMainCorpus, buildOpenPrsCorpus, openPrCount } from "./corpus";
 import { loadBotEnv } from "./env";
-import { ensureMainCheckout, fetchPullRequestHead } from "./main-checkout";
+import { ensureMainCheckout } from "./main-checkout";
 import { listOpenPullRequests } from "./pull-requests";
 import { respondToMessage } from "./respond";
 
@@ -25,9 +25,11 @@ const openPrs = await listOpenPullRequests({
   repoSlug: env.sourceRepo,
   token: env.githubToken,
 });
-const prCorpus = openPrs.flatMap((pr) => {
-  fetchPullRequestHead(checkout, pr.number);
-  return buildPrCorpus(checkout, pr);
+const prCorpus = buildOpenPrsCorpus(checkout, openPrs, {
+  onSkip: (pr, error) =>
+    process.stderr.write(
+      `Skipping PR #${pr.number} in corpus build: ${error}\n`
+    ),
 });
 const corpus = [...mainCorpus, ...prCorpus];
 

@@ -106,8 +106,16 @@ export function changedFiles(
   checkout: MainCheckout,
   prNumber: number
 ): ChangedFile[] {
+  // core.quotepath=false: bank names are Cyrillic, which git otherwise
+  // octal-escapes and wraps in quotes, mangling the path past parsing.
   const output = git(
-    ["diff", "--name-status", `HEAD...${pullRequestRef(prNumber)}`],
+    [
+      "-c",
+      "core.quotepath=false",
+      "diff",
+      "--name-status",
+      `HEAD...${pullRequestRef(prNumber)}`,
+    ],
     checkout.dir
   );
   if (!output) {

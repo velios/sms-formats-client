@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { isBankFormatFilePath, parseFormatFile } from "@/domain/format";
 import {
   changedFiles,
+  fetchPullRequestHead,
   type MainCheckout,
   readFileAtPullRequestHead,
 } from "./main-checkout";
@@ -183,4 +184,31 @@ export function buildPrCorpus(
     }
   }
   return sortByBankThenFormatId(formats);
+}
+
+/**
+ * The PR half across every open PR: fetch each head, then collect its formats.
+ * A single failing PR (fetch error, unreadable file, bad ref) is reported via
+ * `onSkip` and dropped rather than thrown — one broken proposal must not take
+ * down the boot, since main is the durable core and PRs are additive (ADR-0004).
+ */
+export function buildOpenPrsCorpus(
+  checkout: MainCheckout,
+  prs: OpenPullRequest[],
+  options: {
+    onSkip: (pr: OpenPullRequest, error: unknown) => void;
+    /** Injectable for tests; defaults to the real git fetch. */
+    fetchHead?: typeof fetchPullRequestHead;
+  }
+): CorpusFormat[] {
+  const { onSkip, fetchHead = fetchPullRequestHead } = options;
+  return prs.flatMap((pr) => {
+    try {
+      fetchHead(checkout, pr.number);
+      return buildPrCorpus(checkout, pr);
+    } catch (error) {
+      onSkip(pr, error);
+      return [];
+    }
+  });
 }

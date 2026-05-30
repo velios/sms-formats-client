@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   buildMainCorpus,
+  buildOpenPrsCorpus,
   buildPrCorpus,
   type CorpusFormat,
   openPrCount,
@@ -158,6 +159,13 @@ describe("buildPrCorpus", () => {
     rmSync(join(dir, "src/legacy/formats/1.txt"));
     writeRepoFile(dir, "src/blank/formats/4.txt", formatFile(""));
     writeRepoFile(dir, "src/sberbank/senders.txt", "900\n");
+    // Real bank names carry spaces and Cyrillic — git escapes such paths in
+    // diff output unless core.quotepath is off; the PR half must still see them.
+    writeRepoFile(
+      dir,
+      "src/Банк ЛНР_1/formats/Zachislenie RUB_5.txt",
+      formatFile("^Zachislenie \\d+ RUB$")
+    );
     prHeadSha = commitAll(dir, "pr7");
 
     // Simulate what fetchPullRequestHead lands: the PR head at refs/pr/7, with
@@ -193,6 +201,13 @@ describe("buildPrCorpus", () => {
         regex: "^New Sber$",
         fileUrl: `https://github.com/zenmoney/sms-formats/blob/${prHeadSha}/src/sberbank/formats/12.txt`,
       },
+      {
+        source: { kind: "pr", number: 7, title: "Improve Sber & add Alfa" },
+        bank: "Банк ЛНР_1",
+        formatId: "Zachislenie RUB_5",
+        regex: "^Zachislenie \\d+ RUB$",
+        fileUrl: `https://github.com/zenmoney/sms-formats/blob/${prHeadSha}/src/%D0%91%D0%B0%D0%BD%D0%BA%20%D0%9B%D0%9D%D0%A0_1/formats/Zachislenie%20RUB_5.txt`,
+      },
     ]);
   });
 
@@ -204,5 +219,51 @@ describe("buildPrCorpus", () => {
 
   it("does not carry over formats main has but the PR leaves untouched", () => {
     expect(corpus.some((f) => f.bank === "tinkoff")).toBe(false);
+  });
+});
+
+describe("buildOpenPrsCorpus", () => {
+  let dir: string;
+  let checkout: MainCheckout;
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "open-prs-"));
+    git(dir, ["init", "-q", "-b", "main"]);
+    writeRepoFile(dir, "src/sberbank/formats/12.txt", formatFile("^Sber$"));
+    const mainSha = commitAll(dir, "main");
+
+    // PR #7 is healthy: a format landed at refs/pr/7, as fetchPullRequestHead
+    // would leave it. PR #8 is never fetched — refs/pr/8 is absent, so building
+    // it throws (git diff against a missing ref), standing in for any per-PR
+    // failure at boot (fetch error, unreadable file, bad ref).
+    git(dir, ["checkout", "-q", "-b", "pr7"]);
+    writeRepoFile(dir, "src/alfabank/formats/9.txt", formatFile("^Alfa$"));
+    const pr7Sha = commitAll(dir, "pr7");
+    git(dir, ["update-ref", "refs/pr/7", pr7Sha]);
+    git(dir, ["checkout", "-q", "main"]);
+
+    checkout = { dir, sha: mainSha, repoSlug: "zenmoney/sms-formats" };
+  });
+
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("drops a failing PR via onSkip without losing the healthy ones", () => {
+    const skipped: number[] = [];
+    const corpus = buildOpenPrsCorpus(
+      checkout,
+      [
+        { number: 7, title: "Add Alfa", headSha: "pr7head" },
+        { number: 8, title: "Broken", headSha: "missing" },
+      ],
+      {
+        fetchHead: () => "refs/pr/stub",
+        onSkip: (pr) => skipped.push(pr.number),
+      }
+    );
+
+    expect(skipped).toEqual([8]);
+    expect(corpus.map((f) => f.bank)).toEqual(["alfabank"]);
   });
 });
