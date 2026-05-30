@@ -26,6 +26,10 @@ const store = new CorpusStore({
     token: env.githubToken,
     onSkip: (pr, error) =>
       process.stderr.write(`Skipping PR #${pr.number} in corpus: ${error}\n`),
+    onFreshnessError: (error) =>
+      process.stderr.write(
+        `Freshness check failed, building from on-disk corpus: ${error}\n`
+      ),
   }),
   onError: (error) =>
     process.stderr.write(

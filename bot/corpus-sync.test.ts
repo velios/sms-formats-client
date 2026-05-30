@@ -193,12 +193,14 @@ describe("createCorpusSync", () => {
     expect(alfa?.fileUrl).toContain(newHead);
   });
 
-  it("rejects when a REST check errors, so the store can serve last good", async () => {
+  it("falls back to the on-disk checkout when a REST check errors on a cold first cycle", async () => {
+    const errors: unknown[] = [];
     const sync = createCorpusSync({
       repoSlug: "zenmoney/sms-formats",
       branch: "main",
       dir: checkoutDir,
       onSkip: () => undefined,
+      onFreshnessError: (error) => errors.push(error),
       fetchImpl: (async () =>
         new Response("boom", {
           status: 500,
@@ -206,6 +208,36 @@ describe("createCorpusSync", () => {
         })) as unknown as typeof fetch,
     });
 
-    await expect(sync()).rejects.toThrow("500");
+    const snapshot = await sync();
+    // Main half built from the freshly-cloned checkout; PR half empty (the
+    // PR-list REST call failed), instead of stranding the corpus.
+    expect(snapshot?.formats.map((f) => f.bank)).toEqual(["sberbank"]);
+    expect(snapshot?.openPrCount).toBe(0);
+    expect(snapshot?.mainSha).toBe(state.mainSha);
+    // Both freshness checks (main ref + open-PR list) reported their failure.
+    expect(errors).toHaveLength(2);
+  });
+
+  it("returns null on a REST error after a good build, so the store keeps last good", async () => {
+    let failRest = false;
+    const live = fakeFetch(state);
+    const sync = createCorpusSync({
+      repoSlug: "zenmoney/sms-formats",
+      branch: "main",
+      dir: checkoutDir,
+      onSkip: () => undefined,
+      onFreshnessError: () => undefined,
+      fetchImpl: (async (url: string, init: RequestInit) => {
+        if (failRest) {
+          return new Response("boom", { status: 500 });
+        }
+        return live(url, init);
+      }) as unknown as typeof fetch,
+    });
+
+    await sync(); // good first build
+    failRest = true;
+    // Both checks soft-fail → no change → current snapshot stands (serve last good).
+    expect(await sync()).toBeNull();
   });
 });
