@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { prepareFormatEntriesMock } = vi.hoisted(() => ({
@@ -127,9 +127,13 @@ describe("QuickCheckPanel", () => {
       />
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "quickCheck.openInApp" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "quickCheck.openInApp" })
+    );
 
-    expect(onOpenFileInApp).toHaveBeenCalledWith("banks/pumb/formats/match.txt");
+    expect(onOpenFileInApp).toHaveBeenCalledWith(
+      "banks/pumb/formats/match.txt"
+    );
     expect(onClose).toHaveBeenCalled();
   });
 });

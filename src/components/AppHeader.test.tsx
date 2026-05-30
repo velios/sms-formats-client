@@ -1,10 +1,10 @@
-import type { ReactNode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   changeLanguage: vi.fn(),
-  hardResetAppState: vi.fn(async () => {}),
+  hardResetAppState: vi.fn(async () => undefined),
   navigate: vi.fn(),
   setLocale: vi.fn(),
 }));
@@ -44,8 +44,8 @@ vi.mock("@/domain/github", () => ({
   getGitHubUserToken: vi.fn(() => "ghp_saved"),
   refreshPullRequestApprovalPermission: vi.fn(async () => false),
   setGitHubUserToken: vi.fn(),
-  subscribeGitHubAuthChange: vi.fn(() => () => {}),
-  validateToken: vi.fn(async () => {}),
+  subscribeGitHubAuthChange: vi.fn(() => () => undefined),
+  validateToken: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/features/source-selector/SourceSelector", () => ({
@@ -53,12 +53,19 @@ vi.mock("@/features/source-selector/SourceSelector", () => ({
 }));
 
 vi.mock("@/store", () => ({
-  useSourceStore: (selector: (state: { repository: { owner: string; repo: string } }) => unknown) =>
+  useSourceStore: (
+    selector: (state: {
+      repository: { owner: string; repo: string };
+    }) => unknown
+  ) =>
     selector({
       repository: { owner: "zenmoney", repo: "sms-formats" },
     }),
   useUIStore: (
-    selector: (state: { locale: string; setLocale: typeof mocks.setLocale }) => unknown
+    selector: (state: {
+      locale: string;
+      setLocale: typeof mocks.setLocale;
+    }) => unknown
   ) =>
     selector({
       locale: "ru",

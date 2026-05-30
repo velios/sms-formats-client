@@ -54,8 +54,10 @@ const tokenDecorations = EditorView.decorations.compute(
 );
 
 const regexTokenDecorationClassMap: Record<string, string> = {
-  anchor: "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
-  group: "rounded-[2px] border border-[#77c790] bg-[#b9f0c8] px-[1px] font-semibold text-[#0f4c2a]",
+  anchor:
+    "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
+  group:
+    "rounded-[2px] border border-[#77c790] bg-[#b9f0c8] px-[1px] font-semibold text-[#0f4c2a]",
   quantifier:
     "rounded-[2px] border border-[#7fb2ea] bg-[#bcdcff] px-[1px] font-semibold text-[#1b4b78]",
   alternation:
@@ -301,7 +303,7 @@ export function UnifiedRegexEditor({
       className="flex items-stretch overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]"
       onBlur={onBlur}
     >
-      <span className="select-none px-1.5 pb-2 pt-2 text-[15px] text-[color:var(--c-text-dim)] font-[var(--font-mono)]">
+      <span className="select-none px-1.5 pt-2 pb-2 font-[var(--font-mono)] text-[15px] text-[color:var(--c-text-dim)]">
         /
       </span>
       <div className="relative min-w-0 flex-1">
@@ -312,7 +314,7 @@ export function UnifiedRegexEditor({
           ref={containerRef}
         />
       </div>
-      <span className="select-none px-3 pb-2 pt-2 text-sm text-[color:var(--c-text-dim)] font-[var(--font-mono)]">
+      <span className="select-none px-3 pt-2 pb-2 font-[var(--font-mono)] text-[color:var(--c-text-dim)] text-sm">
         /
       </span>
     </div>

@@ -72,14 +72,16 @@ const regexLabHeaderButtonClassName =
   "border-[color:transparent] text-[color:var(--c-text-muted)] shadow-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)] focus-visible:ring-[color:var(--c-border-focus)]";
 const regexLabTabClassName = (isActive: boolean) =>
   cn(
-    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid px-4 py-2 text-[13px] font-medium transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
+    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid px-4 py-2 font-medium text-[13px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
     isActive
       ? "border-b-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-1px_0_var(--c-accent-soft)]"
       : "border-b-transparent text-[color:var(--c-text-muted)] hover:border-b-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
   );
 const regexTokenToneClassMap: Record<string, string> = {
-  anchor: "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
-  group: "rounded-[2px] border border-[#77c790] bg-[#b9f0c8] px-[1px] font-semibold text-[#0f4c2a]",
+  anchor:
+    "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
+  group:
+    "rounded-[2px] border border-[#77c790] bg-[#b9f0c8] px-[1px] font-semibold text-[#0f4c2a]",
   quantifier:
     "rounded-[2px] border border-[#7fb2ea] bg-[#bcdcff] px-[1px] font-semibold text-[#1b4b78]",
   alternation:
@@ -401,9 +403,7 @@ export function RegexLab({
             tokens={explanation.patternTokens}
           />
           {matchResult.error && (
-            <div
-              className="mt-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]"
-            >
+            <div className="mt-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
               {matchResult.error}
             </div>
           )}
@@ -457,21 +457,19 @@ export function RegexLab({
                 size="sm"
                 variant="ghost"
               >
-                <a
-                  href={regex101Url}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
+                <a href={regex101Url} rel="noopener noreferrer" target="_blank">
                   {t("editor.openInRegex101")}
                 </a>
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap border-b border-[color:var(--c-border)]">
+          <div className="flex flex-wrap border-[color:var(--c-border)] border-b">
             {visibleExampleTexts.map((_, i) => (
               <div className="flex items-center" key={i}>
                 <button
-                  className={regexLabTabClassName(i === visibleActiveExampleIndex)}
+                  className={regexLabTabClassName(
+                    i === visibleActiveExampleIndex
+                  )}
                   onClick={() => {
                     if (isShowingIntersectionExamples) {
                       setActiveIntersectionExampleIndex(i);
@@ -523,22 +521,22 @@ export function RegexLab({
                   )}
                 {!isShowingIntersectionExamples &&
                   visibleExampleTexts.length > 1 && (
-                  <Button
-                    aria-label={t("editor.removeExample")}
-                    className="px-1 py-0.5 text-[11px] text-[color:var(--c-text-dim)]"
-                    disabled={readOnly}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveExample(i);
-                    }}
-                    size="sm"
-                    title={t("editor.removeExample")}
-                    type="button"
-                    variant="ghost"
-                  >
-                    ×
-                  </Button>
-                )}
+                    <Button
+                      aria-label={t("editor.removeExample")}
+                      className="px-1 py-0.5 text-[11px] text-[color:var(--c-text-dim)]"
+                      disabled={readOnly}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveExample(i);
+                      }}
+                      size="sm"
+                      title={t("editor.removeExample")}
+                      type="button"
+                      variant="ghost"
+                    >
+                      ×
+                    </Button>
+                  )}
               </div>
             ))}
           </div>
@@ -584,7 +582,9 @@ export function RegexLab({
                 "justify-start px-0 py-0"
               )}
             >
-              <div className={cn(regexLabTabListClassName, "w-full border-b-0")}>
+              <div
+                className={cn(regexLabTabListClassName, "w-full border-b-0")}
+              >
                 <button
                   className={regexLabTabClassName(
                     rightPaneTab === "explanation"
@@ -674,13 +674,13 @@ function MatchOverlayTextarea({
     <div className="relative overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 overflow-auto px-3 py-2 text-[13px] leading-[1.6] text-[color:var(--c-text)] [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] min-h-[60px]"
+        className="pointer-events-none absolute inset-0 min-h-[60px] overflow-auto px-3 py-2 text-[13px] text-[color:var(--c-text)] leading-[1.6] [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap]"
         ref={highlightsRef}
       >
         {renderHighlightedText(segments)}
       </div>
       <textarea
-        className="relative z-[1] min-h-[60px] w-full resize-y border-none bg-transparent px-3 py-2 text-[13px] leading-[1.6] text-transparent caret-[color:var(--c-text)] outline-none [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] selection:bg-[color:var(--c-accent-soft)]"
+        className="relative z-[1] min-h-[60px] w-full resize-y border-none bg-transparent px-3 py-2 text-[13px] text-transparent leading-[1.6] caret-[color:var(--c-text)] outline-none [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] selection:bg-[color:var(--c-accent-soft)]"
         onChange={(e) => onTextChange(e.target.value)}
         onScroll={(e) =>
           handleScroll(e.currentTarget.scrollTop, e.currentTarget.scrollLeft)
@@ -912,7 +912,7 @@ function MatchInfoPanel({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
       {result.error ? (
-        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]">
+        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
           {t("editor.invalidRegex")}
         </div>
       ) : (
@@ -930,7 +930,7 @@ function MatchInfoPanel({
                 className="inline-block h-3 w-3 shrink-0 rounded-full"
                 style={{ background: "var(--c-group-border-0)" }}
               />
-              <span className="text-sm text-[color:var(--c-text-muted)]">
+              <span className="text-[color:var(--c-text-muted)] text-sm">
                 {t("editor.fullMatch")}:
               </span>
               <span className="rounded-[3px] bg-[color:var(--c-bg-input)] px-1.5 py-0.5 font-mono text-sm">
@@ -938,18 +938,18 @@ function MatchInfoPanel({
               </span>
             </div>
           ) : (
-            <div className="text-sm text-[color:var(--c-text-muted)]">
+            <div className="text-[color:var(--c-text-muted)] text-sm">
               {t("editor.noMatch")}
             </div>
           )}
           {captureGroups.length > 0 && (
             <>
               {hasMissingColumnMappings && (
-                <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]">
+                <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
                   {t("columns.missingMappings")}
                 </div>
               )}
-              <div className="mt-1 text-sm font-medium text-[color:var(--c-text-muted)]">
+              <div className="mt-1 font-medium text-[color:var(--c-text-muted)] text-sm">
                 {t("editor.groups")}:
               </div>
               <table className="w-full border-collapse text-xs">
@@ -958,9 +958,7 @@ function MatchInfoPanel({
                     <th className="px-1.5 py-[3px]" />
                     <th className="px-1.5 py-[3px]">#</th>
                     <th className="px-1.5 py-[3px]">Value</th>
-                    <th className="px-1.5 py-[3px]">
-                      {t("editor.columns")}
-                    </th>
+                    <th className="px-1.5 py-[3px]">{t("editor.columns")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1082,14 +1080,14 @@ function ExplanationPanel({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
       {hasError ? (
-        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-xs text-[color:var(--c-error)]">
+        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
           {t("editor.invalidRegex")}
         </div>
       ) : explanation.patternTokens.length === 0 ? (
-        <div className="text-sm text-[color:var(--c-text-muted)]">—</div>
+        <div className="text-[color:var(--c-text-muted)] text-sm">—</div>
       ) : (
         <div className="flex flex-col gap-1">
-          <div className="text-sm font-medium text-[color:var(--c-text-muted)]">
+          <div className="font-medium text-[color:var(--c-text-muted)] text-sm">
             {t("editor.patternParts")}
           </div>
           {explanation.patternTokens.map((token, index) => (
@@ -1205,7 +1203,7 @@ function ColumnPickerModal({
           return (
             <button
               className={cn(
-                "flex w-full items-center gap-2 border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] px-3 py-2 text-left last:border-b-0",
+                "flex w-full items-center gap-2 border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-surface)] px-3 py-2 text-left last:border-b-0",
                 isCurrent && "bg-[color:var(--c-accent-soft)]",
                 !isDisabled && "hover:bg-[color:var(--c-bg-hover)]",
                 isDisabled && "cursor-not-allowed opacity-55"
@@ -1221,8 +1219,8 @@ function ColumnPickerModal({
               }
               type="button"
             >
-              <span className="font-mono font-medium">{column.name}</span>
-              <span className="text-sm text-[color:var(--c-text-muted)]">
+              <span className="font-medium font-mono">{column.name}</span>
+              <span className="text-[color:var(--c-text-muted)] text-sm">
                 {column.description[lang] ?? column.description.en}
               </span>
               {column.parameterized && (
@@ -1239,7 +1237,7 @@ function ColumnPickerModal({
           );
         })}
         {filteredColumns.length === 0 && (
-          <div className="p-4 text-sm text-[color:var(--c-text-muted)]">—</div>
+          <div className="p-4 text-[color:var(--c-text-muted)] text-sm">—</div>
         )}
       </div>
       <div className="mt-6 flex justify-end gap-2">

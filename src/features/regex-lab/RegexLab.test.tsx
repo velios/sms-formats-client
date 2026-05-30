@@ -1,5 +1,5 @@
-import * as React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
+import * as React from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { RegexLab } from "./RegexLab";
 
@@ -99,13 +99,11 @@ function RegexLabHarness() {
       onColumnsChange={() => undefined}
       onExampleChange={(index, value) =>
         setExamples((prev) =>
-          prev.map((item, itemIndex) =>
-            itemIndex === index ? value : item
-          )
+          prev.map((item, itemIndex) => (itemIndex === index ? value : item))
         )
       }
-      onRegexChange={() => undefined}
       onOpenIntersectionFileInApp={handleOpenIntersectionFileInApp}
+      onRegexChange={() => undefined}
       onRemoveExample={() => undefined}
       regex="^PAY (\\d+)$"
     />
@@ -142,7 +140,9 @@ describe("RegexLab intersection example toggle", () => {
 
     expect(textarea).toHaveValue("PAY 400");
 
-    fireEvent.click(screen.getByRole("button", { name: "editor.showExamples" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "editor.showExamples" })
+    );
 
     expect(textarea).toHaveValue("PAY 100");
     expect(textarea).not.toHaveAttribute("readonly");

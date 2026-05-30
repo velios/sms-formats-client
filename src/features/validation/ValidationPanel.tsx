@@ -10,8 +10,8 @@ import {
   checkCrossFormatCollisions,
   validateFormat,
 } from "@/domain/validation";
-import { useFileContentStore } from "@/store/file-content-store";
 import { useDraftStore, useSourceStore } from "@/store";
+import { useFileContentStore } from "@/store/file-content-store";
 
 interface Props {
   bankPath: string;
@@ -69,8 +69,13 @@ async function collectChangedFormatContents(params: {
   repository: RepoRef;
   draftStore: ValidationDraftStore;
 }): Promise<Map<string, string>> {
-  const { changedFormatPaths, prNumber, sourceRefName, repository, draftStore } =
-    params;
+  const {
+    changedFormatPaths,
+    prNumber,
+    sourceRefName,
+    repository,
+    draftStore,
+  } = params;
   const entries = await Promise.all(
     changedFormatPaths.map(async (path) => {
       const latestContent = await loadLatestFormatContent({

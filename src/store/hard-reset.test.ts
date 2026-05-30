@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DRAFT_STORE_STORAGE_KEY } from "./persistence";
 import { hardResetAppState } from "./hard-reset";
+import { DRAFT_STORE_STORAGE_KEY } from "./persistence";
 
 const idbStorage = vi.hoisted(() => new Map<string, string>());
 
@@ -35,8 +35,14 @@ describe("hardResetAppState", () => {
     localStorageState = new Map<string, string>([
       ["sms-formats-github-user-token", "ghp_saved"],
       ["sms-formats-lang", "en"],
-      ["sms-formats-pr-approval-permissions", '{"zenmoney/sms-formats":{"canApprove":true}}'],
-      ["sms-formats-recent-formats", '{"src/TBank_123":["src/TBank_123/formats/a.txt"]}'],
+      [
+        "sms-formats-pr-approval-permissions",
+        '{"zenmoney/sms-formats":{"canApprove":true}}',
+      ],
+      [
+        "sms-formats-recent-formats",
+        '{"src/TBank_123":["src/TBank_123/formats/a.txt"]}',
+      ],
       ["sms-formats-workspace-session", '{"prNumber":123}'],
       ["unrelated-key", "keep-me"],
     ]);
@@ -59,9 +65,9 @@ describe("hardResetAppState", () => {
       "ghp_saved"
     );
     expect(localStorageState.has("sms-formats-lang")).toBe(false);
-    expect(
-      localStorageState.has("sms-formats-pr-approval-permissions")
-    ).toBe(false);
+    expect(localStorageState.has("sms-formats-pr-approval-permissions")).toBe(
+      false
+    );
     expect(localStorageState.has("sms-formats-recent-formats")).toBe(false);
     expect(localStorageState.has("sms-formats-workspace-session")).toBe(false);
     expect(localStorageState.get("unrelated-key")).toBe("keep-me");

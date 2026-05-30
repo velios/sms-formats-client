@@ -93,185 +93,185 @@ function buildInFlightKey(params: PrimeFileContentParams): string {
 }
 
 function isEntryFresh(entry: FileContentEntry | undefined, headSha: string) {
-  return (
-    entry?.status === "ready" && entry.lastResolvedHeadSha === headSha
-  );
+  return entry?.status === "ready" && entry.lastResolvedHeadSha === headSha;
 }
 
-export const useFileContentStore = create<FileContentStoreState>((set, get) => ({
-  entries: {},
+export const useFileContentStore = create<FileContentStoreState>(
+  (set, get) => ({
+    entries: {},
 
-  getFileContentEntry: (params) => get().entries[buildFileContentCacheKey(params)],
+    getFileContentEntry: (params) =>
+      get().entries[buildFileContentCacheKey(params)],
 
-  getCachedFileContent: (params) => {
-    const entry = get().getFileContentEntry(params);
-    return entry && isEntryFresh(entry, params.headSha)
-      ? entry.content
-      : undefined;
-  },
+    getCachedFileContent: (params) => {
+      const entry = get().getFileContentEntry(params);
+      return entry && isEntryFresh(entry, params.headSha)
+        ? entry.content
+        : undefined;
+    },
 
-  setFileContentEntry: ({
-    repository,
-    prNumber,
-    filePath,
-    content,
-    lastResolvedHeadSha,
-    loadedFrom,
-    status,
-    error = null,
-  }) => {
-    const key = buildFileContentCacheKey({ repository, prNumber, filePath });
-    set((state) => ({
-      entries: {
-        ...state.entries,
-        [key]: {
-          repository,
-          prNumber,
-          filePath,
-          content,
-          lastResolvedHeadSha,
-          status,
-          loadedAt: Date.now(),
-          loadedFrom,
-          error,
+    setFileContentEntry: ({
+      repository,
+      prNumber,
+      filePath,
+      content,
+      lastResolvedHeadSha,
+      loadedFrom,
+      status,
+      error = null,
+    }) => {
+      const key = buildFileContentCacheKey({ repository, prNumber, filePath });
+      set((state) => ({
+        entries: {
+          ...state.entries,
+          [key]: {
+            repository,
+            prNumber,
+            filePath,
+            content,
+            lastResolvedHeadSha,
+            status,
+            loadedAt: Date.now(),
+            loadedFrom,
+            error,
+          },
         },
-      },
-    }));
-  },
+      }));
+    },
 
-  primeFileContent: async ({
-    repository,
-    prNumber,
-    filePath,
-    refName,
-    headSha,
-    loadedFrom,
-  }) => {
-    const params = {
+    primeFileContent: async ({
       repository,
       prNumber,
       filePath,
       refName,
       headSha,
       loadedFrom,
-    };
-    const cached = get().getCachedFileContent({
-      repository,
-      prNumber,
-      filePath,
-      headSha,
-    });
-    if (typeof cached === "string") {
-      return cached;
-    }
+    }) => {
+      const params = {
+        repository,
+        prNumber,
+        filePath,
+        refName,
+        headSha,
+        loadedFrom,
+      };
+      const cached = get().getCachedFileContent({
+        repository,
+        prNumber,
+        filePath,
+        headSha,
+      });
+      if (typeof cached === "string") {
+        return cached;
+      }
 
-    const inFlightKey = buildInFlightKey(params);
-    const existingRequest = inFlightRequests.get(inFlightKey);
-    if (existingRequest) {
-      return existingRequest;
-    }
+      const inFlightKey = buildInFlightKey(params);
+      const existingRequest = inFlightRequests.get(inFlightKey);
+      if (existingRequest) {
+        return existingRequest;
+      }
 
-    get().setFileContentEntry({
-      repository,
-      prNumber,
-      filePath,
-      content: "",
-      lastResolvedHeadSha: headSha,
-      loadedFrom,
-      status: "loading",
-    });
-
-    const request = fetchFileContent(filePath, refName, repository)
-      .then((content) => {
-        get().setFileContentEntry({
-          repository,
-          prNumber,
-          filePath,
-          content,
-          lastResolvedHeadSha: headSha,
-          loadedFrom,
-          status: "ready",
-        });
-        return content;
-      })
-      .catch((error) => {
-        get().setFileContentEntry({
-          repository,
-          prNumber,
-          filePath,
-          content: "",
-          lastResolvedHeadSha: headSha,
-          loadedFrom,
-          status: "error",
-          error: error instanceof Error ? error.message : "unknown",
-        });
-        return null;
-      })
-      .finally(() => {
-        inFlightRequests.delete(inFlightKey);
+      get().setFileContentEntry({
+        repository,
+        prNumber,
+        filePath,
+        content: "",
+        lastResolvedHeadSha: headSha,
+        loadedFrom,
+        status: "loading",
       });
 
-    inFlightRequests.set(inFlightKey, request);
-    return request;
-  },
+      const request = fetchFileContent(filePath, refName, repository)
+        .then((content) => {
+          get().setFileContentEntry({
+            repository,
+            prNumber,
+            filePath,
+            content,
+            lastResolvedHeadSha: headSha,
+            loadedFrom,
+            status: "ready",
+          });
+          return content;
+        })
+        .catch((error) => {
+          get().setFileContentEntry({
+            repository,
+            prNumber,
+            filePath,
+            content: "",
+            lastResolvedHeadSha: headSha,
+            loadedFrom,
+            status: "error",
+            error: error instanceof Error ? error.message : "unknown",
+          });
+          return null;
+        })
+        .finally(() => {
+          inFlightRequests.delete(inFlightKey);
+        });
 
-  primeFileContents: async ({
-    repository,
-    prNumber,
-    filePaths,
-    refName,
-    headSha,
-    loadedFrom,
-  }) => {
-    const uniquePaths = Array.from(new Set(filePaths));
-    const cachedPaths = uniquePaths.filter(
-      (filePath) =>
-        typeof
-          get().getCachedFileContent({
+      inFlightRequests.set(inFlightKey, request);
+      return request;
+    },
+
+    primeFileContents: async ({
+      repository,
+      prNumber,
+      filePaths,
+      refName,
+      headSha,
+      loadedFrom,
+    }) => {
+      const uniquePaths = Array.from(new Set(filePaths));
+      const cachedPaths = uniquePaths.filter(
+        (filePath) =>
+          typeof get().getCachedFileContent({
             repository,
             prNumber,
             filePath,
             headSha,
           }) === "string"
-    );
-    const pathsToFetch = uniquePaths.filter(
-      (filePath) => !cachedPaths.includes(filePath)
-    );
+      );
+      const pathsToFetch = uniquePaths.filter(
+        (filePath) => !cachedPaths.includes(filePath)
+      );
 
-    const results = await Promise.all(
-      pathsToFetch.map((filePath) =>
-        get().primeFileContent({
-          repository,
-          prNumber,
-          filePath,
-          refName,
-          headSha,
-          loadedFrom,
-        })
-      )
-    );
+      const results = await Promise.all(
+        pathsToFetch.map((filePath) =>
+          get().primeFileContent({
+            repository,
+            prNumber,
+            filePath,
+            refName,
+            headSha,
+            loadedFrom,
+          })
+        )
+      );
 
-    return {
-      cachedCount: cachedPaths.length,
-      remoteFetchedCount: pathsToFetch.filter(
-        (_, index) => results[index] !== null
-      ).length,
-      loadErrorsCount: results.filter((result) => result === null).length,
-    };
-  },
-
-  invalidatePullRequestFileContents: ({ repository, prNumber }) => {
-    const prefix = `${buildRepoSlug(repository)}:pr:${prNumber}:`;
-    set((state) => {
-      const nextEntries = { ...state.entries };
-      for (const key of Object.keys(nextEntries)) {
-        if (key.startsWith(prefix)) {
-          delete nextEntries[key];
-        }
-      }
       return {
-        entries: nextEntries,
+        cachedCount: cachedPaths.length,
+        remoteFetchedCount: pathsToFetch.filter(
+          (_, index) => results[index] !== null
+        ).length,
+        loadErrorsCount: results.filter((result) => result === null).length,
       };
-    });
-  },
-}));
+    },
+
+    invalidatePullRequestFileContents: ({ repository, prNumber }) => {
+      const prefix = `${buildRepoSlug(repository)}:pr:${prNumber}:`;
+      set((state) => {
+        const nextEntries = { ...state.entries };
+        for (const key of Object.keys(nextEntries)) {
+          if (key.startsWith(prefix)) {
+            delete nextEntries[key];
+          }
+        }
+        return {
+          entries: nextEntries,
+        };
+      });
+    },
+  })
+);

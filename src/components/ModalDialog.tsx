@@ -29,7 +29,7 @@ export function ModalDialog({
         className={cn("sm:max-w-[600px]", className)}
         showCloseButton={false}
       >
-        <DialogHeader className="mb-4 border-b border-[color:var(--c-border)] pb-4 text-left">
+        <DialogHeader className="mb-4 border-[color:var(--c-border)] border-b pb-4 text-left">
           <DialogTitle id={titleId}>{title}</DialogTitle>
         </DialogHeader>
         {children}

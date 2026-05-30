@@ -253,7 +253,7 @@ export function Dashboard() {
                     #{pullRequest.number}
                   </span>
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="inline-flex max-w-full min-w-0 items-center gap-1">
+                    <div className="inline-flex min-w-0 max-w-full items-center gap-1">
                       <span className="min-w-0 truncate text-sm">
                         {pullRequest.title}
                       </span>

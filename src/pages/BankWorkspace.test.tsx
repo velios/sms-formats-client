@@ -160,10 +160,7 @@ describe("FormatsPanel intersections", () => {
           { kind: "modify", path: "banks/other/formats/skip.txt" },
         ],
       })
-    ).toEqual([
-      "banks/pumb/formats/no-extension",
-      "banks/pumb/notes.md",
-    ]);
+    ).toEqual(["banks/pumb/formats/no-extension", "banks/pumb/notes.md"]);
   });
 
   it("renders unsupported PR files first and applies source/local status colors", () => {
@@ -198,22 +195,30 @@ describe("FormatsPanel intersections", () => {
 
     expect(
       container
-        .querySelector('[data-file-path="banks/pumb/formats/unsupported"] [data-slot="badge"]')
+        .querySelector(
+          '[data-file-path="banks/pumb/formats/unsupported"] [data-slot="badge"]'
+        )
         ?.getAttribute("data-variant")
     ).toBe("error");
     expect(
       container
-        .querySelector('[data-file-path="banks/pumb/formats/local-draft.txt"] [data-slot="badge"]')
+        .querySelector(
+          '[data-file-path="banks/pumb/formats/local-draft.txt"] [data-slot="badge"]'
+        )
         ?.getAttribute("data-variant")
     ).toBe("modified");
     expect(
       container
-        .querySelector('[data-file-path="banks/pumb/formats/source-added.txt"] [data-slot="badge"]')
+        .querySelector(
+          '[data-file-path="banks/pumb/formats/source-added.txt"] [data-slot="badge"]'
+        )
         ?.getAttribute("data-variant")
     ).toBe("success");
     expect(
       container
-        .querySelector('[data-file-path="banks/pumb/formats/source-modified.txt"] [data-slot="badge"]')
+        .querySelector(
+          '[data-file-path="banks/pumb/formats/source-modified.txt"] [data-slot="badge"]'
+        )
         ?.getAttribute("data-variant")
     ).toBe("warning");
   });

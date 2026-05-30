@@ -59,7 +59,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[var(--radius-lg)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] p-6 text-[14px] text-[color:var(--c-text)] outline-none shadow-[var(--shadow-md)] duration-100 data-closed:animate-out data-open:animate-in",
+          "data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[var(--radius-lg)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] p-6 text-[14px] text-[color:var(--c-text)] shadow-[var(--shadow-md)] outline-none duration-100 data-closed:animate-out data-open:animate-in",
           className
         )}
         data-slot="dialog-content"
@@ -127,7 +127,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       className={cn(
-        "text-[16px] leading-none font-semibold text-[color:var(--c-text)]",
+        "font-semibold text-[16px] text-[color:var(--c-text)] leading-none",
         className
       )}
       data-slot="dialog-title"

@@ -16,8 +16,8 @@ import {
   validateToken,
 } from "@/domain/github";
 import { SourceSelector } from "@/features/source-selector/SourceSelector";
-import { hardResetAppState } from "@/store/hard-reset";
 import { useSourceStore, useUIStore } from "@/store";
+import { hardResetAppState } from "@/store/hard-reset";
 
 export function AppHeader() {
   const { t, i18n } = useTranslation();

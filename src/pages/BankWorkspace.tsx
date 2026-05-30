@@ -142,7 +142,7 @@ function collectIntersectingExamples(params: {
   entries: CachedFormatEntry[];
 }): IntersectionExampleItem[] {
   const { activeFilePath, activeRegex, entries } = params;
-  if (!activeFilePath || !activeRegex.trim()) {
+  if (!(activeFilePath && activeRegex.trim())) {
     return [];
   }
 
@@ -918,9 +918,9 @@ function renderWorkspaceContent(params: {
         intersectionExamples={selectedFileIntersectionExamples}
         key={selectedFile}
         onOpenIntersectionFileInApp={onOpenIntersectionFileInApp}
-        onRegexBlurAfterEdit={onFormatRegexBlurAfterEdit}
         onOpenSmsByTemplate={onOpenSmsByTemplate}
         onOpenTemplateBySms={onOpenTemplateBySms}
+        onRegexBlurAfterEdit={onFormatRegexBlurAfterEdit}
         onRenameFile={handleRenameFile}
         onSearchContextChange={onFormatSearchContextChange}
         readOnly={readOnly}
@@ -1145,15 +1145,17 @@ export function FormatsPanel(params: {
   const fileRowRefs = useRef(new Map<string, HTMLDivElement>());
   const normalizedSearch = formatSearch.trim().toLowerCase();
   const visibleFormatSet = new Set(visibleFormats);
-  const visibleUnsupportedSourceFiles = unsupportedSourceFiles.filter((path) => {
-    if (normalizedSearch.length === 0) {
-      return true;
+  const visibleUnsupportedSourceFiles = unsupportedSourceFiles.filter(
+    (path) => {
+      if (normalizedSearch.length === 0) {
+        return true;
+      }
+      return (
+        extractFormatFileName(path).toLowerCase().includes(normalizedSearch) ||
+        path.toLowerCase().includes(normalizedSearch)
+      );
     }
-    return (
-      extractFormatFileName(path).toLowerCase().includes(normalizedSearch) ||
-      path.toLowerCase().includes(normalizedSearch)
-    );
-  });
+  );
   const sendersMatchesSearch =
     normalizedSearch.length === 0 ||
     "senders.txt".includes(normalizedSearch) ||
@@ -1268,25 +1270,28 @@ export function FormatsPanel(params: {
           const isSelected =
             isInteractive && (isSenders ? showSenders : selectedFile === path);
           const isDeleted =
-            !isSenders && !isUnsupportedSourceFile && deletedFormatFiles.has(path);
-          const isLocalChanged = !isUnsupportedSourceFile && (isSenders
-            ? localSendersChanged
-            : localChangedFormatFiles.has(path));
-          const sourceIndicatorVariant =
-            isSenders
-              ? !localSendersChanged && sourceSendersChanged
-                ? "warning"
-                : null
-              : !isLocalChanged && sourceFileStatus === "unsupported"
-                ? "error"
-                : !isLocalChanged && sourceFileStatus === "add"
-                  ? "success"
-                  : !isLocalChanged && sourceFileStatus
-                    ? "warning"
-                    : null;
-          const intersectionStats = isSenders || isDeleted || isUnsupportedSourceFile
-            ? null
-            : (formatIntersectionStats.get(path) ?? null);
+            !(isSenders || isUnsupportedSourceFile) &&
+            deletedFormatFiles.has(path);
+          const isLocalChanged =
+            !isUnsupportedSourceFile &&
+            (isSenders
+              ? localSendersChanged
+              : localChangedFormatFiles.has(path));
+          const sourceIndicatorVariant = isSenders
+            ? !localSendersChanged && sourceSendersChanged
+              ? "warning"
+              : null
+            : !isLocalChanged && sourceFileStatus === "unsupported"
+              ? "error"
+              : !isLocalChanged && sourceFileStatus === "add"
+                ? "success"
+                : !isLocalChanged && sourceFileStatus
+                  ? "warning"
+                  : null;
+          const intersectionStats =
+            isSenders || isDeleted || isUnsupportedSourceFile
+              ? null
+              : (formatIntersectionStats.get(path) ?? null);
           const ownExamplesMatch =
             intersectionStats?.totalExamples ===
             intersectionStats?.ownMatchedExamples;
@@ -1311,13 +1316,6 @@ export function FormatsPanel(params: {
               )}
               data-file-path={path}
               key={path}
-              ref={(element) => {
-                if (element) {
-                  fileRowRefs.current.set(path, element);
-                } else {
-                  fileRowRefs.current.delete(path);
-                }
-              }}
               onClick={
                 isInteractive
                   ? () => {
@@ -1343,6 +1341,13 @@ export function FormatsPanel(params: {
                     }
                   : undefined
               }
+              ref={(element) => {
+                if (element) {
+                  fileRowRefs.current.set(path, element);
+                } else {
+                  fileRowRefs.current.delete(path);
+                }
+              }}
               role={isInteractive ? "button" : undefined}
               tabIndex={isInteractive ? 0 : undefined}
             >
@@ -1392,7 +1397,10 @@ export function FormatsPanel(params: {
                 </StatusBadge>
               )}
               {!isLocalChanged && sourceIndicatorVariant && (
-                <StatusBadge className="text-xs" variant={sourceIndicatorVariant}>
+                <StatusBadge
+                  className="text-xs"
+                  variant={sourceIndicatorVariant}
+                >
                   ●
                 </StatusBadge>
               )}
@@ -1566,17 +1574,16 @@ function usePullRequestApproval(params: {
 
   useEffect(() => {
     let cancelled = false;
-    if (!(sourceRef?.type === "pr" && sourceRef.prNumber && canApprovePullRequest)) {
+    if (
+      !(sourceRef?.type === "pr" && sourceRef.prNumber && canApprovePullRequest)
+    ) {
       setIsCheckingPullRequestApproval(false);
       setIsPullRequestApproved(false);
       return;
     }
 
     setIsCheckingPullRequestApproval(true);
-    void fetchPullRequestApprovalByCurrentUser(
-      sourceRef.prNumber,
-      repository
-    )
+    void fetchPullRequestApprovalByCurrentUser(sourceRef.prNumber, repository)
       .then((isApproved) => {
         if (!cancelled) {
           setIsPullRequestApproved(isApproved);
@@ -1625,7 +1632,13 @@ function usePullRequestApproval(params: {
     } finally {
       setIsApprovingPullRequest(false);
     }
-  }, [isPullRequestApproved, repository, sourceRef?.prNumber, sourceRef?.type, t]);
+  }, [
+    isPullRequestApproved,
+    repository,
+    sourceRef?.prNumber,
+    sourceRef?.type,
+    t,
+  ]);
 
   const showApprovePullRequestButton = Boolean(
     sourceRef?.type === "pr" && sourceRef.prNumber && canApprovePullRequest
@@ -2638,12 +2651,7 @@ export function BankWorkspace() {
     setCalculateIntersectionsError(null);
     setIsCalculatingIntersections(false);
     setPendingFocusedFilePath(null);
-  }, [
-    bankPath,
-    repository.owner,
-    repository.repo,
-    sourceRefNameForContent,
-  ]);
+  }, [bankPath, repository.owner, repository.repo, sourceRefNameForContent]);
 
   useEffect(() => {
     intersectionRunIdRef.current += 1;
@@ -3179,9 +3187,9 @@ export function BankWorkspace() {
               : null
           }
           canResetToSource={canResetToSource}
-          isCheckingPullRequestApproval={isCheckingPullRequestApproval}
           isApprovingPullRequest={isApprovingPullRequest}
           isCalculatingIntersections={isCalculatingIntersections}
+          isCheckingPullRequestApproval={isCheckingPullRequestApproval}
           isPublishing={isPublishingQuickUpdate}
           isPullRequestApproved={isPullRequestApproved}
           onApprovePullRequest={() => {
@@ -3246,7 +3254,9 @@ export function BankWorkspace() {
           sourceFileStatuses={sourceFileStatuses}
           sourceSendersChanged={sourceSendersChanged}
           t={t}
-          totalFilesCount={allFormatFiles.length + unsupportedSourceFiles.length + 1}
+          totalFilesCount={
+            allFormatFiles.length + unsupportedSourceFiles.length + 1
+          }
           tTemplate={t}
           unsupportedSourceFiles={unsupportedSourceFiles}
           visibleFormats={filteredFormatFiles}

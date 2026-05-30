@@ -8,8 +8,8 @@ export { FORMAT_TEMPLATE, parseFormatFile, serializeFormat } from "./parser";
 export {
   recognizeSms,
   regexesBySms,
-  type SmsRecognition,
   type SmsesRecognition,
+  type SmsRecognition,
   smsesByRegex,
 } from "./recognition";
 export type {

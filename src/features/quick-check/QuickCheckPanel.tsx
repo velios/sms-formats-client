@@ -8,11 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { recognizeSms, regexesBySms, smsesByRegex } from "@/domain/format";
 import type { RepoRef } from "@/domain/types";
 import { cn } from "@/lib/utils";
-import {
-  type CachedFormatEntry,
-  prepareFormatEntries,
-} from "./format-entries";
 import { useDraftStore, useSourceStore } from "@/store";
+import { type CachedFormatEntry, prepareFormatEntries } from "./format-entries";
 
 export type QuickCheckMode = "template-by-sms" | "sms-by-template";
 
@@ -90,7 +87,7 @@ type QuickCheckRunState =
 
 const quickCheckTabClassName = (isActive: boolean) =>
   cn(
-    "cursor-pointer rounded-md border px-3 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
+    "cursor-pointer rounded-md border px-3 py-1.5 font-medium text-xs transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
     isActive
       ? "border-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-2px_0_var(--c-accent)]"
       : "border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"

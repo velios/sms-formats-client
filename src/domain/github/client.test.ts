@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RepoRef } from "../types";
+
 const octokitMocks = vi.hoisted(() => {
   const createReview = vi.fn(() => Promise.resolve({}));
   const getAuthenticated = vi.fn(() =>
     Promise.resolve({ data: { login: "current-user" } })
   );
   const paginate = vi.fn<
-    (
-      ...args: unknown[]
-    ) => Promise<
+    (...args: unknown[]) => Promise<
       Array<{
         user?: { login?: string } | null;
         state?: string | null;

@@ -52,10 +52,7 @@ describe("file-content-store", () => {
     await useFileContentStore.getState().primeFileContents({
       repository: { owner: "zenmoney", repo: "sms-formats" },
       prNumber: 123,
-      filePaths: [
-        "src/TBank_123/formats/a.txt",
-        "src/TBank_123/formats/b.txt",
-      ],
+      filePaths: ["src/TBank_123/formats/a.txt", "src/TBank_123/formats/b.txt"],
       refName: "head-sha",
       headSha: "head-sha",
       loadedFrom: "quick-check",

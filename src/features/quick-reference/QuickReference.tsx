@@ -192,12 +192,12 @@ export function QuickReference() {
           value={search}
         />
       </div>
-      <div className="grid h-full min-h-0 flex-1 overflow-hidden border-t border-[color:var(--c-border)] [grid-template-columns:140px_1fr]">
-        <div className="overflow-y-auto border-r border-[color:var(--c-border)]">
+      <div className="grid h-full min-h-0 flex-1 overflow-hidden border-[color:var(--c-border)] border-t [grid-template-columns:140px_1fr]">
+        <div className="overflow-y-auto border-[color:var(--c-border)] border-r">
           {CATEGORIES.map((cat) => (
             <button
               className={cn(
-                "block w-full border-0 border-b border-[color:var(--c-border)] bg-transparent px-2.5 py-1.5 text-left text-xs transition-colors",
+                "block w-full border-0 border-[color:var(--c-border)] border-b bg-transparent px-2.5 py-1.5 text-left text-xs transition-colors",
                 activeCat === cat.id
                   ? "bg-[color:var(--c-bg-elevated)] font-semibold text-[color:var(--c-accent)]"
                   : "text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-text)]"
@@ -219,7 +219,7 @@ export function QuickReference() {
               className="flex gap-2 rounded-[var(--radius-sm)] px-2 py-1 text-xs hover:bg-[color:var(--c-bg-hover)]"
               key={i}
             >
-              <span className="min-w-[60px] font-mono font-medium text-[color:var(--c-accent)]">
+              <span className="min-w-[60px] font-medium font-mono text-[color:var(--c-accent)]">
                 {it.token}
               </span>
               <span className="text-[color:var(--c-text-muted)]">
@@ -228,7 +228,7 @@ export function QuickReference() {
             </div>
           ))}
           {filteredItems.length === 0 && (
-            <div className="p-4 text-sm text-[color:var(--c-text-muted)]">
+            <div className="p-4 text-[color:var(--c-text-muted)] text-sm">
               —
             </div>
           )}

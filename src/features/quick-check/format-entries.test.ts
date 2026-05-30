@@ -51,7 +51,8 @@ describe("prepareFormatEntries", () => {
       getDraft(filePath: string) {
         if (filePath === "src/Bank/formats/deleted.txt") {
           return {
-            content: "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nDeleted",
+            content:
+              "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nDeleted",
             isDeleted: true,
             timestamp: 1,
           };

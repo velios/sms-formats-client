@@ -491,9 +491,9 @@ export function FormatEditor({
           onColumnsChange={handleColumnsChange}
           onExampleChange={handleExampleChange}
           onOpenIntersectionFileInApp={onOpenIntersectionFileInApp}
-          onRegexBlur={handleRegexBlur}
           onOpenSmsByTemplate={onOpenSmsByTemplate}
           onOpenTemplateBySms={onOpenTemplateBySms}
+          onRegexBlur={handleRegexBlur}
           onRegexChange={handleRegexChange}
           onRemoveExample={handleRemoveExample}
           readOnly={readOnly || isDeleted}

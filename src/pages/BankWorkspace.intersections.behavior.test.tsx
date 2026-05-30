@@ -144,9 +144,7 @@ const mocks = vi.hoisted(() => {
     })),
     prepareFormatEntries: vi.fn(),
     refreshPullRequestApprovalPermission: vi.fn(() => Promise.resolve(false)),
-    resolvePullRequestWorkspace: vi.fn(
-      () => new Promise(() => undefined)
-    ),
+    resolvePullRequestWorkspace: vi.fn(() => new Promise(() => undefined)),
     routeState,
     saveWorkspaceSession: vi.fn(),
     sourceState,
@@ -261,9 +259,7 @@ vi.mock("@/features/quick-check/QuickCheckPanel", () => ({
     onOpenFileInApp?: (filePath: string) => void;
   }) => (
     <button
-      onClick={() =>
-        onOpenFileInApp?.("src/TBank_123/formats/another.txt")
-      }
+      onClick={() => onOpenFileInApp?.("src/TBank_123/formats/another.txt")}
       type="button"
     >
       quick-check-open-in-app
@@ -272,7 +268,8 @@ vi.mock("@/features/quick-check/QuickCheckPanel", () => ({
 }));
 
 vi.mock("@/features/quick-check/format-entries", () => ({
-  prepareFormatEntries: (...args: unknown[]) => mocks.prepareFormatEntries(...args),
+  prepareFormatEntries: (...args: unknown[]) =>
+    mocks.prepareFormatEntries(...args),
 }));
 
 vi.mock("@/features/senders-editor/SendersEditor", () => ({
@@ -513,7 +510,10 @@ describe("BankWorkspace intersections behavior", () => {
     );
 
     mocks.draftState.drafts = new Map([
-      ["src/TBank_123/formats/another.txt", { filePath: "src/TBank_123/formats/another.txt" }],
+      [
+        "src/TBank_123/formats/another.txt",
+        { filePath: "src/TBank_123/formats/another.txt" },
+      ],
     ]);
     mocks.draftState.getChangedFiles.mockReturnValue([
       {

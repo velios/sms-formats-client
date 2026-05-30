@@ -705,9 +705,7 @@ describe("BankWorkspace route init", () => {
       )
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "publish.updatePR" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "publish.updatePR" }));
 
     await waitFor(() =>
       expect(mocks.updatePullRequestHead).toHaveBeenCalledWith(

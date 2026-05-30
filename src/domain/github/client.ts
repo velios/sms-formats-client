@@ -1075,9 +1075,7 @@ export async function fetchPullRequestApprovalByCurrentUser(
     return false;
   }
 
-  return (
-    resolveLatestReviewStateByReviewer(reviews).get(login) === "APPROVED"
-  );
+  return resolveLatestReviewStateByReviewer(reviews).get(login) === "APPROVED";
 }
 
 // ─── Source loading ───

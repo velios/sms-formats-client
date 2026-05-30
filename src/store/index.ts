@@ -262,7 +262,11 @@ export const useDraftStore = create<DraftState>()(
               existing.baseSha === baseSha &&
               existing.remoteContent === remoteContent
             ) {
-              ensureDraftHistory(filePath, existing.content, existing.isDeleted);
+              ensureDraftHistory(
+                filePath,
+                existing.content,
+                existing.isDeleted
+              );
               return;
             }
             const nextDrafts = new Map(state.drafts);
@@ -276,7 +280,11 @@ export const useDraftStore = create<DraftState>()(
             });
             nextDrafts.set(filePath, nextEntry);
             setCurrentScopeDrafts(nextDrafts);
-            ensureDraftHistory(filePath, nextEntry.content, nextEntry.isDeleted);
+            ensureDraftHistory(
+              filePath,
+              nextEntry.content,
+              nextEntry.isDeleted
+            );
             return;
           }
 
@@ -384,7 +392,11 @@ export const useDraftStore = create<DraftState>()(
             draftHistoryByPath.set(newFilePath, history);
             draftHistoryByPath.delete(oldFilePath);
           } else {
-            resetDraftHistory(newFilePath, newEntry.content, newEntry.isDeleted);
+            resetDraftHistory(
+              newFilePath,
+              newEntry.content,
+              newEntry.isDeleted
+            );
           }
         },
 
