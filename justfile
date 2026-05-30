@@ -33,3 +33,18 @@ deploy-frontend: check-inventory
 deploy-frontend-no-build: check-inventory
   @echo "Deploying existing dist/ to VPS..."
   @cd ansible && ANSIBLE_STDOUT_CALLBACK=default ansible-playbook playbooks/deploy-frontend.yml -i inventory/production.local.yml
+
+# Собрать standalone Linux-бинарь бота (dist-bot/sms-formats-bot)
+build-bot:
+  @bun run bot:build
+
+# Собрать и задеплоить Recognition Bot на VPS (systemd-сервис)
+deploy-bot: check-inventory
+  @echo "Building bot binary (bun-linux-x64)..."
+  @bun run bot:build
+  @echo "Deploying bot to VPS..."
+  @cd ansible && ANSIBLE_STDOUT_CALLBACK=default ansible-playbook playbooks/deploy-bot.yml -i inventory/production.local.yml
+
+# Зарегистрировать Telegram webhook (читает bot/.env)
+set-webhook:
+  @bash ./scripts/bot-set-webhook.sh

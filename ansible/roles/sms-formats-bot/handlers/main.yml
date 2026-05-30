@@ -1,0 +1,9 @@
+---
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: Restart bot
+  systemd:
+    name: "{{ bot_service_name_resolved }}"
+    state: restarted

@@ -13,6 +13,9 @@
     "lint": "bunx ultracite check",
     "format": "bunx ultracite fix",
     "lint:fix": "bun run format",
+    "bot:dev": "bun run --env-file=bot/.env bot/server.ts",
+    "bot:build": "bun build bot/server.ts --compile --target=bun-linux-x64 --outfile=dist-bot/sms-formats-bot",
+    "bot:roundtrip": "bash ./scripts/bot-roundtrip-local.sh",
     "check:secrets": "bash ./scripts/check-secrets.sh",
     "verify": "bun run typecheck && bun run test && bun run check:secrets && bun run lint",
     "prepare:publish": "bun run verify"
@@ -44,6 +47,7 @@
     "@the-node-forge/regex-simplifier": "^1.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "grammy": "^1.43.0",
     "i18next": "^25.8.5",
     "idb-keyval": "^6.2.2",
     "lucide-react": "^0.577.0",

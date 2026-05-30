@@ -20,3 +20,6 @@ all:
         frontend_deploy_base_path: /var/www/sms-formats-client
         frontend_owner: www-data
         frontend_group: www-data
+        bot_deploy_dir: /opt/sms-formats-bot
+        bot_service_user: smsbot
+        bot_service_name: sms-formats-bot

@@ -1,0 +1,19 @@
+[Unit]
+Description=SMS Formats Recognition Bot (Telegram webhook)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ bot_service_user_resolved }}
+EnvironmentFile={{ bot_deploy_dir_resolved }}/.env
+ExecStart={{ bot_deploy_dir_resolved }}/sms-formats-bot
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

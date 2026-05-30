@@ -1,0 +1,7 @@
+---
+- name: Deploy sms-formats-client Recognition Bot
+  hosts: production
+  become: yes
+
+  roles:
+    - role: sms-formats-bot

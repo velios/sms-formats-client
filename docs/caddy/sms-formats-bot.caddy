@@ -1,0 +1,13 @@
+# Recognition Bot webhook reverse proxy.
+#
+# Ansible never touches Caddy (see docs/deploy-frontend.md). Add this manually
+# under /etc/caddy/conf.d/ on the VPS, then validate + reload Caddy.
+#
+# The bot itself is the gatekeeper: it serves only the unguessable webhook path
+# and verifies X-Telegram-Bot-Api-Secret-Token, 404-ing everything else. So
+# Caddy can blindly proxy and the secret path never lands in Caddy config.
+
+zenmoneysmsbot.zentable.ru {
+    encode zstd gzip
+    reverse_proxy localhost:8080
+}
