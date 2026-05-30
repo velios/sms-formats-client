@@ -23,7 +23,7 @@ echo "Setting webhook -> ${URL}"
 curl -sS "${API}/setWebhook" \
   --data-urlencode "url=${URL}" \
   --data-urlencode "secret_token=${RECOGNITION_BOT_WEBHOOK_SECRET}" \
-  --data-urlencode 'allowed_updates=["guest_message"]' | pretty
+  --data-urlencode 'allowed_updates=["guest_message","message"]' | pretty
 
 echo "Webhook info:"
 curl -sS "${API}/getWebhookInfo" | pretty

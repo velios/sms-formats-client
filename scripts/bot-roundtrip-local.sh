@@ -73,6 +73,30 @@ empty_update() {
 JSON
 }
 
+direct_update() {
+  cat <<JSON
+{"update_id":3,"message":{"message_id":12,"date":1700000002,
+"chat":{"id":1,"type":"private"},"from":{"id":2,"is_bot":false,"first_name":"Tester"},
+"text":"Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB"}}
+JSON
+}
+
+start_update() {
+  cat <<JSON
+{"update_id":4,"message":{"message_id":13,"date":1700000003,
+"chat":{"id":1,"type":"private"},"from":{"id":2,"is_bot":false,"first_name":"Tester"},
+"text":"/start"}}
+JSON
+}
+
+group_update() {
+  cat <<JSON
+{"update_id":5,"message":{"message_id":14,"date":1700000004,
+"chat":{"id":-100,"type":"supergroup"},"from":{"id":2,"is_bot":false,"first_name":"Tester"},
+"text":"Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB"}}
+JSON
+}
+
 post() {
   curl -s -o /dev/null -w "%{http_code}" -X POST "$2" \
     -H "Content-Type: application/json" \
@@ -107,6 +131,30 @@ empty_update | post "$SECRET" "$URL" >/dev/null
 sleep 0.2
 grep -q "Пришлите SMS" "$LOG" || fail "missing usage hint"
 echo "ok -> usage hint printed"
+
+echo "== 5. Direct private message -> recognition with file link =="
+before="$(grep -c 'sberbank/12' "$LOG" || true)"
+direct_update | post "$SECRET" "$URL" >/dev/null
+sleep 0.2
+after="$(grep -c 'sberbank/12' "$LOG" || true)"
+[ "$after" -gt "$before" ] || fail "direct message did not render the format"
+echo "ok -> direct path rendered the format"
+
+echo "== 6. /start in a private chat -> usage hint =="
+before="$(grep -c "Пришлите SMS" "$LOG" || true)"
+start_update | post "$SECRET" "$URL" >/dev/null
+sleep 0.2
+after="$(grep -c "Пришлите SMS" "$LOG" || true)"
+[ "$after" -gt "$before" ] || fail "/start did not print the usage hint"
+echo "ok -> /start printed the usage hint"
+
+echo "== 7. Group message without a mention -> ignored =="
+before="$(grep -c 'sberbank/12' "$LOG" || true)"
+group_update | post "$SECRET" "$URL" >/dev/null
+sleep 0.2
+after="$(grep -c 'sberbank/12' "$LOG" || true)"
+[ "$after" = "$before" ] || fail "group message should be ignored, but produced a reply"
+echo "ok -> group message ignored"
 
 echo ""
 echo "All offline round-trip checks passed."

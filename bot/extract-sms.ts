@@ -49,3 +49,24 @@ export function extractSms(message: IncomingMessage): ExtractedSms {
   }
   return { kind: "sms", sms: inline };
 }
+
+// Onboarding taps, not SMS: Telegram's Start button sends `/start`, and `/help`
+// is the conventional sibling. Recognizing these would answer "needs a new
+// format", so they get the usage hint instead.
+const SERVICE_COMMANDS = new Set(["/start", "/help"]);
+
+/**
+ * Direct invocation (private chat): the whole message text verbatim is the SMS
+ * — no mention to strip, and recognition normalizes it later. Service commands
+ * and textless messages carry no SMS, so they ask for the usage hint.
+ */
+export function extractDirectSms(text: string | undefined): ExtractedSms {
+  if (text === undefined) {
+    return { kind: "empty" };
+  }
+  const trimmed = text.trim();
+  if (!trimmed || SERVICE_COMMANDS.has(trimmed)) {
+    return { kind: "empty" };
+  }
+  return { kind: "sms", sms: text };
+}

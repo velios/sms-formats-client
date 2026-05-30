@@ -4,6 +4,7 @@ import { serve } from "bun";
 import { Bot, webhookCallback } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
 import { answerGuestMessage } from "./answer-guest-message";
+import { answerPrivateMessage } from "./answer-private-message";
 import { buildMainCorpus } from "./corpus";
 import { CorpusStore } from "./corpus-store";
 import { createCorpusSync } from "./corpus-sync";
@@ -89,6 +90,21 @@ const bot = new Bot(env.token, {
 bot.on("guest_message", (ctx) => {
   store.noteDemand();
   return answerGuestMessage(ctx, store.current?.formats ?? null, {
+    dryRun: env.dryRun,
+  });
+});
+
+// Direct invocation: a private-chat message is the second way to reach the same
+// Recognition (CONTEXT.md). Group messages stay on the guest path — only DMs are
+// handled here, so the bot never answers unprompted in a group. Like the guest
+// path, the request drives freshness and is answered from the current snapshot
+// (or the initializing stub before the first build). The raw SMS is never logged.
+bot.on("message", (ctx) => {
+  if (ctx.chat.type !== "private") {
+    return;
+  }
+  store.noteDemand();
+  return answerPrivateMessage(ctx, store.current?.formats ?? null, {
     dryRun: env.dryRun,
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractSms } from "./extract-sms";
+import { extractDirectSms, extractSms } from "./extract-sms";
 
 describe("extractSms", () => {
   it("prefers reply_to_message over inline text", () => {
@@ -54,5 +54,36 @@ describe("extractSms", () => {
     expect(extractSms({ replyToText: "   ", text: "" })).toEqual({
       kind: "empty",
     });
+  });
+});
+
+describe("extractDirectSms", () => {
+  it("takes the whole message text verbatim, including newlines", () => {
+    const result = extractDirectSms("Pokupka 1000 RUB\nDostupno 5000");
+    expect(result).toEqual({
+      kind: "sms",
+      sms: "Pokupka 1000 RUB\nDostupno 5000",
+    });
+  });
+
+  it("does not strip @mentions — in a DM they are part of the SMS", () => {
+    const result = extractDirectSms("@zenmoneysms_bot Pokupka 1000 RUB");
+    expect(result).toEqual({
+      kind: "sms",
+      sms: "@zenmoneysms_bot Pokupka 1000 RUB",
+    });
+  });
+
+  it("reports empty for /start and /help", () => {
+    expect(extractDirectSms("/start")).toEqual({ kind: "empty" });
+    expect(extractDirectSms("/help")).toEqual({ kind: "empty" });
+  });
+
+  it("reports empty for a textless message", () => {
+    expect(extractDirectSms(undefined)).toEqual({ kind: "empty" });
+  });
+
+  it("reports empty for blank text", () => {
+    expect(extractDirectSms("   ")).toEqual({ kind: "empty" });
   });
 });
