@@ -3,39 +3,61 @@ import type { CorpusFormat } from "./corpus";
 import type { RecognizedFormat } from "./recognize";
 import { renderResponse } from "./render";
 
+const SBER_URL =
+  "https://github.com/zenmoney/sms-formats/blob/abc/src/sberbank/formats/12.txt";
+const TINKOFF_URL =
+  "https://github.com/zenmoney/sms-formats/blob/abc/src/tinkoff/formats/24.txt";
+
 const corpus: CorpusFormat[] = [
   {
     source: { kind: "pr", number: 45 },
     bank: "tinkoff",
     formatId: "24",
     regex: "x",
+    fileUrl: TINKOFF_URL,
   },
   {
     source: { kind: "pr", number: 50 },
     bank: "alfabank",
     formatId: "3",
     regex: "y",
+    fileUrl:
+      "https://github.com/zenmoney/sms-formats/blob/abc/src/alfabank/formats/3.txt",
   },
 ];
 
 describe("renderResponse", () => {
-  it("groups recognized formats by source, main first then PRs ascending", () => {
+  it("groups recognized formats by source, main first then PRs ascending, as file links", () => {
     const recognized: RecognizedFormat[] = [
-      { source: { kind: "pr", number: 45 }, bank: "tinkoff", formatId: "24" },
-      { source: { kind: "main" }, bank: "sberbank", formatId: "12" },
+      {
+        source: { kind: "pr", number: 45 },
+        bank: "tinkoff",
+        formatId: "24",
+        fileUrl: TINKOFF_URL,
+      },
+      {
+        source: { kind: "main" },
+        bank: "sberbank",
+        formatId: "12",
+        fileUrl: SBER_URL,
+      },
     ];
     expect(renderResponse(recognized, corpus)).toBe(
-      "main:\n- sberbank/12\nPR #45\n- tinkoff/24"
+      `main:\n- <a href="${SBER_URL}">sberbank/12</a>\nPR #45\n- <a href="${TINKOFF_URL}">tinkoff/24</a>`
     );
   });
 
-  it("lists the same bank twice when main and a PR both recognize it", () => {
+  it("escapes HTML in the bank/formatId title", () => {
     const recognized: RecognizedFormat[] = [
-      { source: { kind: "main" }, bank: "tinkoff", formatId: "24" },
-      { source: { kind: "pr", number: 45 }, bank: "tinkoff", formatId: "24" },
+      {
+        source: { kind: "main" },
+        bank: "a&b",
+        formatId: "1",
+        fileUrl: SBER_URL,
+      },
     ];
     expect(renderResponse(recognized, corpus)).toBe(
-      "main:\n- tinkoff/24\nPR #45\n- tinkoff/24"
+      `main:\n- <a href="${SBER_URL}">a&amp;b/1</a>`
     );
   });
 

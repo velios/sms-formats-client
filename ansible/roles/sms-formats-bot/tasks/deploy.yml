@@ -29,6 +29,11 @@
     msg: "bot/.env not found. Copy bot/.env.example to bot/.env and fill secrets."
   when: not local_env.stat.exists
 
+- name: Ensure git is installed (bot clones the corpus on first boot)
+  package:
+    name: git
+    state: present
+
 - name: Create bot service user
   user:
     name: "{{ bot_service_user_resolved }}"

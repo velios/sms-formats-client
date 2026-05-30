@@ -1,10 +1,23 @@
 import { serve } from "bun";
 import { Bot, webhookCallback } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
+import { buildMainCorpus } from "./corpus";
 import { loadBotEnv } from "./env";
+import { ensureMainCheckout } from "./main-checkout";
 import { respondToMessage } from "./respond";
 
 const env = loadBotEnv();
+
+// Materialise the `main` corpus from a real git checkout (clone on first boot,
+// disk on restart — see ADR-0004) before serving. Recognition runs against
+// live main, and every recognized format links to its file at this SHA.
+const checkout = ensureMainCheckout({
+  repoSlug: env.sourceRepo,
+  branch: env.sourceBranch,
+  dir: env.checkoutDir,
+  token: env.githubToken,
+});
+const corpus = buildMainCorpus(checkout);
 
 // Offline dry-run can't call getMe (dummy token), so hand grammY a synthetic
 // identity. Only the token matters for answerGuestQuery; botInfo is unused here.
@@ -41,11 +54,14 @@ bot.on("guest_message", async (ctx) => {
   if (!message) {
     return;
   }
-  const body = respondToMessage({
-    text: message.text,
-    entities: message.entities,
-    replyToText: message.reply_to_message?.text,
-  });
+  const body = respondToMessage(
+    {
+      text: message.text,
+      entities: message.entities,
+      replyToText: message.reply_to_message?.text,
+    },
+    corpus
+  );
 
   if (env.dryRun) {
     process.stdout.write(`${body}\n`);
@@ -55,7 +71,11 @@ bot.on("guest_message", async (ctx) => {
     type: "article",
     id: "recognition",
     title: "Распознанные форматы",
-    input_message_content: { message_text: body },
+    input_message_content: {
+      message_text: body,
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+    },
   });
 });
 
@@ -80,6 +100,7 @@ serve({
 
 process.stdout.write(
   `Recognition Bot webhook listening on :${env.port}${env.webhookPath}` +
+    ` — corpus: ${corpus.length} main formats @ ${checkout.sha.slice(0, 7)}` +
     (env.dryRun ? " (dry-run: replies printed, not sent)" : "") +
     "\n"
 );

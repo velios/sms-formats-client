@@ -26,6 +26,18 @@ interface SourceGroup {
   lines: string[];
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function formatLine(format: RecognizedFormat): string {
+  const title = escapeHtml(`${format.bank}/${format.formatId}`);
+  return `- <a href="${escapeHtml(format.fileUrl)}">${title}</a>`;
+}
+
 function groupBySource(recognized: RecognizedFormat[]): SourceGroup[] {
   const groups = new Map<string, SourceGroup>();
   for (const format of recognized) {
@@ -35,7 +47,7 @@ function groupBySource(recognized: RecognizedFormat[]): SourceGroup[] {
       group = { source: format.source, lines: [] };
       groups.set(key, group);
     }
-    group.lines.push(`- ${format.bank}/${format.formatId}`);
+    group.lines.push(formatLine(format));
   }
   return [...groups.values()].sort(
     (a, b) => sourceOrder(a.source) - sourceOrder(b.source)
@@ -43,9 +55,10 @@ function groupBySource(recognized: RecognizedFormat[]): SourceGroup[] {
 }
 
 /**
- * Output contract: recognized formats grouped by Source (main first, then open
- * PRs ascending), each rendered as `- bank/formatId`. No matches yields the
- * "needs a new format" message.
+ * Output contract (Telegram HTML parse mode): recognized formats grouped by
+ * Source (main first, then open PRs ascending), each rendered as a link
+ * `- bank/formatId` pointing at the file at that Source's SHA. No matches yields
+ * the "needs a new format" message.
  */
 export function renderResponse(
   recognized: RecognizedFormat[],

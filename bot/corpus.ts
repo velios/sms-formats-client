@@ -1,11 +1,15 @@
 /**
- * Hardcoded Corpus for the tracer bullet (issue #4): the set of formats the
- * Recognition Bot matches against. Real corpus sync (git clone + open PR refs,
- * ADR-0004) is a later slice — here the formats are fixed fixtures, no git/net.
- *
- * A bank may appear twice — once from `main` and once as a proposal in an open
- * PR — and that duplication is intentional (a PR re-recognizes the same SMS).
+ * Corpus = the set of formats the Recognition Bot matches against (see Corpus,
+ * Source in CONTEXT.md). This slice builds the `main` half of it from a real
+ * git checkout of `zenmoney/sms-formats`: every format file on main becomes a
+ * CorpusFormat with Source=main and a permalink to the file at the checked-out
+ * SHA. Open-PR sources (and the duplication a PR introduces) come later.
  */
+
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { isBankFormatFilePath, parseFormatFile } from "@/domain/format";
+import type { MainCheckout } from "./main-checkout";
 
 export type Source = { kind: "main" } | { kind: "pr"; number: number };
 
@@ -14,42 +18,9 @@ export interface CorpusFormat {
   bank: string;
   formatId: string;
   regex: string;
+  /** Permalink to the format file in the repo at this Source's SHA. */
+  fileUrl: string;
 }
-
-export const CORPUS: CorpusFormat[] = [
-  {
-    source: { kind: "main" },
-    bank: "sberbank",
-    formatId: "12",
-    regex: "^Pokupka \\d+ RUB\\. Karta \\*\\d+\\. Dostupno \\d+ RUB$",
-  },
-  {
-    source: { kind: "main" },
-    bank: "tinkoff",
-    formatId: "24",
-    regex: "^Spisanie \\d+ RUB",
-  },
-  {
-    // Same bank as main can reappear as a proposal in an open PR — intentional.
-    source: { kind: "pr", number: 45 },
-    bank: "tinkoff",
-    formatId: "24",
-    regex: "Pokupka (\\d+) RUB",
-  },
-  {
-    source: { kind: "pr", number: 50 },
-    bank: "alfabank",
-    formatId: "3",
-    regex: "^Popolnenie (\\d+) RUB",
-  },
-  {
-    // Invalid regex — must be silently skipped by recognition, never crash.
-    source: { kind: "main" },
-    bank: "vtb",
-    formatId: "9",
-    regex: "[broken(",
-  },
-];
 
 /** Number of distinct open PRs represented in the corpus. */
 export function openPrCount(corpus: CorpusFormat[]): number {
@@ -60,4 +31,82 @@ export function openPrCount(corpus: CorpusFormat[]): number {
     }
   }
   return numbers.size;
+}
+
+const REPO_ROOT_DIR = "src";
+
+/** Repo-relative paths of every file under `src/`, with forward slashes. */
+function listRepoFiles(checkoutDir: string): string[] {
+  const paths: string[] = [];
+  const walk = (relDir: string) => {
+    const absDir = join(checkoutDir, relDir);
+    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+      const relPath = `${relDir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        walk(relPath);
+      } else if (entry.isFile()) {
+        paths.push(relPath);
+      }
+    }
+  };
+  walk(REPO_ROOT_DIR);
+  return paths;
+}
+
+/** `src/<bank>/...` → `src/<bank>`, the bank folder the predicate expects. */
+function bankPathOf(repoPath: string): string | null {
+  const [root, bank] = repoPath.split("/");
+  if (root !== REPO_ROOT_DIR || !bank) {
+    return null;
+  }
+  return `${root}/${bank}`;
+}
+
+function bankNameOf(bankPath: string): string {
+  return bankPath.slice(`${REPO_ROOT_DIR}/`.length);
+}
+
+function formatIdOf(repoPath: string): string {
+  const fileName = repoPath.split("/").at(-1) ?? "";
+  return fileName.replace(/\.txt$/, "");
+}
+
+function blobUrl(repoSlug: string, sha: string, repoPath: string): string {
+  // Real bank/format names carry spaces and Cyrillic; encode each path segment
+  // (keeping `/` as the separator) so the permalink survives in an HTML href.
+  const encodedPath = repoPath.split("/").map(encodeURIComponent).join("/");
+  return `https://github.com/${repoSlug}/blob/${sha}/${encodedPath}`;
+}
+
+/**
+ * Walk a main checkout into the `main` corpus: each `src/<bank>/formats/*.txt`
+ * (identified by `isBankFormatFilePath`, so `senders.txt` is ignored) parsed by
+ * `parseFormatFile`. Formats whose regex is empty are skipped — an empty regex
+ * would spuriously match every SMS.
+ */
+export function buildMainCorpus(checkout: MainCheckout): CorpusFormat[] {
+  const formats: CorpusFormat[] = [];
+  for (const repoPath of listRepoFiles(checkout.dir)) {
+    const bankPath = bankPathOf(repoPath);
+    if (!(bankPath && isBankFormatFilePath(repoPath, bankPath))) {
+      continue;
+    }
+    const raw = readFileSync(join(checkout.dir, repoPath), "utf8");
+    const { regex } = parseFormatFile(raw, repoPath);
+    if (!regex) {
+      continue;
+    }
+    formats.push({
+      source: { kind: "main" },
+      bank: bankNameOf(bankPath),
+      formatId: formatIdOf(repoPath),
+      regex,
+      fileUrl: blobUrl(checkout.repoSlug, checkout.sha, repoPath),
+    });
+  }
+  return formats.sort(
+    (a, b) =>
+      a.bank.localeCompare(b.bank) ||
+      a.formatId.localeCompare(b.formatId, undefined, { numeric: true })
+  );
 }

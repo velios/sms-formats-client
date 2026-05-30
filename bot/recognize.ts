@@ -5,6 +5,8 @@ export interface RecognizedFormat {
   source: Source;
   bank: string;
   formatId: string;
+  /** Permalink to the recognized format's file, carried from the corpus. */
+  fileUrl: string;
 }
 
 /**
@@ -28,6 +30,7 @@ export function recognize(
         source: format.source,
         bank: format.bank,
         formatId: format.formatId,
+        fileUrl: format.fileUrl,
       });
     }
   });
