@@ -12,7 +12,6 @@ import { join } from "node:path";
 import { isBankFormatFilePath, parseFormatFile } from "@/domain/format";
 import {
   changedFiles,
-  fetchPullRequestHead,
   type MainCheckout,
   readFileAtPullRequestHead,
 } from "./main-checkout";
@@ -187,28 +186,26 @@ export function buildPrCorpus(
 }
 
 /**
- * The PR half across every open PR: fetch each head, then collect its formats.
- * A single failing PR (fetch error, unreadable file, bad ref) is reported via
- * `onSkip` and dropped rather than thrown — one broken proposal must not take
- * down the boot, since main is the durable core and PRs are additive (ADR-0004).
+ * The whole corpus — main half plus the PR half of every open PR — built purely
+ * from the current on-disk git state (the heads must already be fetched into
+ * `refs/pr/<N>`; freshness sync owns the fetching). A single failing PR
+ * (unreadable file, missing ref) is reported via `onSkip` and dropped rather
+ * than thrown — one broken proposal must not sink the snapshot, since main is
+ * the durable core and PRs are additive (ADR-0004). The snapshot is assembled
+ * fully here before the store swaps it in, so readers never see a half-built one.
  */
-export function buildOpenPrsCorpus(
+export function buildCorpus(
   checkout: MainCheckout,
-  prs: OpenPullRequest[],
-  options: {
-    onSkip: (pr: OpenPullRequest, error: unknown) => void;
-    /** Injectable for tests; defaults to the real git fetch. */
-    fetchHead?: typeof fetchPullRequestHead;
-  }
+  openPrs: OpenPullRequest[],
+  onSkip: (pr: OpenPullRequest, error: unknown) => void
 ): CorpusFormat[] {
-  const { onSkip, fetchHead = fetchPullRequestHead } = options;
-  return prs.flatMap((pr) => {
+  const prFormats = openPrs.flatMap((pr) => {
     try {
-      fetchHead(checkout, pr.number);
       return buildPrCorpus(checkout, pr);
     } catch (error) {
       onSkip(pr, error);
       return [];
     }
   });
+  return [...buildMainCorpus(checkout), ...prFormats];
 }

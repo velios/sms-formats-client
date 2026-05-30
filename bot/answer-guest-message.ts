@@ -18,8 +18,18 @@ export interface GuestQueryContext {
 }
 
 /**
- * Answer one guest query, recognizing the SMS against the corpus. In dry-run the
- * reply is printed instead of sent.
+ * Cold start: no snapshot exists yet (the first clone/build hasn't finished, see
+ * ADR-0004). We answer with this rather than stay silent or error, so the user
+ * knows to retry in a moment instead of assuming the bot is dead.
+ */
+export const INITIALIZING_MESSAGE =
+  "Бот запускается и собирает корпус форматов — попробуйте через несколько секунд.";
+
+/**
+ * Answer one guest query, recognizing the SMS against the corpus. A `null`
+ * corpus means the snapshot isn't ready yet (cold start) — we answer the
+ * initializing stub instead of recognizing. In dry-run the reply is printed
+ * instead of sent.
  *
  * `answerGuestQuery` is wrapped because a guest query expires within seconds:
  * once it's too old (or its id is invalid) Telegram rejects the answer with a
@@ -33,7 +43,7 @@ export interface GuestQueryContext {
  */
 export async function answerGuestMessage(
   ctx: GuestQueryContext,
-  corpus: CorpusFormat[],
+  corpus: CorpusFormat[] | null,
   options: { dryRun: boolean }
 ): Promise<void> {
   const message = ctx.guestMessage;
@@ -41,14 +51,17 @@ export async function answerGuestMessage(
     return;
   }
 
-  const body = respondToMessage(
-    {
-      text: message.text,
-      entities: message.entities,
-      replyToText: message.reply_to_message?.text,
-    },
-    corpus
-  );
+  const body =
+    corpus === null
+      ? INITIALIZING_MESSAGE
+      : respondToMessage(
+          {
+            text: message.text,
+            entities: message.entities,
+            replyToText: message.reply_to_message?.text,
+          },
+          corpus
+        );
 
   if (options.dryRun) {
     process.stdout.write(`${body}\n`);

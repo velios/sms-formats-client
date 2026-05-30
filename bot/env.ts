@@ -23,6 +23,8 @@ export interface BotEnv {
   checkoutDir: string;
   /** Read-only token for cloning; empty clones the public repo anonymously. */
   githubToken?: string;
+  /** Freshness window in ms: at most one check per this interval (ADR-0004). */
+  freshnessTtlMs: number;
 }
 
 function required(name: string): string {
@@ -51,5 +53,8 @@ export function loadBotEnv(): BotEnv {
     checkoutDir:
       process.env.RECOGNITION_BOT_CHECKOUT_DIR || ".cache/sms-formats-main",
     githubToken: process.env.GITHUB_READONLY_TOKEN || undefined,
+    freshnessTtlMs: Number(
+      process.env.RECOGNITION_BOT_FRESHNESS_TTL_MS ?? "45000"
+    ),
   };
 }

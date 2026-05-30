@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  buildCorpus,
   buildMainCorpus,
-  buildOpenPrsCorpus,
   buildPrCorpus,
   type CorpusFormat,
   openPrCount,
@@ -222,20 +222,20 @@ describe("buildPrCorpus", () => {
   });
 });
 
-describe("buildOpenPrsCorpus", () => {
+describe("buildCorpus", () => {
   let dir: string;
   let checkout: MainCheckout;
 
   beforeAll(() => {
-    dir = mkdtempSync(join(tmpdir(), "open-prs-"));
+    dir = mkdtempSync(join(tmpdir(), "build-corpus-"));
     git(dir, ["init", "-q", "-b", "main"]);
     writeRepoFile(dir, "src/sberbank/formats/12.txt", formatFile("^Sber$"));
     const mainSha = commitAll(dir, "main");
 
-    // PR #7 is healthy: a format landed at refs/pr/7, as fetchPullRequestHead
-    // would leave it. PR #8 is never fetched — refs/pr/8 is absent, so building
-    // it throws (git diff against a missing ref), standing in for any per-PR
-    // failure at boot (fetch error, unreadable file, bad ref).
+    // PR #7 is healthy: its head is already fetched at refs/pr/7, as the
+    // freshness sync would leave it. PR #8 is absent — refs/pr/8 doesn't exist,
+    // so building it throws (git diff against a missing ref), standing in for
+    // any per-PR failure (unreadable file, missing ref).
     git(dir, ["checkout", "-q", "-b", "pr7"]);
     writeRepoFile(dir, "src/alfabank/formats/9.txt", formatFile("^Alfa$"));
     const pr7Sha = commitAll(dir, "pr7");
@@ -249,21 +249,30 @@ describe("buildOpenPrsCorpus", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("drops a failing PR via onSkip without losing the healthy ones", () => {
+  it("returns the main half followed by every healthy PR's formats", () => {
+    const corpus = buildCorpus(
+      checkout,
+      [{ number: 7, title: "Add Alfa", headSha: "pr7head" }],
+      () => {
+        throw new Error("should not skip a healthy PR");
+      }
+    );
+
+    expect(corpus.map((f) => f.bank)).toEqual(["sberbank", "alfabank"]);
+  });
+
+  it("drops a failing PR via onSkip while keeping main and the healthy PRs", () => {
     const skipped: number[] = [];
-    const corpus = buildOpenPrsCorpus(
+    const corpus = buildCorpus(
       checkout,
       [
         { number: 7, title: "Add Alfa", headSha: "pr7head" },
         { number: 8, title: "Broken", headSha: "missing" },
       ],
-      {
-        fetchHead: () => "refs/pr/stub",
-        onSkip: (pr) => skipped.push(pr.number),
-      }
+      (pr) => skipped.push(pr.number)
     );
 
     expect(skipped).toEqual([8]);
-    expect(corpus.map((f) => f.bank)).toEqual(["alfabank"]);
+    expect(corpus.map((f) => f.bank)).toEqual(["sberbank", "alfabank"]);
   });
 });

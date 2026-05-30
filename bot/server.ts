@@ -1,37 +1,56 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { serve } from "bun";
 import { Bot, webhookCallback } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
 import { answerGuestMessage } from "./answer-guest-message";
-import { buildMainCorpus, buildOpenPrsCorpus, openPrCount } from "./corpus";
+import { buildMainCorpus } from "./corpus";
+import { CorpusStore } from "./corpus-store";
+import { createCorpusSync } from "./corpus-sync";
 import { loadBotEnv } from "./env";
 import { ensureMainCheckout } from "./main-checkout";
-import { listOpenPullRequests } from "./pull-requests";
 
 const env = loadBotEnv();
 
-// Materialise the corpus from a real git checkout (clone on first boot, disk on
-// restart — see ADR-0004) before serving. `main` formats plus, per open PR, the
-// formats it adds/modifies — each recognized format links to its file at its
-// own SHA. Open PRs are enumerated via the single REST call git can't replace;
-// their heads and diffs travel over git.
-const checkout = ensureMainCheckout({
-  repoSlug: env.sourceRepo,
-  branch: env.sourceBranch,
-  dir: env.checkoutDir,
-  token: env.githubToken,
-});
-const mainCorpus = buildMainCorpus(checkout);
-const openPrs = await listOpenPullRequests({
-  repoSlug: env.sourceRepo,
-  token: env.githubToken,
-});
-const prCorpus = buildOpenPrsCorpus(checkout, openPrs, {
-  onSkip: (pr, error) =>
+// The corpus is kept fresh on demand, not at boot (ADR-0004). A request outside
+// the TTL window kicks one background freshness check — two conditional ETag
+// GETs (main ref + open-PR list); only moved refs are pulled as git deltas and
+// the snapshot is swapped in atomically. Failures serve the last good snapshot.
+const store = new CorpusStore({
+  ttlMs: env.freshnessTtlMs,
+  sync: createCorpusSync({
+    repoSlug: env.sourceRepo,
+    branch: env.sourceBranch,
+    dir: env.checkoutDir,
+    token: env.githubToken,
+    onSkip: (pr, error) =>
+      process.stderr.write(`Skipping PR #${pr.number} in corpus: ${error}\n`),
+  }),
+  onError: (error) =>
     process.stderr.write(
-      `Skipping PR #${pr.number} in corpus build: ${error}\n`
+      `Corpus refresh failed, serving last good snapshot: ${error}\n`
     ),
 });
-const corpus = [...mainCorpus, ...prCorpus];
+
+// A restart over an existing disk checkout is not a re-clone: seed the snapshot
+// from disk (main half) so the first request answers from it, while the open TTL
+// gate makes that same request trigger the first freshness check — which folds
+// in open-PR formats and any main delta. A wiped disk has nothing to seed; the
+// first request then clones in the background and meanwhile gets the cold-start
+// stub (see answer-guest-message.ts).
+if (existsSync(join(env.checkoutDir, ".git"))) {
+  const checkout = ensureMainCheckout({
+    repoSlug: env.sourceRepo,
+    branch: env.sourceBranch,
+    dir: env.checkoutDir,
+    token: env.githubToken,
+  });
+  store.seed({
+    formats: buildMainCorpus(checkout),
+    mainSha: checkout.sha,
+    openPrCount: 0,
+  });
+}
 
 // Offline dry-run can't call getMe (dummy token), so hand grammY a synthetic
 // identity. Only the token matters for answerGuestQuery; botInfo is unused here.
@@ -61,13 +80,18 @@ const bot = new Bot(env.token, {
 });
 
 // Guest Mode (Bot API 10.0): an @mention or reply in any chat arrives as a
-// `guest_message`, answered exactly once via `answerGuestQuery`. We never log
+// `guest_message`, answered exactly once via `answerGuestQuery`. The request
+// drives freshness (noteDemand) and is answered from the current snapshot —
+// fresh or not — or the initializing stub before the first build. We never log
 // the raw SMS; only the rendered format list (which contains no SMS content).
 // A failed answer is swallowed inside the handler — see answer-guest-message.ts
 // for why webhookCallback must never return 500 here.
-bot.on("guest_message", (ctx) =>
-  answerGuestMessage(ctx, corpus, { dryRun: env.dryRun })
-);
+bot.on("guest_message", (ctx) => {
+  store.noteDemand();
+  return answerGuestMessage(ctx, store.current?.formats ?? null, {
+    dryRun: env.dryRun,
+  });
+});
 
 const handleUpdate = webhookCallback(bot, "std/http", {
   secretToken: env.webhookSecret,
@@ -88,10 +112,13 @@ serve({
   },
 });
 
+const seeded = store.current;
 process.stdout.write(
   `Recognition Bot webhook listening on :${env.port}${env.webhookPath}` +
-    ` — corpus: ${mainCorpus.length} main @ ${checkout.sha.slice(0, 7)}` +
-    ` + ${prCorpus.length} formats across ${openPrCount(corpus)} open PRs` +
+    (seeded
+      ? ` — seeded ${seeded.formats.length} main formats @ ${seeded.mainSha.slice(0, 7)} from disk`
+      : " — cold start: first request clones then builds") +
+    `; freshness is demand-driven (TTL ${env.freshnessTtlMs}ms)` +
     (env.dryRun ? " (dry-run: replies printed, not sent)" : "") +
     "\n"
 );

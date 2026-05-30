@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   answerGuestMessage,
   type GuestQueryContext,
+  INITIALIZING_MESSAGE,
 } from "./answer-guest-message";
 import type { CorpusFormat } from "./corpus";
 
@@ -72,6 +73,20 @@ describe("answerGuestMessage", () => {
     };
     expect(result.input_message_content.message_text).toBe(
       `main:\n- <a href="${SBER_URL}">sberbank/12</a>`
+    );
+  });
+
+  it("answers the initializing stub when the corpus is not ready yet", async () => {
+    const answerGuestQuery = vi.fn().mockResolvedValue({});
+    const ctx: GuestQueryContext = { guestMessage, answerGuestQuery };
+
+    await answerGuestMessage(ctx, null, { dryRun: false });
+
+    const result = answerGuestQuery.mock.calls[0]?.[0] as {
+      input_message_content: { message_text: string };
+    };
+    expect(result.input_message_content.message_text).toBe(
+      INITIALIZING_MESSAGE
     );
   });
 

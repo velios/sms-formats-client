@@ -7,7 +7,9 @@
  *
  * Open-PR content rides the same clone: each head is fetched over git via
  * `refs/pull/<N>/head`, and the files it changes come from a local merge-base
- * diff — no per-file REST. Delta fetch / freshness checks are later slices.
+ * diff — no per-file REST. When freshness checks report a shift, only the moved
+ * refs are pulled (`fetchMainDelta`, `fetchPullRequestHead`) and refs of closed
+ * PRs are pruned (`prunePullRequestRef`) — git deltas, never a re-clone.
  */
 
 import { execFileSync } from "node:child_process";
@@ -70,9 +72,28 @@ export function ensureMainCheckout(options: MainCheckoutOptions): MainCheckout {
   };
 }
 
+/**
+ * Pull `main` forward as a git delta and move the working tree onto it. Called
+ * only after a conditional GET reports the main ref moved (ADR-0004), so it's a
+ * small fetch, never a re-clone. `reset --hard` leaves the local `refs/pr/<N>`
+ * untouched — those are separate refs.
+ */
+export function fetchMainDelta(checkout: MainCheckout, branch: string): void {
+  git(["fetch", "origin", branch], checkout.dir);
+  git(["reset", "--hard", `origin/${branch}`], checkout.dir);
+}
+
 /** Local ref a fetched PR head lands on, off the public `refs/pull/<N>/head`. */
 function pullRequestRef(prNumber: number): string {
   return `refs/pr/${prNumber}`;
+}
+
+/** Drop a closed PR's local head ref so it leaves the corpus (ADR-0004). */
+export function prunePullRequestRef(
+  checkout: MainCheckout,
+  prNumber: number
+): void {
+  git(["update-ref", "-d", pullRequestRef(prNumber)], checkout.dir);
 }
 
 /**
