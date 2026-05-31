@@ -52,6 +52,10 @@ import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { resolvePublishPreflightState } from "@/features/publish-panel/PublishPanel";
 import {
+  type CommitMessageInput,
+  UpdatePullRequestDialog,
+} from "@/features/publish-panel/UpdatePullRequestDialog";
+import {
   type CachedFormatEntry,
   prepareFormatEntries,
 } from "@/features/quick-check/format-entries";
@@ -1768,6 +1772,20 @@ function countBlockingPublishValidationIssues(params: {
   return issues.filter((issue) => issue.level === "error").length;
 }
 
+function buildCommitMessage(
+  commit: CommitMessageInput | null
+): string | undefined {
+  if (!commit) {
+    return undefined;
+  }
+  const title = commit.title.trim();
+  if (!title) {
+    return undefined;
+  }
+  const description = commit.description.trim();
+  return description ? `${title}\n\n${description}` : title;
+}
+
 function useQuickPullRequestUpdate(params: {
   bank: BankInfo | undefined;
   bankPath: string;
@@ -1806,110 +1824,77 @@ function useQuickPullRequestUpdate(params: {
   } = params;
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
 
   useEffect(() => {
     setIsPublishing(false);
     setPublishError(null);
+    setIsUpdateDialogOpen(false);
   }, [repository.owner, repository.repo, sourceRef?.prNumber, sourceRef?.type]);
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: publish preflight intentionally keeps stale/read-only/validation branching in one place.
-  const run = useCallback(async () => {
+  const runPreflight = useCallback(async (): Promise<
+    { ok: true; token: string; prNumber: number } | { ok: false }
+  > => {
     if (!(writable && sourceRef?.type === "pr" && sourceRef.prNumber)) {
       setPublishError("no-write-access");
-      return;
+      return { ok: false };
     }
-
     const token = getGitHubUserToken()?.trim() ?? "";
     if (!token) {
       setPublishError(t("githubAuth.emptyToken"));
-      return;
+      return { ok: false };
     }
-
-    setIsPublishing(true);
-    setPublishError(null);
-    try {
-      const resolution = await resolvePullRequestWorkspace(
-        sourceRef.prNumber,
-        repository
-      );
-      if (resolution.status !== "supported") {
-        setPublishError(t("publish.updateError"));
-        return;
-      }
-      const validationErrorsCount = countBlockingPublishValidationIssues({
-        bank,
-        bankPath,
-        changedFiles,
-        draftStore,
-      });
-      const publishPreflightState = resolvePublishPreflightState({
-        resolverHeadSha: resolution.headSha,
-        sessionHeadSha: sourceRef.sha,
-        writable: resolution.writable,
-        localChangesCount: changedFiles.length,
-        hasInvalidScopeChanges: allChangedFiles.some(
-          (file) => !file.filePath.startsWith(`${bankPath}/`)
-        ),
-        validationErrorsCount,
-      });
-      if (publishPreflightState === "stale") {
-        onWorkspaceStale(resolution);
-        setPublishError(t("publish.outdatedBase"));
-        return;
-      }
-      if (publishPreflightState === "read-only") {
-        onWorkspaceReadOnly(resolution);
-        setPublishError(
-          t("publish.readOnly", {
-            defaultValue: "This pull request is read-only.",
-          })
-        );
-        return;
-      }
-      if (publishPreflightState === "no-changes") {
-        setPublishError(t("publish.noChanges"));
-        return;
-      }
-      if (publishPreflightState === "invalid-scope") {
-        setPublishError(t("validation.multiBankPublish"));
-        return;
-      }
-      if (publishPreflightState === "validation-failed") {
-        setPublishError(
-          t("validation.errors", { count: validationErrorsCount })
-        );
-        return;
-      }
-      await updatePullRequestHead(
-        token,
-        sourceRef.prNumber,
-        changedFiles.map((file) => ({
-          path: file.filePath,
-          content: file.isDeleted ? undefined : file.content,
-          delete: file.isDeleted,
-        })),
-        repository
-      );
-      const syncedResolution = await resolvePullRequestWorkspace(
-        sourceRef.prNumber,
-        repository
-      );
-      if (syncedResolution.status !== "supported") {
-        setPublishError(t("publish.updateError"));
-        return;
-      }
-      useFileContentStore.getState().invalidatePullRequestFileContents({
-        repository,
-        prNumber: sourceRef.prNumber,
-      });
-      await onWorkspaceSynced(syncedResolution);
-    } catch (error) {
+    const resolution = await resolvePullRequestWorkspace(
+      sourceRef.prNumber,
+      repository
+    );
+    if (resolution.status !== "supported") {
+      setPublishError(t("publish.updateError"));
+      return { ok: false };
+    }
+    const validationErrorsCount = countBlockingPublishValidationIssues({
+      bank,
+      bankPath,
+      changedFiles,
+      draftStore,
+    });
+    const publishPreflightState = resolvePublishPreflightState({
+      resolverHeadSha: resolution.headSha,
+      sessionHeadSha: sourceRef.sha,
+      writable: resolution.writable,
+      localChangesCount: changedFiles.length,
+      hasInvalidScopeChanges: allChangedFiles.some(
+        (file) => !file.filePath.startsWith(`${bankPath}/`)
+      ),
+      validationErrorsCount,
+    });
+    if (publishPreflightState === "stale") {
+      onWorkspaceStale(resolution);
+      setPublishError(t("publish.outdatedBase"));
+      return { ok: false };
+    }
+    if (publishPreflightState === "read-only") {
+      onWorkspaceReadOnly(resolution);
       setPublishError(
-        error instanceof Error ? error.message : t("publish.updateError")
+        t("publish.readOnly", {
+          defaultValue: "This pull request is read-only.",
+        })
       );
-    } finally {
-      setIsPublishing(false);
+      return { ok: false };
     }
+    if (publishPreflightState === "no-changes") {
+      setPublishError(t("publish.noChanges"));
+      return { ok: false };
+    }
+    if (publishPreflightState === "invalid-scope") {
+      setPublishError(t("validation.multiBankPublish"));
+      return { ok: false };
+    }
+    if (publishPreflightState === "validation-failed") {
+      setPublishError(t("validation.errors", { count: validationErrorsCount }));
+      return { ok: false };
+    }
+    return { ok: true, token, prNumber: sourceRef.prNumber };
   }, [
     allChangedFiles,
     bank,
@@ -1918,7 +1903,6 @@ function useQuickPullRequestUpdate(params: {
     draftStore,
     onWorkspaceReadOnly,
     onWorkspaceStale,
-    onWorkspaceSynced,
     repository,
     sourceRef?.prNumber,
     sourceRef?.type,
@@ -1927,10 +1911,93 @@ function useQuickPullRequestUpdate(params: {
     writable,
   ]);
 
+  const pushAndSync = useCallback(
+    async (
+      token: string,
+      prNumber: number,
+      commitMessage?: string
+    ): Promise<boolean> => {
+      await updatePullRequestHead(
+        token,
+        prNumber,
+        changedFiles.map((file) => ({
+          path: file.filePath,
+          content: file.isDeleted ? undefined : file.content,
+          delete: file.isDeleted,
+        })),
+        repository,
+        commitMessage
+      );
+      const syncedResolution = await resolvePullRequestWorkspace(
+        prNumber,
+        repository
+      );
+      if (syncedResolution.status !== "supported") {
+        setPublishError(t("publish.updateError"));
+        return false;
+      }
+      useFileContentStore.getState().invalidatePullRequestFileContents({
+        repository,
+        prNumber,
+      });
+      await onWorkspaceSynced(syncedResolution);
+      return true;
+    },
+    [changedFiles, onWorkspaceSynced, repository, t]
+  );
+
+  const beginUpdate = useCallback(async () => {
+    setPublishError(null);
+    setIsPublishing(true);
+    try {
+      const pre = await runPreflight();
+      if (pre.ok) {
+        setIsUpdateDialogOpen(true);
+      }
+    } catch (error) {
+      setPublishError(
+        error instanceof Error ? error.message : t("publish.updateError")
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [runPreflight, t]);
+
+  const submitUpdate = useCallback(
+    async (commit: CommitMessageInput | null): Promise<void> => {
+      setIsPublishing(true);
+      setPublishError(null);
+      try {
+        const pre = await runPreflight();
+        if (!pre.ok) {
+          setIsUpdateDialogOpen(false);
+          return;
+        }
+        await pushAndSync(pre.token, pre.prNumber, buildCommitMessage(commit));
+        setIsUpdateDialogOpen(false);
+      } catch (error) {
+        setPublishError(
+          error instanceof Error ? error.message : t("publish.updateError")
+        );
+        setIsUpdateDialogOpen(false);
+      } finally {
+        setIsPublishing(false);
+      }
+    },
+    [pushAndSync, runPreflight, t]
+  );
+
+  const closeUpdateDialog = useCallback(() => {
+    setIsUpdateDialogOpen(false);
+  }, []);
+
   return {
     isPublishing,
     publishError,
-    run,
+    isUpdateDialogOpen,
+    beginUpdate,
+    submitUpdate,
+    closeUpdateDialog,
   };
 }
 
@@ -1981,7 +2048,10 @@ function useBankPublishAction(params: {
   const {
     isPublishing,
     publishError,
-    run: runQuickPullRequestUpdate,
+    isUpdateDialogOpen,
+    beginUpdate,
+    submitUpdate,
+    closeUpdateDialog,
   } = useQuickPullRequestUpdate({
     bank,
     bankPath,
@@ -2000,8 +2070,8 @@ function useBankPublishAction(params: {
     ? t("publish.publishing")
     : t("publish.updatePR");
   const onPublish = useCallback(() => {
-    void runQuickPullRequestUpdate();
-  }, [runQuickPullRequestUpdate]);
+    void beginUpdate();
+  }, [beginUpdate]);
 
   return {
     canUpdateCurrentPullRequest,
@@ -2009,6 +2079,9 @@ function useBankPublishAction(params: {
     onPublish,
     publishActionLabel,
     publishError,
+    isUpdateDialogOpen,
+    submitUpdate,
+    closeUpdateDialog,
   };
 }
 
@@ -3028,6 +3101,9 @@ export function BankWorkspace() {
     publishError,
     onPublish: handlePublishAction,
     publishActionLabel,
+    isUpdateDialogOpen,
+    submitUpdate,
+    closeUpdateDialog,
   } = useBankPublishAction({
     bank,
     bankPath,
@@ -3313,6 +3389,13 @@ export function BankWorkspace() {
       </div>
 
       {/* Modals */}
+      {isUpdateDialogOpen && (
+        <UpdatePullRequestDialog
+          isBusy={isPublishingQuickUpdate}
+          onClose={closeUpdateDialog}
+          onSubmit={submitUpdate}
+        />
+      )}
       {showCreateFormat && (
         <CreateFormatModal
           bankPath={bankPath}

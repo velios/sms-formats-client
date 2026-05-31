@@ -685,6 +685,18 @@ describe("BankWorkspace route init", () => {
         status: "supported",
         repository: { owner: "zenmoney", repo: "sms-formats" },
         prNumber: 123,
+        headSha: "head-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
         headSha: "new-head-sha",
         bankPath: "src/TBank_123",
         writable: true,
@@ -708,6 +720,21 @@ describe("BankWorkspace route init", () => {
     fireEvent.click(screen.getByRole("button", { name: "publish.updatePR" }));
 
     await waitFor(() =>
+      screen.getByRole("textbox", { name: "publish.commitTitleLabel" })
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "publish.commitTitleLabel" }),
+      { target: { value: "Fix negative amounts" } }
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "publish.commitDescriptionLabel" }),
+      { target: { value: "Handles the minus sign in the regex" } }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "publish.updateAction" })
+    );
+
+    await waitFor(() =>
       expect(mocks.updatePullRequestHead).toHaveBeenCalledWith(
         "gh-token",
         123,
@@ -718,7 +745,8 @@ describe("BankWorkspace route init", () => {
             delete: false,
           },
         ],
-        { owner: "zenmoney", repo: "sms-formats" }
+        { owner: "zenmoney", repo: "sms-formats" },
+        "Fix negative amounts\n\nHandles the minus sign in the regex"
       )
     );
     await waitFor(() =>

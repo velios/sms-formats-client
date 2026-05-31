@@ -1621,7 +1621,8 @@ export async function updatePullRequestHead(
   token: string,
   prNumber: number,
   files: Array<{ path: string; content?: string; delete?: boolean }>,
-  repoRef?: RepoRef
+  repoRef?: RepoRef,
+  commitMessage?: string
 ): Promise<{ url: string; title: string }> {
   const repo = resolveRepo(repoRef);
   const octokit = createAuthenticatedOctokit(token);
@@ -1636,8 +1637,9 @@ export async function updatePullRequestHead(
   const headRef = pr.data.head.ref;
   const headSha = pr.data.head.sha;
   const title = pr.data.title;
+  const message = commitMessage?.trim() ? commitMessage : title;
 
-  await createCommit(octokit, headOwner, headRef, headSha, files, title, {
+  await createCommit(octokit, headOwner, headRef, headSha, files, message, {
     owner: headOwner,
     repo: headRepo,
   });

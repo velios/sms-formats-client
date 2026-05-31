@@ -186,7 +186,14 @@
     "prLink": "PR link",
     "outdatedBase": "Cannot publish changes created on top of another commit. Switch to the correct step and reapply the edits.",
     "readOnly": "This pull request is read-only.",
-    "updateError": "Failed to update pull request"
+    "updateError": "Failed to update pull request",
+    "updateDialogTitle": "Update Pull Request",
+    "commitTitleLabel": "Commit title",
+    "commitTitlePlaceholder": "Briefly: what this commit changes",
+    "commitDescriptionLabel": "Commit description",
+    "commitDescriptionPlaceholder": "Optional: details of the change",
+    "updateAction": "Update",
+    "updateWithDefaultTitle": "Update with the default title"
   },
   "refresh": {
     "action": "Pull from GitHub",

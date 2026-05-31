@@ -217,6 +217,13 @@
     "outdatedBase": "Нельзя публиковать изменения, созданные поверх другого коммита. Переключитесь на нужный шаг и внесите правки заново.",
     "readOnly": "Этот pull request открыт только для чтения.",
     "updateError": "Не удалось обновить Pull Request",
+    "updateDialogTitle": "Обновление Pull Request",
+    "commitTitleLabel": "Заголовок коммита",
+    "commitTitlePlaceholder": "Коротко: что меняет этот коммит",
+    "commitDescriptionLabel": "Описание коммита",
+    "commitDescriptionPlaceholder": "Необязательно: детали изменения",
+    "updateAction": "Обновить",
+    "updateWithDefaultTitle": "Обновить со стандартным заголовком",
     "prLink": "Ссылка на PR"
   },
   "locale": {
