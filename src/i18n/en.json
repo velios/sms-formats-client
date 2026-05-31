@@ -193,7 +193,8 @@
     "commitDescriptionLabel": "Commit description",
     "commitDescriptionPlaceholder": "Optional: details of the change",
     "updateAction": "Update",
-    "updateWithDefaultTitle": "Update with the default title"
+    "updateWithDefaultTitle": "Update with the default title",
+    "cancel": "Cancel"
   },
   "refresh": {
     "action": "Pull from GitHub",

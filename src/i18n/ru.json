@@ -224,6 +224,7 @@
     "commitDescriptionPlaceholder": "Необязательно: детали изменения",
     "updateAction": "Обновить",
     "updateWithDefaultTitle": "Обновить со стандартным заголовком",
+    "cancel": "Отмена",
     "prLink": "Ссылка на PR"
   },
   "locale": {

@@ -79,6 +79,9 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
       </div>
 
       <div className="mt-6 flex justify-end gap-2">
+        <Button disabled={isBusy} onClick={onClose} type="button">
+          {t("publish.cancel")}
+        </Button>
         <Button
           disabled={isBusy}
           onClick={() => void handleSubmitWithDefaultTitle()}
