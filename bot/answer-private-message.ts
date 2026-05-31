@@ -1,6 +1,6 @@
 import { INITIALIZING_MESSAGE } from "./answer-guest-message";
-import type { CorpusFormat } from "./corpus";
 import { extractDirectSms } from "./extract-sms";
+import { type CompiledCorpus, EMPTY_CORPUS } from "./recognize";
 import { respond } from "./respond";
 
 /**
@@ -35,7 +35,7 @@ export interface PrivateMessageContext {
  */
 export async function answerPrivateMessage(
   ctx: PrivateMessageContext,
-  corpus: CorpusFormat[] | null,
+  corpus: CompiledCorpus | null,
   options: { dryRun: boolean }
 ): Promise<void> {
   const intent = extractDirectSms(ctx.message?.text);
@@ -44,7 +44,7 @@ export async function answerPrivateMessage(
   const body =
     corpus === null && intent.kind === "sms"
       ? INITIALIZING_MESSAGE
-      : respond(intent, corpus ?? []);
+      : respond(intent, corpus ?? EMPTY_CORPUS);
 
   if (options.dryRun) {
     process.stdout.write(`${body}\n`);

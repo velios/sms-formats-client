@@ -16,14 +16,39 @@
  * this gate is testable without touching git or the network.
  */
 
-import type { CorpusFormat } from "./corpus";
+import { type CompiledRegex, compileRegexes } from "@/domain/format";
+import { type CorpusFormat, openPrCount } from "./corpus";
 
 export interface Snapshot {
   formats: CorpusFormat[];
+  /**
+   * The regexes of `formats` compiled once when this snapshot was built,
+   * aligned by index. Held here so the matching path reuses `RegExp[]` for
+   * every SMS until the next refresh swaps in a fresh snapshot (ADR-0003).
+   */
+  compiled: CompiledRegex[];
   /** Commit SHA of the `main` half — for the boot log and diagnostics. */
   mainSha: string;
   /** Distinct open PRs represented in the snapshot. */
   openPrCount: number;
+}
+
+/**
+ * Assemble a snapshot from a freshly built corpus, compiling every regex once
+ * here (ADR-0003). Because compilation runs at build time, the snapshot caches
+ * by content/SHA, never by format id: a regex edited under the same id yields a
+ * new snapshot with a fresh compile, so a stale `RegExp` can never linger.
+ */
+export function buildSnapshot(
+  formats: CorpusFormat[],
+  mainSha: string
+): Snapshot {
+  return {
+    formats,
+    compiled: compileRegexes(formats.map((format) => format.regex)),
+    mainSha,
+    openPrCount: openPrCount(formats),
+  };
 }
 
 export interface CorpusStoreOptions {

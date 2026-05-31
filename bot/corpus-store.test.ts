@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CorpusStore, type Snapshot } from "./corpus-store";
 
 function snapshot(mainSha: string): Snapshot {
-  return { formats: [], mainSha, openPrCount: 0 };
+  return { formats: [], compiled: [], mainSha, openPrCount: 0 };
 }
 
 describe("CorpusStore freshness gate", () => {

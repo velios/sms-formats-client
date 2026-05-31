@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { compileRegexes } from "@/domain/format";
 import type { CorpusFormat } from "./corpus";
-import { recognize } from "./recognize";
+import { type CompiledCorpus, recognize } from "./recognize";
 
-const corpus: CorpusFormat[] = [
+const formats: CorpusFormat[] = [
   {
     source: { kind: "main" },
     bank: "sberbank",
@@ -25,6 +26,11 @@ const corpus: CorpusFormat[] = [
     fileUrl: "https://github.com/o/r/blob/sha/src/vtb/formats/9.txt",
   },
 ];
+
+const corpus: CompiledCorpus = {
+  formats,
+  compiled: compileRegexes(formats.map((format) => format.regex)),
+};
 
 describe("recognize", () => {
   it("returns every format whose regex recognizes the SMS, by source", () => {

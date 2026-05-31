@@ -22,8 +22,8 @@
  */
 
 import type { Conditional } from "./conditional-get";
-import { buildCorpus, openPrCount } from "./corpus";
-import type { Snapshot } from "./corpus-store";
+import { buildCorpus } from "./corpus";
+import { buildSnapshot, type Snapshot } from "./corpus-store";
 import {
   ensureMainCheckout,
   fetchMainDelta,
@@ -125,11 +125,7 @@ export function createCorpusSync(
 
     const formats = buildCorpus(checkout, openPrs, onSkip);
     built = true;
-    return {
-      formats,
-      mainSha: checkout.sha,
-      openPrCount: openPrCount(formats),
-    };
+    return buildSnapshot(formats, checkout.sha);
   };
 
   function syncPullRequestRefs(

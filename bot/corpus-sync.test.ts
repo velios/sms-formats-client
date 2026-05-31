@@ -135,6 +135,11 @@ describe("createCorpusSync", () => {
     ]);
     expect(snapshot?.openPrCount).toBe(1);
     expect(snapshot?.mainSha).toBe(state.mainSha);
+    // The corpus is compiled once per refresh: a RegExp per format, aligned by
+    // index, reused for every SMS until the next snapshot (ADR-0003).
+    expect(snapshot?.compiled).toHaveLength(snapshot?.formats.length ?? 0);
+    expect(snapshot?.compiled[0]?.regex?.test("Sber")).toBe(true);
+    expect(snapshot?.compiled[1]?.regex?.test("Alfa")).toBe(true);
   });
 
   it("returns null on a 304/304 cycle and does no rebuild", async () => {

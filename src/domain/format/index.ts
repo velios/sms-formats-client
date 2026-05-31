@@ -6,7 +6,10 @@ export {
 } from "./intersections";
 export { FORMAT_TEMPLATE, parseFormatFile, serializeFormat } from "./parser";
 export {
+  type CompiledRegex,
+  compileRegexes,
   recognizeSms,
+  recognizeWithCompiled,
   regexesBySms,
   type SmsesRecognition,
   type SmsRecognition,

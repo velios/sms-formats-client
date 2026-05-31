@@ -6,7 +6,7 @@ import type { UserFromGetMe } from "grammy/types";
 import { answerGuestMessage } from "./answer-guest-message";
 import { answerPrivateMessage } from "./answer-private-message";
 import { buildMainCorpus } from "./corpus";
-import { CorpusStore } from "./corpus-store";
+import { buildSnapshot, CorpusStore } from "./corpus-store";
 import { createCorpusSync } from "./corpus-sync";
 import { loadBotEnv } from "./env";
 import { ensureMainCheckout } from "./main-checkout";
@@ -50,11 +50,7 @@ if (existsSync(join(env.checkoutDir, ".git"))) {
     dir: env.checkoutDir,
     token: env.githubToken,
   });
-  store.seed({
-    formats: buildMainCorpus(checkout),
-    mainSha: checkout.sha,
-    openPrCount: 0,
-  });
+  store.seed(buildSnapshot(buildMainCorpus(checkout), checkout.sha));
 }
 
 // Offline dry-run can't call getMe (dummy token), so hand grammY a synthetic
@@ -93,7 +89,7 @@ const bot = new Bot(env.token, {
 // for why webhookCallback must never return 500 here.
 bot.on("guest_message", (ctx) => {
   store.noteDemand();
-  return answerGuestMessage(ctx, store.current?.formats ?? null, {
+  return answerGuestMessage(ctx, store.current, {
     dryRun: env.dryRun,
   });
 });
@@ -108,7 +104,7 @@ bot.on("message", (ctx) => {
     return;
   }
   store.noteDemand();
-  return answerPrivateMessage(ctx, store.current?.formats ?? null, {
+  return answerPrivateMessage(ctx, store.current, {
     dryRun: env.dryRun,
   });
 });

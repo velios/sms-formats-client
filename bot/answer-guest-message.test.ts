@@ -1,16 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { compileRegexes } from "@/domain/format";
 import {
   answerGuestMessage,
   type GuestQueryContext,
   INITIALIZING_MESSAGE,
 } from "./answer-guest-message";
 import type { CorpusFormat } from "./corpus";
+import type { CompiledCorpus } from "./recognize";
 
 const DEMO_SMS = "Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB";
 const SBER_URL =
   "https://github.com/zenmoney/sms-formats/blob/abc/src/sberbank/formats/12.txt";
 
-const corpus: CorpusFormat[] = [
+const formats: CorpusFormat[] = [
   {
     source: { kind: "main" },
     bank: "sberbank",
@@ -19,6 +21,11 @@ const corpus: CorpusFormat[] = [
     fileUrl: SBER_URL,
   },
 ];
+
+const corpus: CompiledCorpus = {
+  formats,
+  compiled: compileRegexes(formats.map((format) => format.regex)),
+};
 
 // A reply to an SMS plus "@zenmoneysms_bot /sms" — the canonical guest call
 // that triggers recognition (ADR-0006: recognition requires the /sms token).

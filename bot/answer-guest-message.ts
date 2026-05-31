@@ -1,6 +1,6 @@
 import type { InlineQueryResult } from "grammy/types";
-import type { CorpusFormat } from "./corpus";
 import { extractSms, type MessageEntityLike } from "./extract-sms";
+import { type CompiledCorpus, EMPTY_CORPUS } from "./recognize";
 import { respond } from "./respond";
 
 /**
@@ -44,7 +44,7 @@ export const INITIALIZING_MESSAGE =
  */
 export async function answerGuestMessage(
   ctx: GuestQueryContext,
-  corpus: CorpusFormat[] | null,
+  corpus: CompiledCorpus | null,
   options: { dryRun: boolean }
 ): Promise<void> {
   const message = ctx.guestMessage;
@@ -64,7 +64,7 @@ export async function answerGuestMessage(
   const body =
     corpus === null && intent.kind === "sms"
       ? INITIALIZING_MESSAGE
-      : respond(intent, corpus ?? []);
+      : respond(intent, corpus ?? EMPTY_CORPUS);
 
   if (body === null) {
     // Deliberate silence (ADR-0006): no /sms, so we skip answerGuestQuery and

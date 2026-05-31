@@ -1,17 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { compileRegexes } from "@/domain/format";
 import { INITIALIZING_MESSAGE } from "./answer-guest-message";
 import {
   answerPrivateMessage,
   type PrivateMessageContext,
 } from "./answer-private-message";
 import type { CorpusFormat } from "./corpus";
+import type { CompiledCorpus } from "./recognize";
 import { DIRECT_USAGE_HINT } from "./render";
 
 const DEMO_SMS = "Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB";
 const SBER_URL =
   "https://github.com/zenmoney/sms-formats/blob/abc/src/sberbank/formats/12.txt";
 
-const corpus: CorpusFormat[] = [
+const formats: CorpusFormat[] = [
   {
     source: { kind: "main" },
     bank: "sberbank",
@@ -20,6 +22,11 @@ const corpus: CorpusFormat[] = [
     fileUrl: SBER_URL,
   },
 ];
+
+const corpus: CompiledCorpus = {
+  formats,
+  compiled: compileRegexes(formats.map((format) => format.regex)),
+};
 
 class TooManyRequestsError extends Error {
   readonly error_code = 429;

@@ -1,6 +1,5 @@
-import type { CorpusFormat } from "./corpus";
 import type { DirectIntent, Intent } from "./extract-sms";
-import { recognize } from "./recognize";
+import { type CompiledCorpus, recognize } from "./recognize";
 import { renderResponse } from "./render";
 
 /**
@@ -10,14 +9,14 @@ import { renderResponse } from "./render";
  * sees `null`; direct extraction never produces `silent`, so the overload lets
  * the direct adapter treat the result as a plain string.
  */
-export function respond(intent: DirectIntent, corpus: CorpusFormat[]): string;
-export function respond(intent: Intent, corpus: CorpusFormat[]): string | null;
-export function respond(intent: Intent, corpus: CorpusFormat[]): string | null {
+export function respond(intent: DirectIntent, corpus: CompiledCorpus): string;
+export function respond(intent: Intent, corpus: CompiledCorpus): string | null;
+export function respond(intent: Intent, corpus: CompiledCorpus): string | null {
   if (intent.kind === "silent") {
     return null;
   }
   if (intent.kind === "hint") {
     return intent.text;
   }
-  return renderResponse(recognize(intent.sms, corpus), corpus);
+  return renderResponse(recognize(intent.sms, corpus), corpus.formats);
 }

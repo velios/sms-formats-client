@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { recognizeSms, regexesBySms, smsesByRegex } from "./recognition";
+import {
+  compileRegexes,
+  recognizeSms,
+  recognizeWithCompiled,
+  regexesBySms,
+  smsesByRegex,
+} from "./recognition";
 
 describe("recognizeSms", () => {
   it("matches a regex against an SMS", () => {
@@ -66,6 +72,65 @@ describe("regexesBySms", () => {
 
   it("returns an empty array for no regexes", () => {
     expect(regexesBySms([], "PAY 100")).toEqual([]);
+  });
+});
+
+describe("compileRegexes", () => {
+  it("compiles each regex aligned by index, with a usable RegExp", () => {
+    const compiled = compileRegexes(["^PAY (\\d+)$", "^REFUND$"]);
+    expect(compiled).toHaveLength(2);
+    expect(compiled[0]?.error).toBeNull();
+    expect(compiled[0]?.regex?.test("PAY 100")).toBe(true);
+    expect(compiled[1]?.regex?.test("PAY 100")).toBe(false);
+  });
+
+  it("treats an empty or whitespace regex as no regex, no error", () => {
+    expect(compileRegexes(["", "   "])).toEqual([
+      { regex: null, error: null },
+      { regex: null, error: null },
+    ]);
+  });
+
+  it("captures a compile error for an invalid regex without a RegExp", () => {
+    const [entry] = compileRegexes(["[broken"]);
+    expect(entry?.regex).toBeNull();
+    expect(entry?.error).toBeTruthy();
+  });
+
+  it("returns an empty array for no regexes", () => {
+    expect(compileRegexes([])).toEqual([]);
+  });
+});
+
+describe("recognizeWithCompiled", () => {
+  it("matches the normalized SMS against the compiled set, aligned by index", () => {
+    const compiled = compileRegexes(["^A (\\d+) B$", "^REFUND$", "[broken"]);
+    expect(recognizeWithCompiled(compiled, "A 1\n\nB")).toEqual([
+      { matched: true, error: null },
+      { matched: false, error: null },
+      { matched: false, error: expect.any(String) },
+    ]);
+  });
+
+  it("reuses one compiled set across many SMS without recompiling", () => {
+    const compiled = compileRegexes(["^PAY (\\d+)$"]);
+    expect(recognizeWithCompiled(compiled, "PAY 1")[0]?.matched).toBe(true);
+    expect(recognizeWithCompiled(compiled, "PAY 2")[0]?.matched).toBe(true);
+    expect(recognizeWithCompiled(compiled, "REFUND 3")[0]?.matched).toBe(false);
+  });
+
+  it("surfaces an empty regex as no match, no error", () => {
+    expect(recognizeWithCompiled(compileRegexes([""]), "PAY 100")).toEqual([
+      { matched: false, error: null },
+    ]);
+  });
+
+  it("agrees with regexesBySms, which is built over it", () => {
+    const regexes = ["^PAY (\\d+)$", "", "[broken", "^REFUND$"];
+    const sms = "PAY 100";
+    expect(recognizeWithCompiled(compileRegexes(regexes), sms)).toEqual(
+      regexesBySms(regexes, sms)
+    );
   });
 });
 

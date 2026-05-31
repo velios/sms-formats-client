@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { compileRegexes } from "@/domain/format";
 import type { CorpusFormat } from "./corpus";
+import type { CompiledCorpus } from "./recognize";
 import { respond } from "./respond";
 
 const DEMO_SMS = "Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB";
 const SBER_URL =
   "https://github.com/zenmoney/sms-formats/blob/abc/src/sberbank/formats/12.txt";
 
-const corpus: CorpusFormat[] = [
+const formats: CorpusFormat[] = [
   {
     source: { kind: "main" },
     bank: "sberbank",
@@ -15,6 +17,11 @@ const corpus: CorpusFormat[] = [
     fileUrl: SBER_URL,
   },
 ];
+
+const corpus: CompiledCorpus = {
+  formats,
+  compiled: compileRegexes(formats.map((format) => format.regex)),
+};
 
 describe("respond", () => {
   it("returns null for a silent intent", () => {
