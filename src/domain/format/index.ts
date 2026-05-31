@@ -6,6 +6,11 @@ export {
 } from "./intersections";
 export { FORMAT_TEMPLATE, parseFormatFile, serializeFormat } from "./parser";
 export {
+  buildPatternHighlightPlan,
+  type HighlightMode,
+  type PatternHighlightPlan,
+} from "./pattern-highlight";
+export {
   type CompiledRegex,
   compileRegexes,
   recognizeSms,

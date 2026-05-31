@@ -627,9 +627,19 @@ export const usePublishStore = create<PublishState>((set) => ({
 
 // ─── UI store ───
 
+type HighlightMode = "parts" | "groups";
+
+function readHighlightMode(): HighlightMode {
+  return localStorage.getItem("sms-formats-highlight-mode") === "parts"
+    ? "parts"
+    : "groups";
+}
+
 interface UIState {
   locale: string;
   setLocale: (l: string) => void;
+  highlightMode: HighlightMode;
+  setHighlightMode: (mode: HighlightMode) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -637,5 +647,10 @@ export const useUIStore = create<UIState>((set) => ({
   setLocale: (locale) => {
     localStorage.setItem("sms-formats-lang", locale);
     set({ locale });
+  },
+  highlightMode: readHighlightMode(),
+  setHighlightMode: (highlightMode) => {
+    localStorage.setItem("sms-formats-highlight-mode", highlightMode);
+    set({ highlightMode });
   },
 }));

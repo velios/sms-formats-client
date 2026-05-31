@@ -1,6 +1,7 @@
 import {
   EditorState,
   type Extension,
+  type Range,
   StateEffect,
   StateField,
 } from "@codemirror/state";
@@ -12,7 +13,11 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
-import type { RegexPatternToken } from "@/domain/format";
+import type {
+  HighlightMode,
+  PatternHighlightPlan,
+  RegexPatternToken,
+} from "@/domain/format";
 
 export interface UnifiedRegexEditorHandle {
   /** Insert text at the current caret, replacing any selection, then refocus. */
@@ -24,9 +29,17 @@ export interface UnifiedRegexEditorHandle {
 interface TokenDecoState {
   tokens: RegexPatternToken[];
   activeIndex: number | null;
+  mode: HighlightMode;
+  plan: PatternHighlightPlan;
 }
 
-const emptyDecoState: TokenDecoState = { tokens: [], activeIndex: null };
+const emptyPlan: PatternHighlightPlan = { lit: [], colorGroups: [] };
+const emptyDecoState: TokenDecoState = {
+  tokens: [],
+  activeIndex: null,
+  mode: "groups",
+  plan: emptyPlan,
+};
 
 const setTokenDecoEffect = StateEffect.define<TokenDecoState>();
 
@@ -46,16 +59,70 @@ function buildDecorations(
   decoState: TokenDecoState,
   docLength: number
 ): DecorationSet {
-  const { tokens, activeIndex } = decoState;
+  const { tokens, activeIndex, mode, plan } = decoState;
   if (tokens.length === 0) {
     return Decoration.none;
   }
-  const decorations = tokens
-    .filter((token) => token.start < token.end && token.end <= docLength)
-    .map((token, index) => {
-      const cls = getTokenDecoClass(token.type, index === activeIndex);
-      return Decoration.mark({ class: cls }).range(token.start, token.end);
+
+  const isValid = (token: RegexPatternToken) =>
+    token.start < token.end && token.end <= docLength;
+  const decorations: Range<Decoration>[] = [];
+
+  if (mode === "groups") {
+    // Merge adjacent lit tokens sharing a color group into one solid band so
+    // capture-group runs read as a single stripe (no per-token seams).
+    let i = 0;
+    while (i < tokens.length) {
+      const token = tokens[i]!;
+      if (!(plan.lit[i] && isValid(token))) {
+        i++;
+        continue;
+      }
+      const group = plan.colorGroups[i] ?? 0;
+      let last = i;
+      while (
+        last + 1 < tokens.length &&
+        plan.lit[last + 1] &&
+        isValid(tokens[last + 1]!) &&
+        (plan.colorGroups[last + 1] ?? 0) === group
+      ) {
+        last++;
+      }
+      decorations.push(
+        Decoration.mark({ class: getGroupBandClass(group) }).range(
+          token.start,
+          tokens[last]!.end
+        )
+      );
+      i = last + 1;
+    }
+  } else {
+    tokens.forEach((token, index) => {
+      if (!(plan.lit[index] && isValid(token))) {
+        return;
+      }
+      decorations.push(
+        Decoration.mark({ class: getTokenTypeClass(token.type) }).range(
+          token.start,
+          token.end
+        )
+      );
     });
+  }
+
+  // The active token's outline overlays the band/type fill in both modes.
+  if (activeIndex != null) {
+    const token = tokens[activeIndex];
+    if (token && isValid(token)) {
+      decorations.push(
+        Decoration.mark({ class: activeTokenOutlineClass }).range(
+          token.start,
+          token.end
+        )
+      );
+    }
+  }
+
   return Decoration.set(decorations, true);
 }
 
@@ -82,12 +149,31 @@ const regexTokenDecorationClassMap: Record<string, string> = {
     "rounded-[2px] border border-[#bdc8d3] bg-[#e9eff6] px-[1px] font-semibold text-[#2a3e54]",
 };
 
-function getTokenDecoClass(type: string, active: boolean): string {
-  const base =
-    regexTokenDecorationClassMap[type] ?? regexTokenDecorationClassMap.literal!;
-  return active
-    ? `${base} outline outline-2 outline-[#125a96] outline-offset-[-1px]`
-    : base;
+// Solid capture-group bands (match-driven), mirroring the test string's
+// fills. Index 0 is the full-match hue (blue, --c-group-0); groups cycle mod 5.
+const groupBandClassMap = [
+  "rounded-[2px] bg-[color:var(--c-group-1)] shadow-[inset_0_-2px_0_var(--c-group-border-1)] font-semibold",
+  "rounded-[2px] bg-[color:var(--c-group-2)] shadow-[inset_0_-2px_0_var(--c-group-border-2)] font-semibold",
+  "rounded-[2px] bg-[color:var(--c-group-3)] shadow-[inset_0_-2px_0_var(--c-group-border-3)] font-semibold",
+  "rounded-[2px] bg-[color:var(--c-group-4)] shadow-[inset_0_-2px_0_var(--c-group-border-4)] font-semibold",
+  "rounded-[2px] bg-[color:var(--c-group-5)] shadow-[inset_0_-2px_0_var(--c-group-border-5)] font-semibold",
+];
+const fullMatchBandClass =
+  "rounded-[2px] bg-[color:var(--c-group-0)] shadow-[inset_0_-2px_0_var(--c-group-border-0)] font-semibold";
+const activeTokenOutlineClass =
+  "rounded-[2px] outline outline-2 outline-[#125a96] outline-offset-[-1px]";
+
+function getTokenTypeClass(type: string): string {
+  return (
+    regexTokenDecorationClassMap[type] ?? regexTokenDecorationClassMap.literal!
+  );
+}
+
+function getGroupBandClass(group: number): string {
+  if (group <= 0) {
+    return fullMatchBandClass;
+  }
+  return groupBandClassMap[(group - 1) % groupBandClassMap.length]!;
 }
 
 /* ─── Click-on-token via Compartment ─── */
@@ -163,6 +249,8 @@ interface UnifiedRegexEditorProps {
   onRegexChange: (value: string) => void;
   tokens: RegexPatternToken[];
   canHighlight: boolean;
+  highlightMode: HighlightMode;
+  highlightPlan: PatternHighlightPlan;
   activeTokenIndex: number | null;
   onTokenClick?: (tokenIndex: number) => void;
   onTokenHover?: (tokenIndex: number | null) => void;
@@ -185,6 +273,8 @@ export const UnifiedRegexEditor = forwardRef<
     onRegexChange,
     tokens,
     canHighlight,
+    highlightMode,
+    highlightPlan,
     activeTokenIndex,
     onTokenClick,
     onTokenHover,
@@ -305,6 +395,8 @@ export const UnifiedRegexEditor = forwardRef<
     const decoState: TokenDecoState = {
       tokens: effectiveTokens,
       activeIndex: canHighlight ? activeTokenIndex : null,
+      mode: highlightMode,
+      plan: canHighlight ? highlightPlan : emptyPlan,
     };
     view.dispatch({
       effects: [
@@ -312,7 +404,7 @@ export const UnifiedRegexEditor = forwardRef<
         setTokensForClickEffect.of(effectiveTokens),
       ],
     });
-  }, [tokens, canHighlight, activeTokenIndex]);
+  }, [tokens, canHighlight, highlightMode, highlightPlan, activeTokenIndex]);
 
   // Resolve token under mouse pointer on hover
   const handleMouseMove = useCallback((e: React.MouseEvent) => {

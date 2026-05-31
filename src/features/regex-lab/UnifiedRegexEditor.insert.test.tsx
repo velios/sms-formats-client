@@ -13,6 +13,8 @@ function setup(regex: string, onRegexChange = vi.fn()) {
     <UnifiedRegexEditor
       activeTokenIndex={null}
       canHighlight={false}
+      highlightMode="groups"
+      highlightPlan={{ lit: [], colorGroups: [] }}
       onRegexChange={onRegexChange}
       ref={ref}
       regex={regex}

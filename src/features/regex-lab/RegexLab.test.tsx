@@ -72,6 +72,17 @@ vi.mock("@/lib/utils", () => ({
     values.filter(Boolean).join(" "),
 }));
 
+vi.mock("@/store", () => {
+  const uiState = {
+    highlightMode: "groups" as const,
+    setHighlightMode: vi.fn(),
+  };
+  return {
+    useUIStore: <T,>(selector?: (state: typeof uiState) => T) =>
+      selector ? selector(uiState) : uiState,
+  };
+});
+
 function RegexLabHarness() {
   const [activeExampleIndex, setActiveExampleIndex] = React.useState(0);
   const [examples, setExamples] = React.useState(["PAY 100", "PAY 200"]);

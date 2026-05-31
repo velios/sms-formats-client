@@ -154,6 +154,10 @@ describe("recognitionProgress", () => {
     );
     // C = " XXXXX" is the unrecognized tail, so text is not exhausted.
     expect(progress!.textExhausted).toBe(false);
+    // The whole pattern matched as a prefix here, so the cut point is the end
+    // of the pattern string.
+    expect(progress!.prefixPatternEnd).toBe(pattern.length);
+    expect(pattern.slice(0, progress!.prefixPatternEnd)).toBe(pattern);
     expect(progress!.groups[0]?.value).toBe("49 500.00");
     expect(
       sms.slice(progress!.groups[0]!.start, progress!.groups[0]!.end)

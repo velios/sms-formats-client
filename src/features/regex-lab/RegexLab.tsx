@@ -18,6 +18,7 @@ import type {
   RegexPatternToken,
 } from "@/domain/format";
 import {
+  buildPatternHighlightPlan,
   buildRegex101Url,
   buildTokenToCaptureGroupMap,
   countCaptureGroups,
@@ -32,6 +33,7 @@ import { CookbookModal } from "@/features/snippet-library/CookbookModal";
 import { SnippetLibraryModal } from "@/features/snippet-library/SnippetLibraryModal";
 import { SnippetsPanel } from "@/features/snippet-library/SnippetsPanel";
 import { cn } from "@/lib/utils";
+import { useUIStore } from "@/store";
 import {
   UnifiedRegexEditor,
   type UnifiedRegexEditorHandle,
@@ -85,6 +87,13 @@ const regexLabTabClassName = (isActive: boolean) =>
     isActive
       ? "border-b-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-1px_0_var(--c-accent-soft)]"
       : "border-b-transparent text-[color:var(--c-text-muted)] hover:border-b-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
+  );
+const highlightModeSegmentClassName = (isActive: boolean) =>
+  cn(
+    "cursor-pointer border-none px-2.5 py-1 font-medium text-[12px] normal-case tracking-normal transition-[color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
+    isActive
+      ? "bg-[color:var(--c-accent)] text-[color:var(--c-bg-surface)]"
+      : "bg-[color:var(--c-bg-surface)] text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-accent)]"
   );
 const regexTokenToneClassMap: Record<string, string> = {
   anchor:
@@ -166,6 +175,8 @@ export function RegexLab({
   onOpenIntersectionFileInApp,
 }: Props) {
   const { t, i18n } = useTranslation();
+  const highlightMode = useUIStore((state) => state.highlightMode);
+  const setHighlightMode = useUIStore((state) => state.setHighlightMode);
   const [exampleSourceMode, setExampleSourceMode] =
     useState<ExampleSourceMode>("examples");
   const [activeIntersectionExampleIndex, setActiveIntersectionExampleIndex] =
@@ -231,6 +242,16 @@ export function RegexLab({
   const tokenCaptureGroupMap = useMemo(
     () => buildTokenToCaptureGroupMap(explanation.patternTokens),
     [explanation.patternTokens]
+  );
+  const patternHighlightPlan = useMemo(
+    () =>
+      buildPatternHighlightPlan(
+        explanation.patternTokens,
+        tokenCaptureGroupMap,
+        matchResult,
+        progress
+      ),
+    [explanation.patternTokens, tokenCaptureGroupMap, matchResult, progress]
   );
   const regex101Url = useMemo(
     () => buildRegex101Url(regex, activeExample),
@@ -427,6 +448,34 @@ export function RegexLab({
         <div className={regexLabPanelHeaderClassName}>
           <span>{t("editor.regex")}</span>
           <div className={regexLabHeaderActionsClassName}>
+            <div
+              aria-label={t("editor.highlightModeLabel")}
+              className="flex items-center overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)]"
+              role="group"
+            >
+              <button
+                aria-pressed={highlightMode === "parts"}
+                className={highlightModeSegmentClassName(
+                  highlightMode === "parts"
+                )}
+                onClick={() => setHighlightMode("parts")}
+                title={t("editor.highlightModePartsHint")}
+                type="button"
+              >
+                {t("editor.highlightModeParts")}
+              </button>
+              <button
+                aria-pressed={highlightMode === "groups"}
+                className={highlightModeSegmentClassName(
+                  highlightMode === "groups"
+                )}
+                onClick={() => setHighlightMode("groups")}
+                title={t("editor.highlightModeGroupsHint")}
+                type="button"
+              >
+                {t("editor.highlightModeGroups")}
+              </button>
+            </div>
             {!readOnly && (
               <Button
                 className={regexLabHeaderButtonClassName}
@@ -462,6 +511,8 @@ export function RegexLab({
           <UnifiedRegexEditor
             activeTokenIndex={activePatternTokenIndex}
             canHighlight={explanation.canHighlightPattern}
+            highlightMode={highlightMode}
+            highlightPlan={patternHighlightPlan}
             key={readOnly ? "readonly" : "editable"}
             onBlur={onRegexBlur}
             onRegexChange={onRegexChange}

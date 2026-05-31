@@ -224,6 +224,13 @@ export interface RecognitionProgress {
   /** Region B — recognized prefix, in original-text offsets. */
   prefixStart: number;
   prefixEnd: number;
+  /**
+   * Cut point of the recognized prefix inside the *pattern* string (char
+   * offset = end of the last matching depth-0 boundary token). Lets the
+   * pattern field paint its recognized prefix; strictly shorter than the full
+   * pattern. See ADR-0007.
+   */
+  prefixPatternEnd: number;
   /** Capture groups inside the recognized prefix, original-text offsets. */
   groups: RegexMatchResult["groups"];
   /**
@@ -284,10 +291,12 @@ export function recognitionProgress(
     supportsIndices: boolean;
     start: number;
     end: number;
+    patternEnd: number;
   } | null = null;
 
   for (const tokenIndex of depthZeroBoundaryTokenIndices(tokens)) {
-    const subPattern = pattern.slice(0, tokens[tokenIndex]!.end);
+    const patternEnd = tokens[tokenIndex]!.end;
+    const subPattern = pattern.slice(0, patternEnd);
     const compiled = tryCompile(subPattern);
     if (!compiled.regex) {
       continue;
@@ -302,7 +311,13 @@ export function recognitionProgress(
     const end = start + match[0].length;
     // Boundaries grow monotonically, so the last successful one is the longest
     // matching pattern prefix — its match defines region B.
-    best = { match, supportsIndices: compiled.supportsIndices, start, end };
+    best = {
+      match,
+      supportsIndices: compiled.supportsIndices,
+      start,
+      end,
+      patternEnd,
+    };
   }
 
   if (!best || best.end <= best.start) {
@@ -320,6 +335,7 @@ export function recognitionProgress(
   return {
     prefixStart: mapping.toOriginal(best.start),
     prefixEnd: mapping.toOriginal(best.end),
+    prefixPatternEnd: best.patternEnd,
     groups: normGroups.map((group) => ({
       index: group.index,
       value: group.value,
