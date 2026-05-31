@@ -93,6 +93,7 @@
     "groups": "Capture groups",
     "groupIndex": "Group {{index}}",
     "noMatch": "No match",
+    "recognitionProgressWaiting": "Pattern is unfinished: expecting more input",
     "invalidRegex": "Invalid regular expression",
     "explanation": "Explanation",
     "modified": "Modified",

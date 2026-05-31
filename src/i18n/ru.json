@@ -107,6 +107,7 @@
     "groups": "Группы захвата",
     "groupIndex": "Группа {{index}}",
     "noMatch": "Нет совпадения",
+    "recognitionProgressWaiting": "Паттерн ещё не дочитан: ожидается продолжение",
     "invalidRegex": "Некорректное регулярное выражение",
     "explanation": "Пояснение",
     "modified": "Изменено",

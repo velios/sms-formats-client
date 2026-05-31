@@ -3,6 +3,7 @@ import {
   cleanText,
   countCaptureGroups,
   explainRegex,
+  recognitionProgress,
   testRegex,
 } from "./regex";
 
@@ -127,6 +128,83 @@ describe("testRegex", () => {
       start: 10,
       end: 13,
     });
+  });
+});
+
+describe("recognitionProgress", () => {
+  it("returns null for an empty pattern", () => {
+    expect(recognitionProgress("", "anything")).toBeNull();
+  });
+
+  it("returns null when no prefix latches (empty B)", () => {
+    // Pattern never starts: nothing of the SMS is covered.
+    expect(recognitionProgress("USD", "hello world")).toBeNull();
+  });
+
+  it("recognizes the prefix and marks the unrecognized tail (region C)", () => {
+    const pattern = "Soma/\\s*Summa\\s+(\\d[\\d\\s.,]*[.,]\\d{2})";
+    const sms = "123123Soma/ Summa 49 500.00 XXXXX";
+    const progress = recognitionProgress(pattern, sms);
+    expect(progress).not.toBeNull();
+    // A = "123123" stays before the prefix.
+    expect(sms.slice(0, progress!.prefixStart)).toBe("123123");
+    // B covers up to and including the captured amount.
+    expect(sms.slice(progress!.prefixStart, progress!.prefixEnd)).toBe(
+      "Soma/ Summa 49 500.00"
+    );
+    // C = " XXXXX" is the unrecognized tail, so text is not exhausted.
+    expect(progress!.textExhausted).toBe(false);
+    expect(progress!.groups[0]?.value).toBe("49 500.00");
+    expect(
+      sms.slice(progress!.groups[0]!.start, progress!.groups[0]!.end)
+    ).toBe("49 500.00");
+  });
+
+  it("flags textExhausted when the prefix eats the whole SMS but the pattern needs more", () => {
+    // "Summa" is consumed; the mandatory amount has no text left.
+    const progress = recognitionProgress("Summa(\\d+)", "Summa");
+    expect(progress).not.toBeNull();
+    expect(progress!.prefixEnd).toBe("Summa".length);
+    expect(progress!.textExhausted).toBe(true);
+  });
+
+  it("stops a lazy .*? early, leaving the rest as tail (region C)", () => {
+    const sms = "Karta 1234 net";
+    const progress = recognitionProgress("Karta.*?Balans", sms);
+    expect(progress).not.toBeNull();
+    // Lazy quantifier stays minimal: B = "Karta", the rest is the tail.
+    expect(sms.slice(0, progress!.prefixStart)).toBe("");
+    expect(sms.slice(progress!.prefixStart, progress!.prefixEnd)).toBe("Karta");
+    expect(progress!.textExhausted).toBe(false);
+  });
+
+  it("greedy .* eats the tail and triggers textExhausted", () => {
+    const progress = recognitionProgress("Karta.*Balans", "Karta 1234 net");
+    expect(progress).not.toBeNull();
+    expect(progress!.textExhausted).toBe(true);
+  });
+
+  it("does not regard an optional-only prefix as recognized", () => {
+    // \s* matches empty at the start → empty B → null.
+    expect(recognitionProgress("\\s*USD", "hello")).toBeNull();
+  });
+
+  it("maps prefix offsets back across collapsed newlines", () => {
+    const original = "Pokupka\n1000 rub\nMagazin XXX";
+    const progress = recognitionProgress(
+      "^Pokupka (\\d+) rub (Shop)",
+      original
+    );
+    expect(progress).not.toBeNull();
+    expect(progress!.groups[0]).toMatchObject({ value: "1000" });
+    expect(
+      original.slice(progress!.groups[0]!.start, progress!.groups[0]!.end)
+    ).toBe("1000");
+  });
+
+  it("respects anchored patterns (no latch when head precedes the anchor)", () => {
+    // ^ forces the start; SMS has junk before it, so nothing latches.
+    expect(recognitionProgress("^USD (\\d+)", "xxx USD 10")).toBeNull();
   });
 });
 

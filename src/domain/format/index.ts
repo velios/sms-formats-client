@@ -16,6 +16,7 @@ export {
   smsesByRegex,
 } from "./recognition";
 export type {
+  RecognitionProgress,
   RegexExplanation,
   RegexExplanationLocale,
   RegexMatchResult,
@@ -25,6 +26,7 @@ export {
   cleanText,
   countCaptureGroups,
   explainRegex,
+  recognitionProgress,
   testRegex,
   tryCompile,
 } from "./regex";

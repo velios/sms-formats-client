@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type {
+  RecognitionProgress,
   RegexExplanation,
   RegexMatchResult,
   RegexPatternToken,
@@ -21,6 +22,7 @@ import {
   buildTokenToCaptureGroupMap,
   countCaptureGroups,
   explainRegex,
+  recognitionProgress,
   resolveTokenMatchRange,
   testRegex,
 } from "@/domain/format";
@@ -118,6 +120,25 @@ const matchHighlightGroupClassMap = [
   "bg-[color:var(--c-group-5)] shadow-[inset_0_-2px_0_var(--c-group-border-5)]",
 ];
 
+// Recognition Progress (ADR-0007): provisional, deliberately distinct from a
+// finished full match. B uses a dashed accent outline (not the solid match
+// fill); B's capture groups keep their hue but with muted dashed borders; C is
+// the alarming wavy-underlined tail; the marker is the "waiting for more" caret.
+const progressPrefixClass =
+  "rounded-[2px] border border-dashed border-[color:var(--c-accent)] bg-[color:var(--c-accent-soft)]";
+const progressGroupClassMap = [
+  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-1)] bg-[color:var(--c-group-1)]",
+  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-2)] bg-[color:var(--c-group-2)]",
+  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-3)] bg-[color:var(--c-group-3)]",
+  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-4)] bg-[color:var(--c-group-4)]",
+  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-5)] bg-[color:var(--c-group-5)]",
+];
+const progressTailClass =
+  "rounded-[2px] bg-[color:var(--c-error-soft)] text-[color:var(--c-error)] underline decoration-wavy decoration-[color:var(--c-error)] underline-offset-2";
+const progressWaitingClass =
+  "ml-[1px] animate-pulse font-bold text-[color:var(--c-warning)]";
+const PROGRESS_WAITING_GLYPH = "▏";
+
 export function RegexLab({
   regex,
   readOnly = false,
@@ -173,6 +194,13 @@ export function RegexLab({
   const matchResult = useMemo(
     () => testRegex(regex, activeExample),
     [regex, activeExample]
+  );
+  // Recognition Progress only kicks in when the full pattern does not match;
+  // a successful match keeps today's full-match highlighting.
+  const progress = useMemo(
+    () =>
+      matchResult.matched ? null : recognitionProgress(regex, activeExample),
+    [matchResult.matched, regex, activeExample]
   );
   const exampleMatchStates = useMemo(
     () => visibleExampleTexts.map((example) => testRegex(regex, example ?? "")),
@@ -548,6 +576,7 @@ export function RegexLab({
               onTextChange={(value) =>
                 onExampleChange(activeExampleIndex, value)
               }
+              progress={progress}
               readOnly={isExampleInputReadOnly}
               result={matchResult}
               text={activeExample}
@@ -647,6 +676,7 @@ function MatchOverlayTextarea({
   result,
   hoveredGroup,
   activeMatchRange,
+  progress,
   onTextChange,
   readOnly = false,
 }: {
@@ -654,13 +684,24 @@ function MatchOverlayTextarea({
   result: RegexMatchResult;
   hoveredGroup: number | null;
   activeMatchRange: { start: number; end: number } | null;
+  progress: RecognitionProgress | null;
   onTextChange: (value: string) => void;
   readOnly?: boolean;
 }) {
+  const { t } = useTranslation();
   const highlightsRef = useRef<HTMLDivElement>(null);
+  const waitingLabel = t("editor.recognitionProgressWaiting");
   const segments = useMemo(
-    () => buildMatchSegments(text, result, hoveredGroup, activeMatchRange),
-    [text, result, hoveredGroup, activeMatchRange]
+    () =>
+      buildMatchSegments(
+        text,
+        result,
+        hoveredGroup,
+        activeMatchRange,
+        progress,
+        waitingLabel
+      ),
+    [text, result, hoveredGroup, activeMatchRange, progress, waitingLabel]
   );
 
   const handleScroll = useCallback((top: number, left: number) => {
@@ -775,7 +816,9 @@ function buildMatchSegments(
   text: string,
   result: RegexMatchResult,
   hoveredGroup: number | null,
-  activeMatchRange: { start: number; end: number } | null
+  activeMatchRange: { start: number; end: number } | null,
+  progress: RecognitionProgress | null,
+  waitingLabel: string
 ): HighlightSegment[] {
   if (!text) {
     return [{ text: "\u200b" }];
@@ -783,9 +826,30 @@ function buildMatchSegments(
 
   const bounds = resolveMatchBounds(text, result);
   if (!bounds) {
+    // No full match: show Recognition Progress when a prefix latched (region
+    // B is non-empty); otherwise stay neutral, matching today's "no match".
+    if (progress && progress.prefixEnd > progress.prefixStart) {
+      return buildProgressSegments(text, progress, waitingLabel);
+    }
     return [{ text }];
   }
 
+  return buildFullMatchSegments(
+    text,
+    bounds,
+    result,
+    hoveredGroup,
+    activeMatchRange
+  );
+}
+
+function buildFullMatchSegments(
+  text: string,
+  bounds: { start: number; end: number },
+  result: RegexMatchResult,
+  hoveredGroup: number | null,
+  activeMatchRange: { start: number; end: number } | null
+): HighlightSegment[] {
   const boundedFullMatchStart = bounds.start;
   const boundedFullMatchEnd = bounds.end;
   const segments: HighlightSegment[] = [];
@@ -856,6 +920,77 @@ function buildMatchSegments(
   return segments.length > 0 ? segments : [{ text }];
 }
 
+function buildProgressSegments(
+  text: string,
+  progress: RecognitionProgress,
+  waitingLabel: string
+): HighlightSegment[] {
+  const prefixStart = Math.max(0, Math.min(progress.prefixStart, text.length));
+  const prefixEnd = Math.max(
+    prefixStart,
+    Math.min(progress.prefixEnd, text.length)
+  );
+  const segments: HighlightSegment[] = [];
+
+  // Region A — head before the format, neutral (like unhighlighted text).
+  if (prefixStart > 0) {
+    segments.push({ text: text.slice(0, prefixStart) });
+  }
+
+  // Region B — recognized prefix (provisional), with muted capture groups.
+  const groups = normalizeGroupsForBounds(
+    progress.groups,
+    prefixStart,
+    prefixEnd
+  );
+  let cursor = prefixStart;
+  for (const group of groups) {
+    const groupStart = Math.max(group.start, cursor);
+    const groupEnd = Math.max(groupStart, group.end);
+    if (groupEnd <= cursor) {
+      continue;
+    }
+    if (groupStart > cursor) {
+      segments.push({
+        text: text.slice(cursor, groupStart),
+        className: progressPrefixClass,
+      });
+    }
+    segments.push({
+      text: text.slice(groupStart, groupEnd),
+      className: getProgressGroupClass(group.index),
+      title: `Group ${group.index}`,
+    });
+    cursor = groupEnd;
+  }
+  if (cursor < prefixEnd) {
+    segments.push({
+      text: text.slice(cursor, prefixEnd),
+      className: progressPrefixClass,
+    });
+  }
+
+  // Region C and the "waiting for more" marker are mutually exclusive: either
+  // text remains past the prefix (C), or the text was exhausted (marker).
+  if (progress.textExhausted) {
+    if (prefixEnd < text.length) {
+      segments.push({ text: text.slice(prefixEnd) });
+    }
+    segments.push({
+      text: PROGRESS_WAITING_GLYPH,
+      className: progressWaitingClass,
+      title: waitingLabel,
+    });
+  } else if (prefixEnd < text.length) {
+    segments.push({
+      text: text.slice(prefixEnd),
+      className: progressTailClass,
+    });
+  }
+
+  return segments;
+}
+
 function renderHighlightedText(segments: HighlightSegment[]) {
   return segments.map((segment, index) => (
     <span className={segment.className} key={index} title={segment.title}>
@@ -877,6 +1012,10 @@ function getGroupColor(groupIndex: number): string {
 
 function getGroupClass(groupIndex: number): string {
   return matchHighlightGroupClassMap[(groupIndex - 1) % 5]!;
+}
+
+function getProgressGroupClass(groupIndex: number): string {
+  return progressGroupClassMap[(groupIndex - 1) % 5]!;
 }
 
 function MatchInfoPanel({

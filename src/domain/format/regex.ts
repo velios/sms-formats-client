@@ -220,6 +220,116 @@ export function testRegex(pattern: string, testStr: string): RegexMatchResult {
   };
 }
 
+export interface RecognitionProgress {
+  /** Region B — recognized prefix, in original-text offsets. */
+  prefixStart: number;
+  prefixEnd: number;
+  /** Capture groups inside the recognized prefix, original-text offsets. */
+  groups: RegexMatchResult["groups"];
+  /**
+   * The longest prefix consumed all of the normalized SMS, yet the full
+   * pattern is still unsatisfied (a mandatory token remains). The caller draws
+   * the "waiting for more" caret instead of region C.
+   */
+  textExhausted: boolean;
+}
+
+/**
+ * Token indices whose `end` sits at bracket depth 0 — the only offsets where
+ * slicing the pattern always yields a compilable sub-pattern (a group is taken
+ * whole at its closing `)`, never mid-way).
+ */
+function depthZeroBoundaryTokenIndices(tokens: RegexPatternToken[]): number[] {
+  const indices: number[] = [];
+  let depth = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const raw = tokens[i]!.raw;
+    if (raw.startsWith("(")) {
+      depth++;
+    } else if (raw === ")") {
+      depth = Math.max(0, depth - 1);
+    }
+    if (depth === 0) {
+      indices.push(i);
+    }
+  }
+  return indices;
+}
+
+/**
+ * Editor-only **Recognition Progress** (see ADR-0007): for an SMS the full
+ * pattern does *not* recognize, report how far the pattern reaches left to
+ * right. Incrementally recompiles the longest depth-0 prefix of the pattern
+ * that still matches, then maps its `[start, end)` and groups back onto the
+ * original text. Distinct from device-identical, binary `recognition`.
+ */
+export function recognitionProgress(
+  pattern: string,
+  sms: string
+): RecognitionProgress | null {
+  if (!pattern) {
+    return null;
+  }
+
+  const tokens = tokenizeRegexPattern(pattern, "en");
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  const mapping = buildNormalizedTextMapping(sms);
+  const normalized = mapping.normalized;
+
+  let best: {
+    match: ExecMatchWithIndices;
+    supportsIndices: boolean;
+    start: number;
+    end: number;
+  } | null = null;
+
+  for (const tokenIndex of depthZeroBoundaryTokenIndices(tokens)) {
+    const subPattern = pattern.slice(0, tokens[tokenIndex]!.end);
+    const compiled = tryCompile(subPattern);
+    if (!compiled.regex) {
+      continue;
+    }
+    const match = compiled.regex.exec(
+      normalized
+    ) as ExecMatchWithIndices | null;
+    if (!match || match[0] == null) {
+      continue;
+    }
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    // Boundaries grow monotonically, so the last successful one is the longest
+    // matching pattern prefix — its match defines region B.
+    best = { match, supportsIndices: compiled.supportsIndices, start, end };
+  }
+
+  if (!best || best.end <= best.start) {
+    return null;
+  }
+
+  const normGroups = extractMatchGroups(
+    best.match,
+    best.supportsIndices,
+    normalized,
+    best.start,
+    best.end
+  );
+
+  return {
+    prefixStart: mapping.toOriginal(best.start),
+    prefixEnd: mapping.toOriginal(best.end),
+    groups: normGroups.map((group) => ({
+      index: group.index,
+      value: group.value,
+      start: mapping.toOriginal(group.start),
+      end: mapping.toOriginal(group.end),
+    })),
+    textExhausted: best.end === normalized.length,
+  };
+}
+
 /**
  * Count the number of capturing groups in a regex pattern.
  */
