@@ -30,6 +30,7 @@ import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { QuickReference } from "@/features/quick-reference/QuickReference";
 import { CookbookModal } from "@/features/snippet-library/CookbookModal";
 import { SnippetLibraryModal } from "@/features/snippet-library/SnippetLibraryModal";
+import { SnippetsPanel } from "@/features/snippet-library/SnippetsPanel";
 import { cn } from "@/lib/utils";
 import {
   UnifiedRegexEditor,
@@ -65,7 +66,7 @@ interface PatternSelection {
   end: number;
 }
 
-type RightPaneTab = "explanation" | "quickref";
+type RightPaneTab = "explanation" | "quickref" | "snippets";
 type ExampleSourceMode = "examples" | "intersections";
 
 const regexLabPanelClassName =
@@ -319,6 +320,13 @@ export function RegexLab({
   useEffect(() => {
     setSelectedPatternTokenIndex(null);
   }, [activeExample, regex]);
+
+  // The snippets tab is editor-only; drop back to explanation in read-only mode.
+  useEffect(() => {
+    if (readOnly && rightPaneTab === "snippets") {
+      setRightPaneTab("explanation");
+    }
+  }, [readOnly, rightPaneTab]);
 
   useEffect(() => {
     const activeTab = exampleTabRefs.current.get(visibleActiveExampleIndex);
@@ -661,10 +669,21 @@ export function RegexLab({
                 >
                   QUICK REF
                 </button>
+                {!readOnly && (
+                  <button
+                    className={regexLabTabClassName(
+                      rightPaneTab === "snippets"
+                    )}
+                    onClick={() => setRightPaneTab("snippets")}
+                    type="button"
+                  >
+                    {t("snippets.open").toUpperCase()}
+                  </button>
+                )}
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">
-              {rightPaneTab === "explanation" ? (
+              {rightPaneTab === "explanation" && (
                 <ExplanationPanel
                   activePatternTokenIndex={activePatternTokenIndex}
                   errorMessage={matchResult.error}
@@ -672,8 +691,10 @@ export function RegexLab({
                   onPatternTokenActivate={handlePatternTokenActivate}
                   onPatternTokenHover={setHoveredPatternTokenIndex}
                 />
-              ) : (
-                <QuickReference />
+              )}
+              {rightPaneTab === "quickref" && <QuickReference />}
+              {rightPaneTab === "snippets" && !readOnly && (
+                <SnippetsPanel onInsert={handleInsertSnippet} />
               )}
             </div>
           </div>
