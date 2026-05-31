@@ -33,6 +33,7 @@ import { UnifiedRegexEditor } from "./UnifiedRegexEditor";
 
 interface Props {
   regex: string;
+  structuralIssues?: string[];
   readOnly?: boolean;
   onRegexChange: (v: string) => void;
   onRegexBlur?: () => void;
@@ -141,6 +142,7 @@ const PROGRESS_WAITING_GLYPH = "▏";
 
 export function RegexLab({
   regex,
+  structuralIssues = [],
   readOnly = false,
   onRegexChange,
   onRegexBlur,
@@ -430,11 +432,6 @@ export function RegexLab({
             regex={regex}
             tokens={explanation.patternTokens}
           />
-          {matchResult.error && (
-            <div className="mt-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
-              {matchResult.error}
-            </div>
-          )}
         </div>
       </div>
 
@@ -601,6 +598,7 @@ export function RegexLab({
               onOpenColumnPicker={setColumnPickerGroupIndex}
               readOnly={readOnly}
               result={matchResult}
+              structuralIssues={structuralIssues}
             />
           </div>
 
@@ -636,8 +634,8 @@ export function RegexLab({
               {rightPaneTab === "explanation" ? (
                 <ExplanationPanel
                   activePatternTokenIndex={activePatternTokenIndex}
+                  errorMessage={matchResult.error}
                   explanation={explanation}
-                  hasError={!!matchResult.error}
                   onPatternTokenActivate={handlePatternTokenActivate}
                   onPatternTokenHover={setHoveredPatternTokenIndex}
                 />
@@ -1029,6 +1027,7 @@ function MatchInfoPanel({
   onClearColumn,
   onColumnParamChange,
   hasMissingColumnMappings,
+  structuralIssues,
   readOnly = false,
 }: {
   result: RegexMatchResult;
@@ -1044,15 +1043,27 @@ function MatchInfoPanel({
   onClearColumn: (groupIndex: number) => void;
   onColumnParamChange: (groupIndex: number, value: string) => void;
   hasMissingColumnMappings: boolean;
+  structuralIssues: string[];
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
+  const issues = [
+    ...(result.error ? [t("editor.invalidRegex")] : []),
+    ...structuralIssues,
+  ];
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
-      {result.error ? (
-        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
-          {t("editor.invalidRegex")}
+      {issues.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          {issues.map((issue, i) => (
+            <div
+              className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs"
+              key={i}
+            >
+              {issue}
+            </div>
+          ))}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -1191,13 +1202,13 @@ function MatchInfoPanel({
 
 function ExplanationPanel({
   explanation,
-  hasError,
+  errorMessage,
   activePatternTokenIndex,
   onPatternTokenActivate,
   onPatternTokenHover,
 }: {
   explanation: RegexExplanation;
-  hasError: boolean;
+  errorMessage: string | null;
   activePatternTokenIndex: number | null;
   onPatternTokenActivate: (tokenIndex: number) => void;
   onPatternTokenHover: (tokenIndex: number | null) => void;
@@ -1218,9 +1229,9 @@ function ExplanationPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
-      {hasError ? (
+      {errorMessage ? (
         <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
-          {t("editor.invalidRegex")}
+          {cleanRegexErrorReason(errorMessage)}
         </div>
       ) : explanation.patternTokens.length === 0 ? (
         <div className="text-[color:var(--c-text-muted)] text-sm">—</div>
@@ -1386,6 +1397,13 @@ function ColumnPickerModal({
       </div>
     </ModalDialog>
   );
+}
+
+// Native engine message is "Invalid regular expression: /<pattern>/: <reason>".
+// The pattern is already on screen above, so keep only the trailing reason.
+function cleanRegexErrorReason(message: string): string {
+  const marker = message.lastIndexOf(": ");
+  return marker === -1 ? message : message.slice(marker + 2);
 }
 
 function getRegexTokenClass(type: string): string {

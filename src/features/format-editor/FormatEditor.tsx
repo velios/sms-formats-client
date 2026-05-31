@@ -114,6 +114,7 @@ export function FormatEditor({
   const [rawContent, setRawContent] = useState("");
   const [mode, setMode] = useState<EditorMode>("structured");
   const [parseErrors, setParseErrors] = useState<string[]>([]);
+  const [structuralIssues, setStructuralIssues] = useState<string[]>([]);
   const [renameError, setRenameError] = useState<string | null>(null);
   const lastAppliedContentRef = useRef<string | null>(null);
   const hasPendingRegexBlurRef = useRef(false);
@@ -123,11 +124,13 @@ export function FormatEditor({
   const parseRawToStructured = useCallback(
     (raw: string, preserveActiveIndex: boolean) => {
       const parsed = parseFormatFile(raw, filePath);
-      const issues = parsed.parseIssues.map((issue) => issue.message);
+      const structural = parsed.parseIssues.map((issue) => issue.message);
+      const issues = [...structural];
       if (parsed.regex && !isRegexValid(parsed.regex)) {
         issues.push(t("editor.invalidRegex"));
       }
       setParseErrors(issues);
+      setStructuralIssues(structural);
 
       const canSync = !!parsed.regex && parsed.examples.length > 0;
 
@@ -167,6 +170,9 @@ export function FormatEditor({
           ? [t("editor.invalidRegex")]
           : []
       );
+      // A serialized structured draft is always well-formed, so any prior
+      // structural parse issue (missing section/marker) is gone after a sync.
+      setStructuralIssues([]);
       lastAppliedContentRef.current = syncedRaw;
       draftStore.applyUserEdit(filePath, syncedRaw, baseSha, remoteBaseline);
     },
@@ -466,7 +472,7 @@ export function FormatEditor({
           {renameError}
         </div>
       )}
-      {parseErrors.length > 0 && (
+      {mode === "raw" && parseErrors.length > 0 && (
         <div className="flex flex-col gap-1">
           {parseErrors.map((err, i) => (
             <div
@@ -498,6 +504,7 @@ export function FormatEditor({
           onRemoveExample={handleRemoveExample}
           readOnly={readOnly || isDeleted}
           regex={regex}
+          structuralIssues={structuralIssues}
         />
       )}
 
