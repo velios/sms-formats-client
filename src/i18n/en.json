@@ -204,6 +204,37 @@
     "conflict": "Conflicts detected. Manual resolution required.",
     "noChanges": "Data is already up to date"
   },
+  "snippets": {
+    "open": "Snippets",
+    "title": "Snippet library",
+    "search": "Search by pattern, description, entity…",
+    "allGroups": "All",
+    "insert": "Insert",
+    "empty": "Nothing found",
+    "trigger": "When",
+    "example": "Example",
+    "gotcha": "Pitfall",
+    "kind": {
+      "default": "default",
+      "alt": "alternative"
+    },
+    "groups": {
+      "amount": "Operation amounts",
+      "balance": "Balance",
+      "currency": "Currency",
+      "syncid": "Account / card",
+      "date": "Operation date",
+      "payee": "Payee",
+      "comment": "Comment",
+      "mcc": "MCC",
+      "glue": "Glue & anchors"
+    }
+  },
+  "cookbook": {
+    "open": "Cookbook",
+    "title": "Regex Cookbook",
+    "openOnGitHub": "Open on GitHub"
+  },
   "locale": {
     "ru": "Русский",
     "en": "English"

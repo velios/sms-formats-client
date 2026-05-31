@@ -1,10 +1,14 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["ultracite/biome/core"],
+  "files": {
+    "includes": ["!src/content/*.generated.ts", "!.claude/worktrees"]
+  },
   "javascript": {
     "formatter": {
       "quoteStyle": "double"
-    }
+    },
+    "globals": ["Bun"]
   },
   "linter": {
     "rules": {

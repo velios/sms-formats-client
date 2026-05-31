@@ -217,6 +217,102 @@
   }
 
   /* ─── Grid layouts ─── */
+
+  /* ─── Cookbook markdown prose (ADR-0009) ─── */
+  .cookbook-prose {
+    color: var(--c-text);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .cookbook-prose h1,
+  .cookbook-prose h2,
+  .cookbook-prose h3,
+  .cookbook-prose h4 {
+    color: var(--c-text);
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: 1.4em;
+    margin-bottom: 0.5em;
+  }
+  .cookbook-prose h1 {
+    font-size: 22px;
+  }
+  .cookbook-prose h2 {
+    font-size: 18px;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--c-border);
+  }
+  .cookbook-prose h3 {
+    font-size: 16px;
+  }
+  .cookbook-prose h4 {
+    font-size: 14px;
+  }
+  .cookbook-prose p,
+  .cookbook-prose ul,
+  .cookbook-prose ol {
+    margin: 0.6em 0;
+  }
+  .cookbook-prose ul,
+  .cookbook-prose ol {
+    padding-left: 1.4em;
+  }
+  .cookbook-prose li {
+    margin: 0.25em 0;
+  }
+  .cookbook-prose a {
+    color: var(--c-accent);
+  }
+  .cookbook-prose strong {
+    font-weight: 600;
+  }
+  .cookbook-prose hr {
+    border: 0;
+    border-top: 1px solid var(--c-border);
+    margin: 1.4em 0;
+  }
+  .cookbook-prose code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--c-bg-input);
+    border: 1px solid var(--c-border);
+    border-radius: 3px;
+    padding: 0.1em 0.35em;
+  }
+  .cookbook-prose pre {
+    background: var(--c-bg-input);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-sm);
+    padding: 0.8em 1em;
+    overflow-x: auto;
+    margin: 0.7em 0;
+  }
+  .cookbook-prose pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: 0.85em;
+  }
+  .cookbook-prose table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.8em 0;
+    font-size: 13px;
+  }
+  .cookbook-prose th,
+  .cookbook-prose td {
+    border: 1px solid var(--c-border);
+    padding: 0.4em 0.6em;
+    text-align: left;
+    vertical-align: top;
+  }
+  .cookbook-prose th {
+    background: var(--c-bg-elevated);
+    font-weight: 600;
+  }
+  .cookbook-prose tr:nth-child(even) td {
+    background: var(--c-bg-elevated);
+  }
 }
 
 .dark {

@@ -25,6 +25,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# build-time generated content (ADR-0009), rebuilt by predev/prebuild/pretest hooks
+src/content/*.generated.ts
+
 # IntelliJ based IDEs
 .idea
 

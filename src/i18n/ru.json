@@ -227,6 +227,37 @@
     "cancel": "Отмена",
     "prLink": "Ссылка на PR"
   },
+  "snippets": {
+    "open": "Сниппеты",
+    "title": "Библиотека сниппетов",
+    "search": "Поиск по паттерну, описанию, сущности…",
+    "allGroups": "Все",
+    "insert": "Вставить",
+    "empty": "Ничего не найдено",
+    "trigger": "Когда",
+    "example": "Пример",
+    "gotcha": "Грабли",
+    "kind": {
+      "default": "дефолт",
+      "alt": "альтернатива"
+    },
+    "groups": {
+      "amount": "Суммы операции",
+      "balance": "Баланс",
+      "currency": "Валюта",
+      "syncid": "Счёт / карта",
+      "date": "Дата операции",
+      "payee": "Получатель",
+      "comment": "Комментарий",
+      "mcc": "MCC",
+      "glue": "Склейка и якоря"
+    }
+  },
+  "cookbook": {
+    "open": "Cookbook",
+    "title": "Regex Cookbook",
+    "openOnGitHub": "Открыть на GitHub"
+  },
   "locale": {
     "ru": "Русский",
     "en": "English"

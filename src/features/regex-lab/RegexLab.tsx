@@ -28,8 +28,13 @@ import {
 } from "@/domain/format";
 import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { QuickReference } from "@/features/quick-reference/QuickReference";
+import { CookbookModal } from "@/features/snippet-library/CookbookModal";
+import { SnippetLibraryModal } from "@/features/snippet-library/SnippetLibraryModal";
 import { cn } from "@/lib/utils";
-import { UnifiedRegexEditor } from "./UnifiedRegexEditor";
+import {
+  UnifiedRegexEditor,
+  type UnifiedRegexEditorHandle,
+} from "./UnifiedRegexEditor";
 
 interface Props {
   regex: string;
@@ -192,6 +197,13 @@ export function RegexLab({
     number | null
   >(null);
   const columnPickerTitleId = useId();
+  const [isSnippetLibraryOpen, setIsSnippetLibraryOpen] = useState(false);
+  const [isCookbookOpen, setIsCookbookOpen] = useState(false);
+  const regexEditorRef = useRef<UnifiedRegexEditorHandle>(null);
+
+  const handleInsertSnippet = useCallback((pattern: string) => {
+    regexEditorRef.current?.insertAtCursor(pattern);
+  }, []);
 
   const matchResult = useMemo(
     () => testRegex(regex, activeExample),
@@ -407,6 +419,26 @@ export function RegexLab({
         <div className={regexLabPanelHeaderClassName}>
           <span>{t("editor.regex")}</span>
           <div className={regexLabHeaderActionsClassName}>
+            {!readOnly && (
+              <Button
+                className={regexLabHeaderButtonClassName}
+                onClick={() => setIsSnippetLibraryOpen(true)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {t("snippets.open")}
+              </Button>
+            )}
+            <Button
+              className={regexLabHeaderButtonClassName}
+              onClick={() => setIsCookbookOpen(true)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {t("cookbook.open")}
+            </Button>
             <Button
               className={regexLabHeaderButtonClassName}
               onClick={onOpenSmsByTemplate}
@@ -429,6 +461,7 @@ export function RegexLab({
             onTokenClick={handlePatternTokenActivate}
             onTokenHover={setHoveredPatternTokenIndex}
             readOnly={readOnly}
+            ref={regexEditorRef}
             regex={regex}
             tokens={explanation.patternTokens}
           />
@@ -658,6 +691,17 @@ export function RegexLab({
           selectedColumns={columns}
           titleId={columnPickerTitleId}
         />
+      )}
+
+      {isSnippetLibraryOpen && (
+        <SnippetLibraryModal
+          onClose={() => setIsSnippetLibraryOpen(false)}
+          onInsert={handleInsertSnippet}
+        />
+      )}
+
+      {isCookbookOpen && (
+        <CookbookModal onClose={() => setIsCookbookOpen(false)} />
       )}
     </div>
   );

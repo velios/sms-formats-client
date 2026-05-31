@@ -5,8 +5,19 @@ import {
   StateField,
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
-import { useCallback, useEffect, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 import type { RegexPatternToken } from "@/domain/format";
+
+export interface UnifiedRegexEditorHandle {
+  /** Insert text at the current caret, replacing any selection, then refocus. */
+  insertAtCursor: (text: string) => void;
+}
 
 /* ─── Token decoration state effect ─── */
 
@@ -163,20 +174,45 @@ interface UnifiedRegexEditorProps {
   ) => void;
 }
 
-export function UnifiedRegexEditor({
-  regex,
-  readOnly = false,
-  onBlur,
-  onRegexChange,
-  tokens,
-  canHighlight,
-  activeTokenIndex,
-  onTokenClick,
-  onTokenHover,
-  onSelectionChange,
-}: UnifiedRegexEditorProps) {
+export const UnifiedRegexEditor = forwardRef<
+  UnifiedRegexEditorHandle,
+  UnifiedRegexEditorProps
+>(function UnifiedRegexEditor(
+  {
+    regex,
+    readOnly = false,
+    onBlur,
+    onRegexChange,
+    tokens,
+    canHighlight,
+    activeTokenIndex,
+    onTokenClick,
+    onTokenHover,
+    onSelectionChange,
+  },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      insertAtCursor(text: string) {
+        const view = viewRef.current;
+        if (!view) {
+          return;
+        }
+        const { from, to } = view.state.selection.main;
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + text.length },
+        });
+        view.focus();
+      },
+    }),
+    []
+  );
   const callbacksRef = useRef({
     onRegexChange,
     onSelectionChange,
@@ -319,4 +355,4 @@ export function UnifiedRegexEditor({
       </span>
     </div>
   );
-}
+});
