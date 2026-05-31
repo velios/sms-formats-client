@@ -3290,7 +3290,9 @@ export function BankWorkspace() {
           onPublish={handlePublishAction}
           onResetToSource={handleResetToSource}
           publishActionLabel={publishActionLabel}
-          publishDisabled={workspaceReadOnly}
+          publishDisabled={
+            workspaceReadOnly || changedFilesForPublish.length === 0
+          }
           publishError={publishError}
           showApprovePullRequestButton={showApprovePullRequestButton}
           t={t}

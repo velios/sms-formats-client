@@ -446,8 +446,8 @@ export function RegexLab({
       {/* REGULAR EXPRESSION — unified regex editor */}
       <div className={regexLabPanelClassName}>
         <div className={regexLabPanelHeaderClassName}>
-          <span>{t("editor.regex")}</span>
-          <div className={regexLabHeaderActionsClassName}>
+          <div className="flex items-center gap-3">
+            <span>{t("editor.regex")}</span>
             <div
               aria-label={t("editor.highlightModeLabel")}
               className="flex items-center overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)]"
@@ -476,6 +476,8 @@ export function RegexLab({
                 {t("editor.highlightModeGroups")}
               </button>
             </div>
+          </div>
+          <div className={regexLabHeaderActionsClassName}>
             {!readOnly && (
               <Button
                 className={regexLabHeaderButtonClassName}
