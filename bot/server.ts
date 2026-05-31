@@ -3,8 +3,7 @@ import { join } from "node:path";
 import { serve } from "bun";
 import { Bot, webhookCallback } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
-import { answerGuestMessage } from "./answer-guest-message";
-import { answerPrivateMessage } from "./answer-private-message";
+import { answerGuestMessage, answerPrivateMessage } from "./answer";
 import { buildMainCorpus } from "./corpus";
 import { buildSnapshot, CorpusStore } from "./corpus-store";
 import { createCorpusSync } from "./corpus-sync";
@@ -42,7 +41,7 @@ const store = new CorpusStore({
 // gate makes that same request trigger the first freshness check — which folds
 // in open-PR formats and any main delta. A wiped disk has nothing to seed; the
 // first request then clones in the background and meanwhile gets the cold-start
-// stub (see answer-guest-message.ts).
+// stub (see answer.ts).
 if (existsSync(join(env.checkoutDir, ".git"))) {
   const checkout = ensureMainCheckout({
     repoSlug: env.sourceRepo,
@@ -85,7 +84,7 @@ const bot = new Bot(env.token, {
 // drives freshness (noteDemand) and is answered from the current snapshot —
 // fresh or not — or the initializing stub before the first build. We never log
 // the raw SMS; only the rendered format list (which contains no SMS content).
-// A failed answer is swallowed inside the handler — see answer-guest-message.ts
+// A failed answer is swallowed inside the handler — see answer.ts
 // for why webhookCallback must never return 500 here.
 bot.on("guest_message", (ctx) => {
   store.noteDemand();

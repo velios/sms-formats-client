@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compileRegexes } from "@/domain/format";
 import type { CorpusFormat } from "./corpus";
 import type { CompiledCorpus } from "./recognize";
+import { INITIALIZING_MESSAGE } from "./render";
 import { respond } from "./respond";
 
 const DEMO_SMS = "Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB";
@@ -42,5 +43,15 @@ describe("respond", () => {
     expect(respond({ kind: "sms", sms: "Random unmatched text" }, corpus)).toBe(
       "Ни один формат не распознаёт этот SMS — ни на main, ни в 0 открытых PR. Похоже, нужен новый формат."
     );
+  });
+
+  it("answers the cold-start stub for an sms intent when the corpus is not ready", () => {
+    expect(respond({ kind: "sms", sms: DEMO_SMS }, null)).toBe(
+      INITIALIZING_MESSAGE
+    );
+  });
+
+  it("answers a hint during cold start — only recognition needs the corpus", () => {
+    expect(respond({ kind: "hint", text: "do this" }, null)).toBe("do this");
   });
 });

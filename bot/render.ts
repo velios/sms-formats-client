@@ -16,6 +16,12 @@ export const CONFLICT_HINT =
 export const DIRECT_USAGE_HINT =
   "Пришлите SMS текстом — просто сообщением или командой /sms <текст>, — и я покажу, какие форматы его распознают.";
 
+// Cold start: no snapshot exists yet (the first clone/build hasn't finished, see
+// ADR-0004). `respond` answers with this rather than staying silent or erroring,
+// so the user knows to retry in a moment instead of assuming the bot is dead.
+export const INITIALIZING_MESSAGE =
+  "Бот запускается — попробуйте через несколько секунд.";
+
 function noMatchMessage(corpus: CorpusFormat[]): string {
   const prCount = openPrCount(corpus);
   return `Ни один формат не распознаёт этот SMS — ни на main, ни в ${prCount} открытых PR. Похоже, нужен новый формат.`;

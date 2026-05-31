@@ -19,9 +19,6 @@ export interface CompiledCorpus {
   compiled: CompiledRegex[];
 }
 
-/** An unbuilt corpus stand-in, for paths that recognize before a snapshot exists. */
-export const EMPTY_CORPUS: CompiledCorpus = { formats: [], compiled: [] };
-
 /**
  * Which corpus formats recognize this SMS. Matching runs through the shared
  * recognition core (`@/domain/format`) over the precompiled regexes, so it
