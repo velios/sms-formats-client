@@ -1,11 +1,17 @@
 import {
+  Annotation,
   EditorState,
   type Extension,
   type Range,
   StateEffect,
   StateField,
 } from "@codemirror/state";
-import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
+import {
+  Decoration,
+  type DecorationSet,
+  drawSelection,
+  EditorView,
+} from "@codemirror/view";
 import {
   forwardRef,
   useCallback,
@@ -20,17 +26,29 @@ import type {
 } from "@/domain/format";
 
 export interface UnifiedRegexEditorHandle {
-  /** Insert text at the current caret, replacing any selection, then refocus. */
-  insertAtCursor: (text: string) => void;
+  /**
+   * Insert text into the field. Without `range`: replace the live selection at
+   * the caret and refocus (normal snippet insert). With `range`: replace that
+   * explicit span and leave the inserted text selected without stealing focus —
+   * the group-replacement path, so iterative snippet swaps target the group
+   * span, not a drifted caret (ADR-0010).
+   */
+  insertAtCursor: (text: string, range?: { from: number; to: number }) => void;
 }
 
 /* ─── Token decoration state effect ─── */
+
+interface GroupRange {
+  start: number;
+  end: number;
+}
 
 interface TokenDecoState {
   tokens: RegexPatternToken[];
   activeIndex: number | null;
   mode: HighlightMode;
   plan: PatternHighlightPlan;
+  selectedGroupRange: GroupRange | null;
 }
 
 const emptyPlan: PatternHighlightPlan = { lit: [], colorGroups: [] };
@@ -39,7 +57,13 @@ const emptyDecoState: TokenDecoState = {
   activeIndex: null,
   mode: "groups",
   plan: emptyPlan,
+  selectedGroupRange: null,
 };
+
+// Marks a transaction whose selection we set programmatically (group select /
+// toggle-collapse). The update listener skips token/selection resolution for it
+// so it does not feed back into the group-toggle logic (see ADR-0010).
+const programmaticSelection = Annotation.define<boolean>();
 
 const setTokenDecoEffect = StateEffect.define<TokenDecoState>();
 
@@ -59,7 +83,7 @@ function buildDecorations(
   decoState: TokenDecoState,
   docLength: number
 ): DecorationSet {
-  const { tokens, activeIndex, mode, plan } = decoState;
+  const { tokens, activeIndex, mode, plan, selectedGroupRange } = decoState;
   if (tokens.length === 0) {
     return Decoration.none;
   }
@@ -110,20 +134,50 @@ function buildDecorations(
     });
   }
 
-  // The active token's outline overlays the band/type fill in both modes.
-  if (activeIndex != null) {
-    const token = tokens[activeIndex];
-    if (token && isValid(token)) {
-      decorations.push(
-        Decoration.mark({ class: activeTokenOutlineClass }).range(
-          token.start,
-          token.end
-        )
-      );
-    }
+  const overlay = buildOverlayDecoration(
+    tokens,
+    activeIndex,
+    selectedGroupRange,
+    docLength
+  );
+  if (overlay) {
+    decorations.push(overlay);
   }
 
   return Decoration.set(decorations, true);
+}
+
+/**
+ * The single overlay on top of the band/type fills: a selected capture group's
+ * +2 font bump (which also suppresses the outline), otherwise the active
+ * token's outline (ADR-0010).
+ */
+function buildOverlayDecoration(
+  tokens: RegexPatternToken[],
+  activeIndex: number | null,
+  selectedGroupRange: GroupRange | null,
+  docLength: number
+): Range<Decoration> | null {
+  if (
+    selectedGroupRange &&
+    selectedGroupRange.start < selectedGroupRange.end &&
+    selectedGroupRange.end <= docLength
+  ) {
+    return Decoration.mark({ class: selectedGroupFontClass }).range(
+      selectedGroupRange.start,
+      selectedGroupRange.end
+    );
+  }
+  if (activeIndex != null) {
+    const token = tokens[activeIndex];
+    if (token && token.start < token.end && token.end <= docLength) {
+      return Decoration.mark({ class: activeTokenOutlineClass }).range(
+        token.start,
+        token.end
+      );
+    }
+  }
+  return null;
 }
 
 const tokenDecorations = EditorView.decorations.compute(
@@ -162,6 +216,8 @@ const fullMatchBandClass =
   "rounded-[2px] bg-[color:var(--c-group-0)] shadow-[inset_0_-2px_0_var(--c-group-border-0)] font-semibold";
 const activeTokenOutlineClass =
   "rounded-[2px] outline outline-2 outline-[#125a96] outline-offset-[-1px]";
+// +2 over the 14px base; only safe in this pure-CodeMirror field (ADR-0010).
+const selectedGroupFontClass = "text-[16px]";
 
 function getTokenTypeClass(type: string): string {
   return (
@@ -252,8 +308,16 @@ interface UnifiedRegexEditorProps {
   highlightMode: HighlightMode;
   highlightPlan: PatternHighlightPlan;
   activeTokenIndex: number | null;
+  /** Bracket span of the selected capture group, or null. Drives a real CM
+   * selection + font bump (ADR-0010). */
+  selectedGroupRange?: GroupRange | null;
+  /** Show a pointer cursor over the content (hovering a group token). */
+  showPointerCursor?: boolean;
   onTokenClick?: (tokenIndex: number) => void;
   onTokenHover?: (tokenIndex: number | null) => void;
+  /** A real mouse press resolved to a token index (or null when off any
+   * token). Distinct from caret-driven `onTokenClick`. */
+  onTokenMouseDown?: (tokenIndex: number | null) => void;
   onSelectionChange?: (
     selection: {
       start: number;
@@ -276,8 +340,11 @@ export const UnifiedRegexEditor = forwardRef<
     highlightMode,
     highlightPlan,
     activeTokenIndex,
+    selectedGroupRange = null,
+    showPointerCursor = false,
     onTokenClick,
     onTokenHover,
+    onTokenMouseDown,
     onSelectionChange,
   },
   ref
@@ -288,9 +355,21 @@ export const UnifiedRegexEditor = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      insertAtCursor(text: string) {
+      insertAtCursor(text: string, range?: { from: number; to: number }) {
         const view = viewRef.current;
         if (!view) {
+          return;
+        }
+        if (range) {
+          // Group replacement: target the explicit span, keep the inserted text
+          // selected (it is the group's new span), tag it programmatic so the
+          // caret fallback can't light a false highlight, and don't steal focus
+          // (the selection stays visible via drawSelection) (ADR-0010).
+          view.dispatch({
+            changes: { from: range.from, to: range.to, insert: text },
+            selection: { anchor: range.from, head: range.from + text.length },
+            annotations: programmaticSelection.of(true),
+          });
           return;
         }
         const { from, to } = view.state.selection.main;
@@ -308,12 +387,14 @@ export const UnifiedRegexEditor = forwardRef<
     onSelectionChange,
     onTokenClick,
     onTokenHover,
+    onTokenMouseDown,
   });
   callbacksRef.current = {
     onRegexChange,
     onSelectionChange,
     onTokenClick,
     onTokenHover,
+    onTokenMouseDown,
   };
 
   // Create editor once on mount
@@ -327,7 +408,12 @@ export const UnifiedRegexEditor = forwardRef<
       if (update.docChanged) {
         callbacksRef.current.onRegexChange(update.state.doc.toString());
       }
-      if (update.selectionSet || update.docChanged) {
+      // Skip our own programmatic group selection: it must not re-resolve a
+      // token and feed back into the group-toggle logic (ADR-0010).
+      const isProgrammatic = update.transactions.some((tr) =>
+        tr.annotation(programmaticSelection)
+      );
+      if (!isProgrammatic && (update.selectionSet || update.docChanged)) {
         const sel = update.state.selection.main;
         callbacksRef.current.onSelectionChange?.({
           start: sel.from,
@@ -345,10 +431,28 @@ export const UnifiedRegexEditor = forwardRef<
       }
     });
 
+    // A real mouse press drives group selection — distinct from caret-derived
+    // token resolution, which also fires on keyboard navigation (ADR-0010).
+    const mouseDownHandler = EditorView.domEventHandlers({
+      mousedown(event, view) {
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        const toks = view.state.field(tokensForClickField);
+        const idx =
+          pos == null
+            ? -1
+            : toks.findIndex((t) => pos >= t.start && pos < t.end);
+        callbacksRef.current.onTokenMouseDown?.(idx >= 0 ? idx : null);
+        return false;
+      },
+    });
+
     const state = EditorState.create({
       doc: regex,
       extensions: [
         baseTheme,
+        // Renders the selection layer so a selected group stays visible even
+        // when the field is not focused (ADR-0010).
+        drawSelection(),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnly),
         EditorView.editable.of(!readOnly),
@@ -357,6 +461,7 @@ export const UnifiedRegexEditor = forwardRef<
         tokensForClickField,
         tokenDecorations,
         updateListener,
+        mouseDownHandler,
         singleLineFilter,
       ],
     });
@@ -397,6 +502,7 @@ export const UnifiedRegexEditor = forwardRef<
       activeIndex: canHighlight ? activeTokenIndex : null,
       mode: highlightMode,
       plan: canHighlight ? highlightPlan : emptyPlan,
+      selectedGroupRange: canHighlight ? selectedGroupRange : null,
     };
     view.dispatch({
       effects: [
@@ -404,7 +510,44 @@ export const UnifiedRegexEditor = forwardRef<
         setTokensForClickEffect.of(effectiveTokens),
       ],
     });
-  }, [tokens, canHighlight, highlightMode, highlightPlan, activeTokenIndex]);
+  }, [
+    tokens,
+    canHighlight,
+    highlightMode,
+    highlightPlan,
+    activeTokenIndex,
+    selectedGroupRange,
+  ]);
+
+  // Drive the real CM selection from the selected group range: select the
+  // bracket span, or collapse to a caret when the group is deselected
+  // (ADR-0010). Tagged programmatic so it does not re-trigger group toggling.
+  const prevSelectedGroupRangeRef = useRef<GroupRange | null>(null);
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+    const range = selectedGroupRange;
+    const docLength = view.state.doc.length;
+    if (range && range.start < range.end && range.end <= docLength) {
+      const sel = view.state.selection.main;
+      if (sel.from !== range.start || sel.to !== range.end) {
+        view.dispatch({
+          selection: { anchor: range.start, head: range.end },
+          annotations: programmaticSelection.of(true),
+        });
+      }
+    } else if (prevSelectedGroupRangeRef.current) {
+      // Deselected: collapse the span back to a caret at its anchor.
+      const sel = view.state.selection.main;
+      view.dispatch({
+        selection: { anchor: sel.from },
+        annotations: programmaticSelection.of(true),
+      });
+    }
+    prevSelectedGroupRangeRef.current = range;
+  }, [selectedGroupRange]);
 
   // Resolve token under mouse pointer on hover
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -436,7 +579,11 @@ export const UnifiedRegexEditor = forwardRef<
       </span>
       <div className="relative min-w-0 flex-1">
         <div
-          className="w-full"
+          className={
+            showPointerCursor
+              ? "w-full [&_.cm-content]:cursor-pointer"
+              : "w-full"
+          }
           onMouseLeave={handleMouseLeave}
           onMouseMove={handleMouseMove}
           ref={containerRef}

@@ -1,5 +1,23 @@
 import type { RegexMatchResult, RegexPatternToken } from "./regex";
 
+/** True for a `(` token that opens a *capturing* group (plain or named). */
+function isGroupOpener(token: RegexPatternToken): boolean {
+  return token.type === "group" && token.raw.startsWith("(");
+}
+
+/**
+ * Whether a group-opener token starts a capturing group, matching the native
+ * engine's numbering: plain `(` and named `(?<name>`, but NOT `(?:`, lookahead
+ * `(?=`/`(?!`, or lookbehind `(?<=`/`(?<!`.
+ */
+function isCapturingGroupOpener(raw: string): boolean {
+  if (raw === "(") {
+    return true;
+  }
+  // Named capturing group `(?<name>` — but exclude lookbehind `(?<=` / `(?<!`.
+  return raw.startsWith("(?<") && raw[3] !== "=" && raw[3] !== "!";
+}
+
 /**
  * Build a mapping from each pattern token index to the innermost
  * capture group index it belongs to (1-based), or null if the token
@@ -7,8 +25,8 @@ import type { RegexMatchResult, RegexPatternToken } from "./regex";
  *
  * Uses a stack-based approach: opening `(` tokens push a group,
  * closing `)` tokens pop. Non-capturing group openers (`(?:`, `(?=`,
- * `(?!`, `(?<=`, `(?<!`, `(?<name>`) are tracked but excluded from
- * the capture index sequence.
+ * `(?!`, `(?<=`, `(?<!`) are tracked but excluded from the capture
+ * index sequence.
  */
 export function buildTokenToCaptureGroupMap(
   tokens: RegexPatternToken[]
@@ -18,11 +36,8 @@ export function buildTokenToCaptureGroupMap(
   let captureIndex = 0;
 
   for (const token of tokens) {
-    if (token.type === "group" && token.raw.startsWith("(")) {
-      const isCapturing = token.raw === "(" || token.raw.startsWith("(?<");
-      const isNamedCapturing =
-        token.raw.startsWith("(?<") && !token.raw.startsWith("(?<=");
-      if (isCapturing || isNamedCapturing) {
+    if (isGroupOpener(token)) {
+      if (isCapturingGroupOpener(token.raw)) {
         captureIndex++;
         groupStack.push(captureIndex);
         result.push(captureIndex);
@@ -67,6 +82,64 @@ export function resolveTokenCaptureGroup(
   }
   const map = buildTokenToCaptureGroupMap(tokens);
   return map[tokenIndex] ?? null;
+}
+
+/**
+ * Resolve the character range of capturing group N's parentheses in the pattern
+ * string: from its opening `(` to the matching `)`, **including** the brackets
+ * but **excluding** any trailing quantifier (`?`/`+`/`*`/`{n,m}`), which is a
+ * separate token outside the parens. Returns null if group N does not exist.
+ *
+ * Used to drive a real CodeMirror selection over the group so a snippet insert
+ * replaces the whole group (see ADR-0010).
+ */
+export function resolveCaptureGroupRange(
+  tokens: RegexPatternToken[],
+  groupIndex: number
+): { start: number; end: number } | null {
+  if (groupIndex < 1) {
+    return null;
+  }
+
+  let captureIndex = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    if (!(isGroupOpener(token) && isCapturingGroupOpener(token.raw))) {
+      continue;
+    }
+    captureIndex++;
+    if (captureIndex !== groupIndex) {
+      continue;
+    }
+    const end = findMatchingCloseEnd(tokens, i);
+    return end == null ? null : { start: token.start, end };
+  }
+
+  return null;
+}
+
+/**
+ * Given the index of a group-opener token, find the `end` offset of its
+ * matching `)` by walking forward and tracking bracket depth. Returns null if
+ * the group is unclosed.
+ */
+function findMatchingCloseEnd(
+  tokens: RegexPatternToken[],
+  openIndex: number
+): number | null {
+  let depth = 0;
+  for (let i = openIndex; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    if (isGroupOpener(token)) {
+      depth++;
+    } else if (token.type === "group" && token.raw === ")") {
+      depth--;
+      if (depth === 0) {
+        return token.end;
+      }
+    }
+  }
+  return null;
 }
 
 /**

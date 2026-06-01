@@ -24,6 +24,7 @@ import {
   countCaptureGroups,
   explainRegex,
   recognitionProgress,
+  resolveCaptureGroupRange,
   resolveTokenMatchRange,
   testRegex,
 } from "@/domain/format";
@@ -202,6 +203,9 @@ export function RegexLab({
   const [selectedPatternTokenIndex, setSelectedPatternTokenIndex] = useState<
     number | null
   >(null);
+  const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(
+    null
+  );
   const [hoveredPatternTokenIndex, setHoveredPatternTokenIndex] = useState<
     number | null
   >(null);
@@ -212,10 +216,10 @@ export function RegexLab({
   const [isSnippetLibraryOpen, setIsSnippetLibraryOpen] = useState(false);
   const [isCookbookOpen, setIsCookbookOpen] = useState(false);
   const regexEditorRef = useRef<UnifiedRegexEditorHandle>(null);
-
-  const handleInsertSnippet = useCallback((pattern: string) => {
-    regexEditorRef.current?.insertAtCursor(pattern);
-  }, []);
+  // Armed right before a snippet insert that replaces the selected group, so the
+  // regex-change reset can tell that edit apart from typing/external changes and
+  // keep the group selected for iterative swaps (ADR-0010).
+  const insertionIsReplacingGroupRef = useRef(false);
 
   const matchResult = useMemo(
     () => testRegex(regex, activeExample),
@@ -271,14 +275,57 @@ export function RegexLab({
     selectedPatternTokenIndex;
   const exampleTabRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
-  // Derived reactively from activePatternTokenIndex so hover also syncs
+  // Bracket span of the explicitly selected capture group (regex-field click or
+  // table icon), used to drive a real CM selection (ADR-0010).
+  const selectedGroupRange = useMemo(
+    () =>
+      selectedGroupIndex == null
+        ? null
+        : resolveCaptureGroupRange(
+            explanation.patternTokens,
+            selectedGroupIndex
+          ),
+    [selectedGroupIndex, explanation.patternTokens]
+  );
+
+  // Insert a snippet. With a group selected, replace that group's bracket span
+  // (the explicit source of truth) and keep the selection alive for iterative
+  // swaps; otherwise insert at the caret as usual (ADR-0010).
+  const handleInsertSnippet = useCallback(
+    (pattern: string) => {
+      if (selectedGroupRange) {
+        insertionIsReplacingGroupRef.current = true;
+        regexEditorRef.current?.insertAtCursor(pattern, {
+          from: selectedGroupRange.start,
+          to: selectedGroupRange.end,
+        });
+        return;
+      }
+      regexEditorRef.current?.insertAtCursor(pattern);
+    },
+    [selectedGroupRange]
+  );
+
+  // A selected group is the source of truth for the synchronized highlight;
+  // otherwise fall back to the token under the cursor/hover.
   const activeCaptureGroup = useMemo(() => {
+    if (selectedGroupIndex != null) {
+      return selectedGroupIndex;
+    }
     if (activePatternTokenIndex == null) {
       return null;
     }
     return tokenCaptureGroupMap[activePatternTokenIndex] ?? null;
-  }, [activePatternTokenIndex, tokenCaptureGroupMap]);
+  }, [selectedGroupIndex, activePatternTokenIndex, tokenCaptureGroupMap]);
   const activeMatchRange = useMemo(() => {
+    if (selectedGroupIndex != null) {
+      const group = matchResult.groups.find(
+        (g) => g.index === selectedGroupIndex
+      );
+      return group && group.start < group.end
+        ? { start: group.start, end: group.end }
+        : null;
+    }
     if (activePatternTokenIndex == null) {
       return null;
     }
@@ -287,7 +334,26 @@ export function RegexLab({
       tokenCaptureGroupMap,
       matchResult
     );
-  }, [activePatternTokenIndex, tokenCaptureGroupMap, matchResult]);
+  }, [
+    selectedGroupIndex,
+    activePatternTokenIndex,
+    tokenCaptureGroupMap,
+    matchResult,
+  ]);
+
+  // While a group is selected its native CM selection stands in for the
+  // single-token outline; the pointer cursor only shows over group tokens in
+  // groups mode (ADR-0010).
+  const editorActiveTokenIndex = useMemo(
+    () => (selectedGroupIndex != null ? null : activePatternTokenIndex),
+    [selectedGroupIndex, activePatternTokenIndex]
+  );
+  const showPointerCursor = useMemo(() => {
+    if (highlightMode !== "groups" || hoveredPatternTokenIndex == null) {
+      return false;
+    }
+    return (tokenCaptureGroupMap[hoveredPatternTokenIndex] ?? null) != null;
+  }, [highlightMode, hoveredPatternTokenIndex, tokenCaptureGroupMap]);
 
   const captureGroupCount = useMemo(
     () => countCaptureGroups(regex) ?? 0,
@@ -337,10 +403,42 @@ export function RegexLab({
     }
   }, [explanation.patternTokens.length, selectedPatternTokenIndex]);
 
-  // Clear selected token when regex or example changes
+  // Clear the single-token selection whenever the regex or example changes.
   useEffect(() => {
     setSelectedPatternTokenIndex(null);
   }, [activeExample, regex]);
+
+  // Switching the active example always drops the group selection.
+  useEffect(() => {
+    setSelectedGroupIndex(null);
+  }, [activeExample]);
+
+  // A regex change drops the group selection too — typing/external/format
+  // changes reset it. The one exception is our own snippet insert into the
+  // selected group: the armed flag lets iterative swaps survive (ADR-0010).
+  useEffect(() => {
+    if (insertionIsReplacingGroupRef.current) {
+      insertionIsReplacingGroupRef.current = false;
+      return;
+    }
+    setSelectedGroupIndex(null);
+  }, [regex]);
+
+  // After a snippet insert, re-resolve group N on the new tokens: if it vanished
+  // (snippet without brackets, group count fell below N) drop the selection so
+  // it softly collapses to a caret (ADR-0010).
+  useEffect(() => {
+    if (selectedGroupIndex != null && selectedGroupRange == null) {
+      setSelectedGroupIndex(null);
+    }
+  }, [selectedGroupIndex, selectedGroupRange]);
+
+  // Group selection is a groups-mode affordance; drop it when leaving the mode.
+  useEffect(() => {
+    if (highlightMode !== "groups") {
+      setSelectedGroupIndex(null);
+    }
+  }, [highlightMode]);
 
   // The snippets tab is editor-only; drop back to explanation in read-only mode.
   useEffect(() => {
@@ -428,6 +526,40 @@ export function RegexLab({
     [explanation.patternTokens]
   );
 
+  // Real mouse press in the regex field. In "groups" mode, pressing a token
+  // inside a capture group toggles a whole-group selection; anywhere else
+  // clears it and falls back to the caret-driven single-token highlight
+  // (ADR-0010).
+  const handleEditorTokenMouseDown = useCallback(
+    (tokenIndex: number | null) => {
+      if (highlightMode === "groups" && tokenIndex != null) {
+        const group = tokenCaptureGroupMap[tokenIndex] ?? null;
+        if (group != null) {
+          setSelectedGroupIndex((prev) => (prev === group ? null : group));
+          return;
+        }
+      }
+      setSelectedGroupIndex(null);
+    },
+    [highlightMode, tokenCaptureGroupMap]
+  );
+
+  // The explanation list selects a single token and always clears any group
+  // selection.
+  const handleExplanationTokenActivate = useCallback(
+    (tokenIndex: number) => {
+      setSelectedGroupIndex(null);
+      handlePatternTokenActivate(tokenIndex);
+    },
+    [handlePatternTokenActivate]
+  );
+
+  // Table-row icon: toggle the selection of this exact group — the only way to
+  // reach an outer/enclosing group in the nested case (ADR-0010).
+  const handleSelectGroupFromTable = useCallback((groupIndex: number) => {
+    setSelectedGroupIndex((prev) => (prev === groupIndex ? null : groupIndex));
+  }, []);
+
   const handleToggleExampleSource = useCallback(() => {
     if (!hasIntersectionExamples) {
       return;
@@ -511,7 +643,7 @@ export function RegexLab({
         </div>
         <div className="p-4">
           <UnifiedRegexEditor
-            activeTokenIndex={activePatternTokenIndex}
+            activeTokenIndex={editorActiveTokenIndex}
             canHighlight={explanation.canHighlightPattern}
             highlightMode={highlightMode}
             highlightPlan={patternHighlightPlan}
@@ -521,9 +653,12 @@ export function RegexLab({
             onSelectionChange={handlePatternSelectionChange}
             onTokenClick={handlePatternTokenActivate}
             onTokenHover={setHoveredPatternTokenIndex}
+            onTokenMouseDown={handleEditorTokenMouseDown}
             readOnly={readOnly}
             ref={regexEditorRef}
             regex={regex}
+            selectedGroupRange={selectedGroupRange}
+            showPointerCursor={showPointerCursor}
             tokens={explanation.patternTokens}
           />
         </div>
@@ -690,8 +825,10 @@ export function RegexLab({
               onColumnParamChange={handleColumnParamChange}
               onGroupHover={handleGroupHover}
               onOpenColumnPicker={setColumnPickerGroupIndex}
+              onSelectGroup={handleSelectGroupFromTable}
               readOnly={readOnly}
               result={matchResult}
+              selectedGroupIndex={selectedGroupIndex}
               structuralIssues={structuralIssues}
             />
           </div>
@@ -741,7 +878,7 @@ export function RegexLab({
                   activePatternTokenIndex={activePatternTokenIndex}
                   errorMessage={matchResult.error}
                   explanation={explanation}
-                  onPatternTokenActivate={handlePatternTokenActivate}
+                  onPatternTokenActivate={handleExplanationTokenActivate}
                   onPatternTokenHover={setHoveredPatternTokenIndex}
                 />
               )}
@@ -1144,6 +1281,8 @@ function MatchInfoPanel({
   onOpenColumnPicker,
   onClearColumn,
   onColumnParamChange,
+  onSelectGroup,
+  selectedGroupIndex,
   hasMissingColumnMappings,
   structuralIssues,
   readOnly = false,
@@ -1160,6 +1299,8 @@ function MatchInfoPanel({
   onOpenColumnPicker: (groupIndex: number) => void;
   onClearColumn: (groupIndex: number) => void;
   onColumnParamChange: (groupIndex: number, value: string) => void;
+  onSelectGroup: (groupIndex: number) => void;
+  selectedGroupIndex: number | null;
   hasMissingColumnMappings: boolean;
   structuralIssues: string[];
   readOnly?: boolean;
@@ -1227,6 +1368,7 @@ function MatchInfoPanel({
                     <th className="px-1.5 py-[3px]">#</th>
                     <th className="px-1.5 py-[3px]">Value</th>
                     <th className="px-1.5 py-[3px]">{t("editor.columns")}</th>
+                    <th className="px-1.5 py-[3px]" />
                   </tr>
                 </thead>
                 <tbody>
@@ -1304,6 +1446,24 @@ function MatchInfoPanel({
                               />
                             )}
                           </div>
+                        </td>
+                        <td className="px-1.5 py-[3px] text-right">
+                          <Button
+                            aria-label={t("editor.selectGroup")}
+                            aria-pressed={selectedGroupIndex === g.index}
+                            className={cn(
+                              "px-1.5 py-0.5 text-[13px]",
+                              selectedGroupIndex === g.index &&
+                                "text-[color:var(--c-accent)]"
+                            )}
+                            onClick={() => onSelectGroup(g.index)}
+                            size="sm"
+                            title={t("editor.selectGroupHint")}
+                            type="button"
+                            variant="ghost"
+                          >
+                            ⌖
+                          </Button>
                         </td>
                       </tr>
                     );

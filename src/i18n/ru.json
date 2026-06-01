@@ -106,6 +106,8 @@
     "fullMatch": "Полное совпадение",
     "groups": "Группы захвата",
     "groupIndex": "Группа {{index}}",
+    "selectGroup": "Выделить группу",
+    "selectGroupHint": "Выделить эту группу в выражении, чтобы заменить её сниппетом",
     "noMatch": "Нет совпадения",
     "highlightModeLabel": "Режим раскраски",
     "highlightModeParts": "Части",

@@ -92,6 +92,8 @@
     "fullMatch": "Full match",
     "groups": "Capture groups",
     "groupIndex": "Group {{index}}",
+    "selectGroup": "Select group",
+    "selectGroupHint": "Select this group in the pattern to replace it with a snippet",
     "noMatch": "No match",
     "highlightModeLabel": "Highlight mode",
     "highlightModeParts": "Parts",

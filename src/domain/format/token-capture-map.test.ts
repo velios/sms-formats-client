@@ -3,6 +3,7 @@ import type { RegexMatchResult } from "./regex";
 import { explainRegex, testRegex } from "./regex";
 import {
   buildTokenToCaptureGroupMap,
+  resolveCaptureGroupRange,
   resolveTokenCaptureGroup,
   resolveTokenMatchRange,
 } from "./token-capture-map";
@@ -99,8 +100,63 @@ describe("buildTokenToCaptureGroupMap", () => {
     expect(map[realOpen]).toBe(1);
   });
 
+  it("excludes lookbehind groups from capture index", () => {
+    // ^(?<=x)(\d+)$ — lookbehind is non-capturing, so the only group is 1
+    const tokens = tokensFor("^(?<=x)(\\d+)$");
+    const map = buildTokenToCaptureGroupMap(tokens);
+    const lookbehind = tokens.findIndex((t) => t.raw === "(?<=");
+    expect(map[lookbehind]).toBeNull();
+    const capOpen = tokens.findIndex((t) => t.raw === "(");
+    expect(map[capOpen]).toBe(1);
+  });
+
   it("returns empty array for empty tokens", () => {
     expect(buildTokenToCaptureGroupMap([])).toEqual([]);
+  });
+});
+
+describe("resolveCaptureGroupRange", () => {
+  /** Slice the pattern at the resolved range to assert the exact bracket span. */
+  function spanFor(pattern: string, groupIndex: number): string | null {
+    const range = resolveCaptureGroupRange(tokensFor(pattern), groupIndex);
+    return range ? pattern.slice(range.start, range.end) : null;
+  }
+
+  it("spans the parentheses of a simple group", () => {
+    expect(spanFor("^(\\d+)$", 1)).toBe("(\\d+)");
+  });
+
+  it("excludes a trailing quantifier after the group", () => {
+    // ([A-Z]{3})? → range covers the parens, not the outer `?`
+    expect(spanFor("([A-Z]{3})?", 1)).toBe("([A-Z]{3})");
+    expect(spanFor("(\\d+)*", 1)).toBe("(\\d+)");
+    expect(spanFor("(\\d+){2,4}", 1)).toBe("(\\d+)");
+  });
+
+  it("keeps an inner curly quantifier that is inside the group", () => {
+    expect(spanFor("(\\d{4})", 1)).toBe("(\\d{4})");
+  });
+
+  it("spans the full outer group for a nested capture", () => {
+    expect(spanFor("(\\d{2}-(\\d{4}))", 1)).toBe("(\\d{2}-(\\d{4}))");
+    expect(spanFor("(\\d{2}-(\\d{4}))", 2)).toBe("(\\d{4})");
+  });
+
+  it("skips non-capturing and lookaround groups when numbering", () => {
+    expect(spanFor("(?:ab)(\\d+)", 1)).toBe("(\\d+)");
+    expect(spanFor("(?=\\d)(\\d+)", 1)).toBe("(\\d+)");
+    // Lookbehind is NOT a capturing group → group 1 is the real one
+    expect(spanFor("(?<=x)(\\d+)", 1)).toBe("(\\d+)");
+  });
+
+  it("resolves named capturing groups", () => {
+    expect(spanFor("(?<year>\\d{4})", 1)).toBe("(?<year>\\d{4})");
+  });
+
+  it("returns null for an out-of-range group index", () => {
+    expect(resolveCaptureGroupRange(tokensFor("(\\d+)"), 0)).toBeNull();
+    expect(resolveCaptureGroupRange(tokensFor("(\\d+)"), 2)).toBeNull();
+    expect(resolveCaptureGroupRange([], 1)).toBeNull();
   });
 });
 
