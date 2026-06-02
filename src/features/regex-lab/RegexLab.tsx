@@ -69,7 +69,6 @@ interface PatternSelection {
   end: number;
 }
 
-type RightPaneTab = "explanation" | "quickref" | "snippets";
 type ExampleSourceMode = "examples" | "intersections";
 
 const regexLabPanelClassName =
@@ -197,7 +196,8 @@ export function RegexLab({
   const activeExample = visibleExampleTexts[visibleActiveExampleIndex] ?? "";
   const isExampleInputReadOnly = readOnly || isShowingIntersectionExamples;
   const [hoveredGroup, setHoveredGroup] = useState<number | null>(null);
-  const [rightPaneTab, setRightPaneTab] = useState<RightPaneTab>("explanation");
+  const rightPaneTab = useUIStore((state) => state.rightPaneTab);
+  const setRightPaneTab = useUIStore((state) => state.setRightPaneTab);
   const [patternSelection, setPatternSelection] =
     useState<PatternSelection | null>(null);
   const [selectedPatternTokenIndex, setSelectedPatternTokenIndex] = useState<
@@ -569,7 +569,9 @@ export function RegexLab({
       if (highlightMode !== "groups") {
         return;
       }
-      setSelectedGroupIndex((prev) => (prev === groupIndex ? null : groupIndex));
+      setSelectedGroupIndex((prev) =>
+        prev === groupIndex ? null : groupIndex
+      );
     },
     [highlightMode]
   );
@@ -600,26 +602,32 @@ export function RegexLab({
               role="group"
             >
               <button
-                aria-pressed={highlightMode === "parts"}
-                className={highlightModeSegmentClassName(
-                  highlightMode === "parts"
-                )}
-                onClick={() => setHighlightMode("parts")}
-                title={t("editor.highlightModePartsHint")}
-                type="button"
-              >
-                {t("editor.highlightModeParts")}
-              </button>
-              <button
                 aria-pressed={highlightMode === "groups"}
                 className={highlightModeSegmentClassName(
                   highlightMode === "groups"
                 )}
-                onClick={() => setHighlightMode("groups")}
+                onClick={() => {
+                  setHighlightMode("groups");
+                  setRightPaneTab("snippets");
+                }}
                 title={t("editor.highlightModeGroupsHint")}
                 type="button"
               >
                 {t("editor.highlightModeGroups")}
+              </button>
+              <button
+                aria-pressed={highlightMode === "parts"}
+                className={highlightModeSegmentClassName(
+                  highlightMode === "parts"
+                )}
+                onClick={() => {
+                  setHighlightMode("parts");
+                  setRightPaneTab("explanation");
+                }}
+                title={t("editor.highlightModePartsHint")}
+                type="button"
+              >
+                {t("editor.highlightModeParts")}
               </button>
             </div>
           </div>
@@ -833,13 +841,13 @@ export function RegexLab({
               activeCaptureGroup={activeCaptureGroup}
               captureGroups={captureGroups}
               columns={columns}
+              groupSelectionEnabled={highlightMode === "groups"}
               hasMissingColumnMappings={hasMissingColumnMappings}
               hoveredGroup={hoveredGroup}
               onClearColumn={handleClearColumn}
               onColumnParamChange={handleColumnParamChange}
               onGroupHover={handleGroupHover}
               onOpenColumnPicker={setColumnPickerGroupIndex}
-              groupSelectionEnabled={highlightMode === "groups"}
               onSelectGroup={handleSelectGroupFromTable}
               readOnly={readOnly}
               result={matchResult}
@@ -858,6 +866,17 @@ export function RegexLab({
               <div
                 className={cn(regexLabTabListClassName, "w-full border-b-0")}
               >
+                {!readOnly && (
+                  <button
+                    className={regexLabTabClassName(
+                      rightPaneTab === "snippets"
+                    )}
+                    onClick={() => setRightPaneTab("snippets")}
+                    type="button"
+                  >
+                    {t("snippets.open").toUpperCase()}
+                  </button>
+                )}
                 <button
                   className={regexLabTabClassName(
                     rightPaneTab === "explanation"
@@ -874,17 +893,6 @@ export function RegexLab({
                 >
                   QUICK REF
                 </button>
-                {!readOnly && (
-                  <button
-                    className={regexLabTabClassName(
-                      rightPaneTab === "snippets"
-                    )}
-                    onClick={() => setRightPaneTab("snippets")}
-                    type="button"
-                  >
-                    {t("snippets.open").toUpperCase()}
-                  </button>
-                )}
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">

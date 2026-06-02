@@ -627,7 +627,8 @@ export const usePublishStore = create<PublishState>((set) => ({
 
 // ─── UI store ───
 
-type HighlightMode = "parts" | "groups";
+export type HighlightMode = "parts" | "groups";
+export type RightPaneTab = "explanation" | "quickref" | "snippets";
 
 function readHighlightMode(): HighlightMode {
   return localStorage.getItem("sms-formats-highlight-mode") === "parts"
@@ -635,11 +636,22 @@ function readHighlightMode(): HighlightMode {
     : "groups";
 }
 
+function readRightPaneTab(): RightPaneTab {
+  const stored = localStorage.getItem("sms-formats-right-pane-tab");
+  return stored === "explanation" ||
+    stored === "quickref" ||
+    stored === "snippets"
+    ? stored
+    : "snippets";
+}
+
 interface UIState {
   locale: string;
   setLocale: (l: string) => void;
   highlightMode: HighlightMode;
   setHighlightMode: (mode: HighlightMode) => void;
+  rightPaneTab: RightPaneTab;
+  setRightPaneTab: (tab: RightPaneTab) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -652,5 +664,10 @@ export const useUIStore = create<UIState>((set) => ({
   setHighlightMode: (highlightMode) => {
     localStorage.setItem("sms-formats-highlight-mode", highlightMode);
     set({ highlightMode });
+  },
+  rightPaneTab: readRightPaneTab(),
+  setRightPaneTab: (rightPaneTab) => {
+    localStorage.setItem("sms-formats-right-pane-tab", rightPaneTab);
+    set({ rightPaneTab });
   },
 }));
