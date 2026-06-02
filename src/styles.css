@@ -45,6 +45,13 @@
   --c-accent-soft: rgba(52, 100, 163, 0.14);
   --c-overlay: rgba(51, 51, 51, 0.6);
 
+  /* Regex field: frame around a manual text selection (dark neutral, not from
+     the palette, so it contrasts with every light band fill) and the light halo
+     that keeps the caret readable over both light bands and dark accents. */
+  --c-selection-frame: #1f2933;
+  --c-selection-fill: rgba(31, 41, 51, 0.22);
+  --c-caret-halo: rgba(255, 255, 255, 0.9);
+
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
 

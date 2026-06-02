@@ -269,8 +269,13 @@ export function RegexLab({
       ),
     [explanation.patternTokens, patternSelection]
   );
+  // Hover drives the per-token outline + synchronized highlight only in "parts"
+  // mode, where the point is inspecting individual parts. In "groups" mode the
+  // unit is the whole group: an outline chasing the mouse is just noise over the
+  // group selection and the caret, so ignore hover there and let the caret/click
+  // drive the active token, keeping caret placement and selection clean.
   const activePatternTokenIndex =
-    hoveredPatternTokenIndex ??
+    (highlightMode === "groups" ? null : hoveredPatternTokenIndex) ??
     resolvedPatternTokenIndexFromSelection ??
     selectedPatternTokenIndex;
   const exampleTabRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
@@ -341,12 +346,13 @@ export function RegexLab({
     matchResult,
   ]);
 
-  // While a group is selected its native CM selection stands in for the
-  // single-token outline; the pointer cursor only shows over group tokens in
-  // groups mode (ADR-0010).
+  // The single-token outline belongs to "parts" mode. In "groups" mode the only
+  // field indicator is the group selection (its native CM selection), so the
+  // outline stays off entirely — clicking off a group just places a caret
+  // instead of outlining the token under it (ADR-0010).
   const editorActiveTokenIndex = useMemo(
-    () => (selectedGroupIndex != null ? null : activePatternTokenIndex),
-    [selectedGroupIndex, activePatternTokenIndex]
+    () => (highlightMode === "groups" ? null : activePatternTokenIndex),
+    [highlightMode, activePatternTokenIndex]
   );
   const showPointerCursor = useMemo(() => {
     if (highlightMode !== "groups" || hoveredPatternTokenIndex == null) {
@@ -555,10 +561,18 @@ export function RegexLab({
   );
 
   // Table-row icon: toggle the selection of this exact group — the only way to
-  // reach an outer/enclosing group in the nested case (ADR-0010).
-  const handleSelectGroupFromTable = useCallback((groupIndex: number) => {
-    setSelectedGroupIndex((prev) => (prev === groupIndex ? null : groupIndex));
-  }, []);
+  // reach an outer/enclosing group in the nested case (ADR-0010). Group selection
+  // is a "groups" mode concept; ignore it in "parts" mode, where the outline/CSS
+  // suppression assumes no group is selected (see editorActiveTokenIndex).
+  const handleSelectGroupFromTable = useCallback(
+    (groupIndex: number) => {
+      if (highlightMode !== "groups") {
+        return;
+      }
+      setSelectedGroupIndex((prev) => (prev === groupIndex ? null : groupIndex));
+    },
+    [highlightMode]
+  );
 
   const handleToggleExampleSource = useCallback(() => {
     if (!hasIntersectionExamples) {
@@ -825,6 +839,7 @@ export function RegexLab({
               onColumnParamChange={handleColumnParamChange}
               onGroupHover={handleGroupHover}
               onOpenColumnPicker={setColumnPickerGroupIndex}
+              groupSelectionEnabled={highlightMode === "groups"}
               onSelectGroup={handleSelectGroupFromTable}
               readOnly={readOnly}
               result={matchResult}
@@ -1283,6 +1298,7 @@ function MatchInfoPanel({
   onColumnParamChange,
   onSelectGroup,
   selectedGroupIndex,
+  groupSelectionEnabled,
   hasMissingColumnMappings,
   structuralIssues,
   readOnly = false,
@@ -1301,6 +1317,7 @@ function MatchInfoPanel({
   onColumnParamChange: (groupIndex: number, value: string) => void;
   onSelectGroup: (groupIndex: number) => void;
   selectedGroupIndex: number | null;
+  groupSelectionEnabled: boolean;
   hasMissingColumnMappings: boolean;
   structuralIssues: string[];
   readOnly?: boolean;
@@ -1456,9 +1473,14 @@ function MatchInfoPanel({
                               selectedGroupIndex === g.index &&
                                 "text-[color:var(--c-accent)]"
                             )}
+                            disabled={!groupSelectionEnabled}
                             onClick={() => onSelectGroup(g.index)}
                             size="sm"
-                            title={t("editor.selectGroupHint")}
+                            title={
+                              groupSelectionEnabled
+                                ? t("editor.selectGroupHint")
+                                : t("editor.selectGroupDisabledHint")
+                            }
                             type="button"
                             variant="ghost"
                           >

@@ -94,6 +94,7 @@
     "groupIndex": "Group {{index}}",
     "selectGroup": "Select group",
     "selectGroupHint": "Select this group in the pattern to replace it with a snippet",
+    "selectGroupDisabledHint": "Switch to \"groups\" mode to select a group",
     "noMatch": "No match",
     "highlightModeLabel": "Highlight mode",
     "highlightModeParts": "Parts",

@@ -275,11 +275,36 @@ const baseTheme = EditorView.theme({
     overflow: "auto",
     fontFamily: "var(--font-mono)",
   },
+  // Thicker dark core + light halo so the caret reads over light bands and over
+  // dark accents (active-token outline, group borders) alike (ADR-0010).
   ".cm-cursor": {
     borderLeftColor: "var(--c-text)",
+    borderLeftWidth: "2px",
+    boxShadow: "0 0 0 1px var(--c-caret-halo)",
   },
+  // CodeMirror paints the selection layer at z-index:-1, BEHIND the content —
+  // so it sits under the opaque match-driven band fills and is invisible over
+  // them. Raise it above the content (the cursor layer stays higher at 150) so
+  // the frame reads on every band; pointer-events:none keeps token clicks
+  // landing on the content beneath it (ADR-0010).
+  ".cm-selectionLayer": {
+    zIndex: "1 !important",
+    pointerEvents: "none",
+  },
+  // Manual selection: a translucent dark fill that darkens the band beneath plus
+  // a dark neutral frame; single-line field so it is always one seamless
+  // rectangle (ADR-0010).
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-    background: "var(--c-accent-soft) !important",
+    background: "var(--c-selection-fill) !important",
+    boxShadow: "inset 0 0 0 2px var(--c-selection-frame)",
+    borderRadius: "2px",
+  },
+  // A selected capture group shares this layer but is marked by the +2px font
+  // bump instead; suppress both fill and frame so the group gets neither
+  // (ADR-0010).
+  "&.has-group-selection .cm-selectionBackground": {
+    background: "transparent !important",
+    boxShadow: "none",
   },
 });
 
@@ -510,6 +535,12 @@ export const UnifiedRegexEditor = forwardRef<
         setTokensForClickEffect.of(effectiveTokens),
       ],
     });
+    // Mirror "a group is selected" onto the root class so CSS can suppress the
+    // manual-selection frame for the shared selection layer (ADR-0010).
+    view.dom.classList.toggle(
+      "has-group-selection",
+      decoState.selectedGroupRange != null
+    );
   }, [
     tokens,
     canHighlight,

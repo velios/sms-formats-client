@@ -108,6 +108,7 @@
     "groupIndex": "Группа {{index}}",
     "selectGroup": "Выделить группу",
     "selectGroupHint": "Выделить эту группу в выражении, чтобы заменить её сниппетом",
+    "selectGroupDisabledHint": "Переключитесь в режим «группы», чтобы выделить группу",
     "noMatch": "Нет совпадения",
     "highlightModeLabel": "Режим раскраски",
     "highlightModeParts": "Части",
