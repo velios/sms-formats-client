@@ -11,6 +11,7 @@ export interface FormatIntersectionStat {
   totalExamples: number;
   ownMatchedExamples: number;
   intersectingOtherFormats: number;
+  intersectingFormatPaths: string[];
 }
 
 export function calculateFormatIntersectionStats(
@@ -35,6 +36,9 @@ export function calculateFormatIntersectionStats(
           intersectingFormatIndexes.add(otherExamples[i]!.otherIndex);
         }
       });
+      const intersectingFormatPaths = Array.from(intersectingFormatIndexes)
+        .sort((a, b) => a - b)
+        .map((index) => formats[index]!.filePath);
 
       return [
         format.filePath,
@@ -43,6 +47,7 @@ export function calculateFormatIntersectionStats(
           totalExamples: format.examples.length,
           ownMatchedExamples: ownMatched.matched.filter(Boolean).length,
           intersectingOtherFormats: intersectingFormatIndexes.size,
+          intersectingFormatPaths,
         },
       ];
     })

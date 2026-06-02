@@ -35,7 +35,7 @@ function renderFormatsPanel(params: {
     visibleFormats = ["banks/pumb/formats/example.txt"],
   } = params;
   const handleSelectFile = vi.fn();
-  const onOpenSmsByTemplateForIntersection = vi.fn();
+  const onScopeIntersections = vi.fn();
 
   const view = render(
     <FormatsPanel
@@ -50,6 +50,7 @@ function renderFormatsPanel(params: {
               totalExamples: 8,
               ownMatchedExamples: 8,
               intersectingOtherFormats,
+              intersectingFormatPaths: [],
             },
           ],
         ])
@@ -58,10 +59,11 @@ function renderFormatsPanel(params: {
       formatTab="all"
       handleSelectFile={handleSelectFile}
       handleSelectSenders={vi.fn()}
+      intersectionScopeFiles={null}
       localChangedFormatFiles={localChangedFormatFiles}
       localSendersChanged={false}
       onFocusedFilePathHandled={vi.fn()}
-      onOpenSmsByTemplateForIntersection={onOpenSmsByTemplateForIntersection}
+      onScopeIntersections={onScopeIntersections}
       pendingFocusedFilePath={null}
       recentFiles={[]}
       refName="main"
@@ -87,21 +89,22 @@ function renderFormatsPanel(params: {
     />
   );
 
-  return { ...view, handleSelectFile, onOpenSmsByTemplateForIntersection };
+  return { ...view, handleSelectFile, onScopeIntersections };
 }
 
 describe("FormatsPanel intersections", () => {
-  it("opens SMS-by-template quick check from active intersections badge", () => {
-    const { handleSelectFile, onOpenSmsByTemplateForIntersection } =
-      renderFormatsPanel({ intersectingOtherFormats: 2 });
+  it("scopes the intersections tab from the active intersections badge", () => {
+    const { handleSelectFile, onScopeIntersections } = renderFormatsPanel({
+      intersectingOtherFormats: 2,
+    });
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "quickCheck.openIntersectingSmsByTemplate:example.txt:2",
+        name: "bank.scopeIntersections:example.txt:2",
       })
     );
 
-    expect(onOpenSmsByTemplateForIntersection).toHaveBeenCalledWith(
+    expect(onScopeIntersections).toHaveBeenCalledWith(
       "banks/pumb/formats/example.txt"
     );
     expect(handleSelectFile).not.toHaveBeenCalled();
@@ -112,7 +115,7 @@ describe("FormatsPanel intersections", () => {
 
     expect(
       screen.queryByRole("button", {
-        name: /quickCheck\.openIntersectingSmsByTemplate/,
+        name: /bank\.scopeIntersections/,
       })
     ).not.toBeInTheDocument();
   });
@@ -125,7 +128,7 @@ describe("FormatsPanel intersections", () => {
 
     expect(
       screen.queryByRole("button", {
-        name: /quickCheck\.openIntersectingSmsByTemplate/,
+        name: /bank\.scopeIntersections/,
       })
     ).not.toBeInTheDocument();
     expect(

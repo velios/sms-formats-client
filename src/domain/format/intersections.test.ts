@@ -26,18 +26,21 @@ describe("calculateFormatIntersectionStats", () => {
       totalExamples: 3,
       ownMatchedExamples: 2,
       intersectingOtherFormats: 1,
+      intersectingFormatPaths: ["src/Bank/formats/b.txt"],
     });
     expect(stats.get("src/Bank/formats/b.txt")).toEqual({
       filePath: "src/Bank/formats/b.txt",
       totalExamples: 2,
       ownMatchedExamples: 1,
       intersectingOtherFormats: 0,
+      intersectingFormatPaths: [],
     });
     expect(stats.get("src/Bank/formats/c.txt")).toEqual({
       filePath: "src/Bank/formats/c.txt",
       totalExamples: 1,
       ownMatchedExamples: 1,
       intersectingOtherFormats: 0,
+      intersectingFormatPaths: [],
     });
   });
 
@@ -60,12 +63,14 @@ describe("calculateFormatIntersectionStats", () => {
       totalExamples: 1,
       ownMatchedExamples: 0,
       intersectingOtherFormats: 0,
+      intersectingFormatPaths: [],
     });
     expect(stats.get("src/Bank/formats/invalid.txt")).toEqual({
       filePath: "src/Bank/formats/invalid.txt",
       totalExamples: 1,
       ownMatchedExamples: 0,
       intersectingOtherFormats: 0,
+      intersectingFormatPaths: [],
     });
   });
 });

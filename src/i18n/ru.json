@@ -70,6 +70,8 @@
     "formats": "Форматы",
     "allFiles": "Все файлы",
     "recentFiles": "Недавние файлы",
+    "intersectionsTab": "Пересечения",
+    "scopeIntersections": "Показать пересечения для {{file}} ({{count}})",
     "allFormats": "Все",
     "senders": "Отправители",
     "createBank": "Создать банк",
@@ -170,7 +172,6 @@
   "quickCheck": {
     "openTemplateBySms": "Поиск шаблона по СМС",
     "openSmsByTemplate": "Поиск СМС по шаблону",
-    "openIntersectingSmsByTemplate": "Открыть поиск СМС по шаблону для {{file}} (пересечений: {{count}})",
     "calculateIntersections": "Посчитать пересечения",
     "calculatingIntersections": "Считаем пересечения…",
     "title": "Поиск по банку: {{bank}}",

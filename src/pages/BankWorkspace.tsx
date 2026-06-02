@@ -60,7 +60,6 @@ import {
   prepareFormatEntries,
 } from "@/features/quick-check/format-entries";
 import {
-  type QuickCheckActiveFormatContext,
   type QuickCheckMode,
   QuickCheckPanel,
 } from "@/features/quick-check/QuickCheckPanel";
@@ -107,17 +106,6 @@ function getActiveExampleText(
     return "";
   }
   return context.examples[context.activeExampleIndex] ?? "";
-}
-
-function buildQuickCheckContextFromEntry(
-  entry: CachedFormatEntry
-): QuickCheckActiveFormatContext {
-  return {
-    filePath: entry.filePath,
-    regex: entry.regex,
-    activeExampleIndex: 0,
-    activeSmsText: entry.examples[0] ?? "",
-  };
 }
 
 function normalizeIntersectionExample(example: string): string {
@@ -451,7 +439,7 @@ function extractExamplesForSearch(content: string, filePath: string): string {
 
 function shouldStartExampleIndexing(
   query: string,
-  formatTab: "all" | "recent"
+  formatTab: "all" | "recent" | "intersections"
 ): boolean {
   if (formatTab !== "all") {
     return false;
@@ -549,7 +537,7 @@ function useBankFormatSearch(params: {
   changedFormatFiles: Set<string>;
   draftStore: SearchDraftStore;
   formatSearch: string;
-  formatTab: "all" | "recent";
+  formatTab: "all" | "recent" | "intersections";
   bankPath: string;
   prNumber: number | null;
   repository: { owner: string; repo: string };
@@ -1084,8 +1072,8 @@ export function FormatsPanel(params: {
   t: (key: string) => string;
   tTemplate: (key: string, options?: Record<string, unknown>) => string;
   totalFilesCount: number;
-  formatTab: "all" | "recent";
-  setFormatTab: (value: "all" | "recent") => void;
+  formatTab: "all" | "recent" | "intersections";
+  setFormatTab: (value: "all" | "recent" | "intersections") => void;
   recentFiles: string[];
   createFormatDisabled: boolean;
   setShowCreateFormat: (value: boolean) => void;
@@ -1105,7 +1093,8 @@ export function FormatsPanel(params: {
   showSenders: boolean;
   handleSelectSenders: () => void;
   handleSelectFile: (path: string) => void;
-  onOpenSmsByTemplateForIntersection: (filePath: string) => void;
+  onScopeIntersections: (filePath: string) => void;
+  intersectionScopeFiles: string[] | null;
   repository: { owner: string; repo: string };
   refName: string;
   sendersPath: string;
@@ -1138,7 +1127,8 @@ export function FormatsPanel(params: {
     showSenders,
     handleSelectSenders,
     handleSelectFile,
-    onOpenSmsByTemplateForIntersection,
+    onScopeIntersections,
+    intersectionScopeFiles,
     repository,
     refName,
     sendersPath,
@@ -1179,7 +1169,23 @@ export function FormatsPanel(params: {
     }
     return extractFormatFileName(path).toLowerCase().includes(normalizedSearch);
   });
-  const filesForRender = formatTab === "recent" ? recentFilesVisible : allFiles;
+  const intersectionScopeVisible = (intersectionScopeFiles ?? []).filter(
+    (path) => {
+      if (normalizedSearch.length === 0) {
+        return true;
+      }
+      return (
+        extractFormatFileName(path).toLowerCase().includes(normalizedSearch) ||
+        path.toLowerCase().includes(normalizedSearch)
+      );
+    }
+  );
+  const filesForRender =
+    formatTab === "recent"
+      ? recentFilesVisible
+      : formatTab === "intersections"
+        ? intersectionScopeVisible
+        : allFiles;
   const showNoResults = filesForRender.length === 0;
 
   useEffect(() => {
@@ -1244,6 +1250,14 @@ export function FormatsPanel(params: {
         >
           {t("bank.recentFiles")}
         </button>
+        {intersectionScopeFiles && (
+          <button
+            className={workspaceTabClassName(formatTab === "intersections")}
+            onClick={() => setFormatTab("intersections")}
+          >
+            {t("bank.intersectionsTab")}
+          </button>
+        )}
       </div>
       <div className="border-[color:var(--c-border)] border-b p-2">
         <Input
@@ -1373,15 +1387,12 @@ export function FormatsPanel(params: {
                     /{" "}
                     {hasIntersectingFormats ? (
                       <FormatIntersectionMetric
-                        ariaLabel={tTemplate(
-                          "quickCheck.openIntersectingSmsByTemplate",
-                          {
-                            count: intersectionStats.intersectingOtherFormats,
-                            file: displayName,
-                          }
-                        )}
+                        ariaLabel={tTemplate("bank.scopeIntersections", {
+                          count: intersectionStats.intersectingOtherFormats,
+                          file: displayName,
+                        })}
                         onClick={() => {
-                          onOpenSmsByTemplateForIntersection(path);
+                          onScopeIntersections(path);
                         }}
                         tone={intersectionsTone}
                         value={intersectionStats.intersectingOtherFormats}
@@ -2469,7 +2480,6 @@ export function BankWorkspace() {
   const [showCreateFormat, setShowCreateFormat] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [showQuickCheck, setShowQuickCheck] = useState(false);
-  const [quickCheckAutoRunOnOpen, setQuickCheckAutoRunOnOpen] = useState(false);
   const [quickCheckMode, setQuickCheckMode] =
     useState<QuickCheckMode>("template-by-sms");
   const [intersectionFormatEntries, setIntersectionFormatEntries] = useState<
@@ -2489,12 +2499,14 @@ export function BankWorkspace() {
   const [pendingFocusedFilePath, setPendingFocusedFilePath] = useState<
     string | null
   >(null);
-  const [
-    quickCheckActiveFormatContextOverride,
-    setQuickCheckActiveFormatContextOverride,
-  ] = useState<QuickCheckActiveFormatContext | null>(null);
   const [formatSearch, setFormatSearch] = useState("");
-  const [formatTab, setFormatTab] = useState<"all" | "recent">("all");
+  const [formatTab, setFormatTab] = useState<
+    "all" | "recent" | "intersections"
+  >("all");
+  const [intersectionScope, setIntersectionScope] = useState<{
+    anchorPath: string;
+    formatPaths: string[];
+  } | null>(null);
   const sendersPath = `${bankPath}/senders.txt`;
   const { prChangedFiles, isPrChangedFilesReady } = usePullRequestChangedFiles({
     repository,
@@ -2875,6 +2887,16 @@ export function BankWorkspace() {
     );
   }, [allFormatFiles, bankPath, sendersPath]);
 
+  const intersectionScopeFiles = useMemo(() => {
+    if (!intersectionScope) {
+      return null;
+    }
+    return intersectionScope.formatPaths.filter(
+      (path) =>
+        allFormatFiles.includes(path) && !visibleDeletedFormatFiles.has(path)
+    );
+  }, [allFormatFiles, intersectionScope, visibleDeletedFormatFiles]);
+
   const handleSelectFile = useCallback(
     (f: string) => {
       if (requestedFile !== f) {
@@ -2909,6 +2931,9 @@ export function BankWorkspace() {
     ) {
       return;
     }
+
+    setIntersectionScope(null);
+    setFormatTab((current) => (current === "intersections" ? "all" : current));
 
     const runId = intersectionRunIdRef.current + 1;
     intersectionRunIdRef.current = runId;
@@ -2968,21 +2993,17 @@ export function BankWorkspace() {
     t,
   ]);
 
-  const handleOpenSmsByTemplateForIntersection = useCallback(
+  const handleScopeIntersections = useCallback(
     (filePath: string) => {
-      const entry = intersectionFormatEntries.get(filePath);
-      if (!entry?.regex.trim()) {
-        return;
-      }
-
-      setQuickCheckActiveFormatContextOverride(
-        buildQuickCheckContextFromEntry(entry)
-      );
-      setQuickCheckAutoRunOnOpen(true);
-      setQuickCheckMode("sms-by-template");
-      setShowQuickCheck(true);
+      const stat = formatIntersectionStats.get(filePath);
+      const otherPaths = stat?.intersectingFormatPaths ?? [];
+      setIntersectionScope({
+        anchorPath: filePath,
+        formatPaths: [filePath, ...otherPaths],
+      });
+      setFormatTab("intersections");
     },
-    [intersectionFormatEntries]
+    [formatIntersectionStats]
   );
 
   const handleFormatRegexBlurAfterEdit = useCallback(
@@ -3005,16 +3026,14 @@ export function BankWorkspace() {
     [hasCalculatedIntersections, visibleDeletedFormatFiles]
   );
 
-  const quickCheckActiveFormatContext =
-    quickCheckActiveFormatContextOverride ??
-    (activeFormatSearchContext
-      ? {
-          filePath: activeFormatSearchContext.filePath,
-          regex: activeFormatSearchContext.regex,
-          activeExampleIndex: activeFormatSearchContext.activeExampleIndex,
-          activeSmsText: getActiveExampleText(activeFormatSearchContext),
-        }
-      : null);
+  const quickCheckActiveFormatContext = activeFormatSearchContext
+    ? {
+        filePath: activeFormatSearchContext.filePath,
+        regex: activeFormatSearchContext.regex,
+        activeExampleIndex: activeFormatSearchContext.activeExampleIndex,
+        activeSmsText: getActiveExampleText(activeFormatSearchContext),
+      }
+    : null;
 
   const handleRenameFile = useCallback(
     (fromPath: string, toPath: string): boolean => {
@@ -3275,14 +3294,10 @@ export function BankWorkspace() {
             void handleCalculateIntersections();
           }}
           onOpenSmsByTemplate={() => {
-            setQuickCheckActiveFormatContextOverride(null);
-            setQuickCheckAutoRunOnOpen(false);
             setQuickCheckMode("sms-by-template");
             setShowQuickCheck(true);
           }}
           onOpenTemplateBySms={() => {
-            setQuickCheckActiveFormatContextOverride(null);
-            setQuickCheckAutoRunOnOpen(false);
             setQuickCheckMode("template-by-sms");
             setShowQuickCheck(true);
           }}
@@ -3306,6 +3321,7 @@ export function BankWorkspace() {
           formatTab={formatTab}
           handleSelectFile={handleSelectFile}
           handleSelectSenders={handleSelectSenders}
+          intersectionScopeFiles={intersectionScopeFiles}
           localChangedFormatFiles={localChangedFormatFiles}
           localSendersChanged={localSendersChanged}
           onFocusedFilePathHandled={(filePath) =>
@@ -3313,9 +3329,7 @@ export function BankWorkspace() {
               current === filePath ? null : current
             )
           }
-          onOpenSmsByTemplateForIntersection={
-            handleOpenSmsByTemplateForIntersection
-          }
+          onScopeIntersections={handleScopeIntersections}
           pendingFocusedFilePath={pendingFocusedFilePath}
           recentFiles={recentFiles}
           refName={refName}
@@ -3333,7 +3347,9 @@ export function BankWorkspace() {
           sourceSendersChanged={sourceSendersChanged}
           t={t}
           totalFilesCount={
-            allFormatFiles.length + unsupportedSourceFiles.length + 1
+            formatTab === "intersections" && intersectionScopeFiles
+              ? intersectionScopeFiles.length
+              : allFormatFiles.length + unsupportedSourceFiles.length + 1
           }
           tTemplate={t}
           unsupportedSourceFiles={unsupportedSourceFiles}
@@ -3375,14 +3391,10 @@ export function BankWorkspace() {
           onFormatRegexBlurAfterEdit: handleFormatRegexBlurAfterEdit,
           onOpenIntersectionFileInApp: handleOpenFileInApp,
           onOpenSmsByTemplate: () => {
-            setQuickCheckActiveFormatContextOverride(null);
-            setQuickCheckAutoRunOnOpen(false);
             setQuickCheckMode("sms-by-template");
             setShowQuickCheck(true);
           },
           onOpenTemplateBySms: () => {
-            setQuickCheckActiveFormatContextOverride(null);
-            setQuickCheckAutoRunOnOpen(false);
             setQuickCheckMode("template-by-sms");
             setShowQuickCheck(true);
           },
@@ -3421,14 +3433,10 @@ export function BankWorkspace() {
       {showQuickCheck && (
         <QuickCheckPanel
           activeFormatContext={quickCheckActiveFormatContext}
-          autoRunOnOpen={quickCheckAutoRunOnOpen}
           bankName={displayName}
           formatPaths={quickCheckFormatPaths}
           initialMode={quickCheckMode}
-          onClose={() => {
-            setQuickCheckAutoRunOnOpen(false);
-            setShowQuickCheck(false);
-          }}
+          onClose={() => setShowQuickCheck(false)}
           onOpenFileInApp={handleOpenFileInApp}
         />
       )}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -41,56 +41,6 @@ describe("QuickCheckPanel", () => {
     prepareFormatEntriesMock.mockReset();
   });
 
-  it("auto-runs SMS-by-template check when opened from intersections", async () => {
-    prepareFormatEntriesMock.mockResolvedValue({
-      entries: [
-        {
-          examples: ["Matched SMS text"],
-          fileName: "match.txt",
-          filePath: "banks/pumb/formats/match.txt",
-          fingerprint: "remote:main",
-          regex: "Matched SMS text",
-          source: "remote",
-        },
-      ],
-      loadErrorsCount: 0,
-      remoteFetchedCount: 1,
-      cachedCount: 0,
-    });
-
-    render(
-      <QuickCheckPanel
-        activeFormatContext={{
-          activeExampleIndex: 0,
-          activeSmsText: "Matched SMS text",
-          filePath: "banks/pumb/formats/source.txt",
-          regex: "Matched SMS text",
-        }}
-        autoRunOnOpen
-        bankName="ПУМБ-ua"
-        formatPaths={["banks/pumb/formats/match.txt"]}
-        initialMode="sms-by-template"
-        onClose={vi.fn()}
-        onOpenFileInApp={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(prepareFormatEntriesMock).toHaveBeenCalledTimes(1);
-    });
-
-    expect(prepareFormatEntriesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePaths: ["banks/pumb/formats/match.txt"],
-        prNumber: 123,
-        repository: { owner: "flocktory", repo: "sms-formats-client" },
-        sourceRefName: "head-sha",
-      })
-    );
-
-    expect(await screen.findByText("match.txt")).toBeInTheDocument();
-  });
-
   it("opens a matched file in app and closes the panel", async () => {
     prepareFormatEntriesMock.mockResolvedValue({
       entries: [
@@ -118,7 +68,6 @@ describe("QuickCheckPanel", () => {
           filePath: "banks/pumb/formats/source.txt",
           regex: "Matched SMS text",
         }}
-        autoRunOnOpen
         bankName="ПУМБ-ua"
         formatPaths={["banks/pumb/formats/match.txt"]}
         initialMode="sms-by-template"
@@ -126,6 +75,8 @@ describe("QuickCheckPanel", () => {
         onOpenFileInApp={onOpenFileInApp}
       />
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "quickCheck.run" }));
 
     fireEvent.click(
       await screen.findByRole("button", { name: "quickCheck.openInApp" })

@@ -710,4 +710,44 @@ describe("BankWorkspace intersections behavior", () => {
     );
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
+
+  it("scopes the intersections tab from the right badge without touching the editor", async () => {
+    render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      )
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "bank.intersectionsTab" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "quickCheck.calculateIntersections" })
+    );
+
+    await waitFor(() =>
+      expect(getFormatRow("current.txt")).toHaveTextContent("2 / 2 / 1")
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "bank.scopeIntersections" })
+    );
+
+    const intersectionsTab = await screen.findByRole("button", {
+      name: "bank.intersectionsTab",
+    });
+    expect(intersectionsTab.className).toContain(
+      "border-b-[color:var(--c-accent)]"
+    );
+
+    expect(getFormatRow("current.txt")).toBeInTheDocument();
+    expect(getFormatRow("another.txt")).toBeInTheDocument();
+
+    expect(screen.getByTestId("format-editor")).toHaveTextContent(
+      "src/TBank_123/formats/current.txt"
+    );
+  });
 });

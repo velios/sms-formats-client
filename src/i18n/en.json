@@ -57,6 +57,8 @@
     "formats": "Formats",
     "allFiles": "All files",
     "recentFiles": "Recent files",
+    "intersectionsTab": "Intersections",
+    "scopeIntersections": "Show intersections for {{file}} ({{count}})",
     "allFormats": "All",
     "senders": "Senders",
     "createBank": "Create Bank",
@@ -150,7 +152,6 @@
   "quickCheck": {
     "openTemplateBySms": "Search template by SMS",
     "openSmsByTemplate": "Search SMS by template",
-    "openIntersectingSmsByTemplate": "Open search SMS by template for {{file}} (intersections: {{count}})",
     "calculateIntersections": "Count intersections",
     "calculatingIntersections": "Counting intersections…",
     "open": "SMS Regex Check",
