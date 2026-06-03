@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
   useCallback,
@@ -32,6 +33,7 @@ import {
 } from "@/domain/format";
 import {
   approvePullRequest,
+  fetchOpenPRs,
   fetchPullRequestApprovalByCurrentUser,
   fetchPullRequestFiles,
   fetchRepoTree,
@@ -65,6 +67,7 @@ import {
 } from "@/features/quick-check/QuickCheckPanel";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
+import { openPrsQueryKey } from "@/hooks/useGitHub";
 import { cn } from "@/lib/utils";
 import {
   useDraftStore,
@@ -1833,6 +1836,7 @@ function useQuickPullRequestUpdate(params: {
     sourceRef,
     t,
   } = params;
+  const queryClient = useQueryClient();
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
@@ -1928,7 +1932,7 @@ function useQuickPullRequestUpdate(params: {
       prNumber: number,
       commitMessage?: string
     ): Promise<boolean> => {
-      await updatePullRequestHead(
+      const { headSha: newHeadSha } = await updatePullRequestHead(
         token,
         prNumber,
         changedFiles.map((file) => ({
@@ -1941,7 +1945,8 @@ function useQuickPullRequestUpdate(params: {
       );
       const syncedResolution = await resolvePullRequestWorkspace(
         prNumber,
-        repository
+        repository,
+        { forceFresh: true, headShaOverride: newHeadSha }
       );
       if (syncedResolution.status !== "supported") {
         setPublishError(t("publish.updateError"));
@@ -1952,9 +1957,11 @@ function useQuickPullRequestUpdate(params: {
         prNumber,
       });
       await onWorkspaceSynced(syncedResolution);
+      const freshOpenPrs = await fetchOpenPRs(repository, { forceFresh: true });
+      queryClient.setQueryData(openPrsQueryKey(repository), freshOpenPrs);
       return true;
     },
-    [changedFiles, onWorkspaceSynced, repository, t]
+    [changedFiles, onWorkspaceSynced, queryClient, repository, t]
   );
 
   const beginUpdate = useCallback(async () => {

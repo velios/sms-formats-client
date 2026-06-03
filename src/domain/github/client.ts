@@ -837,6 +837,14 @@ function createPublicOctokit(token: string): Octokit {
   return token ? new Octokit({ auth: token }) : new Octokit();
 }
 
+// GitHub serves authenticated GETs with `Cache-Control: private, max-age=60`,
+// so the browser HTTP cache (under Octokit's fetch) keeps returning the
+// pre-write body for ~60s — even across page reloads. Appending a unique query
+// param changes the cache key, forcing a fresh read right after we push.
+function cacheBustParam(forceFresh?: boolean): { _cb?: number } {
+  return forceFresh ? { _cb: Date.now() } : {};
+}
+
 function readStoredGitHubUserToken(): string {
   if (typeof window === "undefined") {
     return "";
@@ -1092,7 +1100,10 @@ export async function fetchBranches(
   return res.data.map((b) => ({ name: b.name, sha: b.commit.sha }));
 }
 
-export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
+export async function fetchOpenPRs(
+  repoRef?: RepoRef,
+  options?: { forceFresh?: boolean }
+): Promise<
   {
     number: number;
     title: string;
@@ -1147,6 +1158,7 @@ export async function fetchOpenPRs(repoRef?: RepoRef): Promise<
     repo: repo.repo,
     state: "open",
     per_page: 100,
+    ...cacheBustParam(options?.forceFresh),
   });
   const openPrs = res.data;
   return Promise.all(
@@ -1219,7 +1231,8 @@ export async function fetchPullRequestValidationDetails(
 
 export async function resolvePullRequestWorkspace(
   prNumber: number,
-  repoRef?: RepoRef
+  repoRef?: RepoRef,
+  options?: { forceFresh?: boolean; headShaOverride?: string }
 ): Promise<PullRequestWorkspaceResolution> {
   const repo = resolveRepo(repoRef);
 
@@ -1229,6 +1242,7 @@ export async function resolvePullRequestWorkspace(
         owner: repo.owner,
         repo: repo.repo,
         pull_number: prNumber,
+        ...cacheBustParam(options?.forceFresh),
       }),
       refreshPullRequestApprovalPermission(repo),
       publicOctokit.paginate(publicOctokit.pulls.listFiles, {
@@ -1236,6 +1250,7 @@ export async function resolvePullRequestWorkspace(
         repo: repo.repo,
         pull_number: prNumber,
         per_page: 100,
+        ...cacheBustParam(options?.forceFresh),
       }),
     ]);
 
@@ -1253,7 +1268,7 @@ export async function resolvePullRequestWorkspace(
       prNumber,
       state: pullRequest.data.state === "open" ? "open" : "closed",
       merged: pullRequest.data.merged === true,
-      headSha: pullRequest.data.head.sha,
+      headSha: options?.headShaOverride ?? pullRequest.data.head.sha,
       baseSha: pullRequest.data.base.sha,
       canWriteRepository,
       maintainerCanModify: pullRequest.data.maintainer_can_modify ?? null,
@@ -1623,7 +1638,7 @@ export async function updatePullRequestHead(
   files: Array<{ path: string; content?: string; delete?: boolean }>,
   repoRef?: RepoRef,
   commitMessage?: string
-): Promise<{ url: string; title: string }> {
+): Promise<{ url: string; title: string; headSha: string }> {
   const repo = resolveRepo(repoRef);
   const octokit = createAuthenticatedOctokit(token);
   const pr = await octokit.pulls.get({
@@ -1639,14 +1654,23 @@ export async function updatePullRequestHead(
   const title = pr.data.title;
   const message = commitMessage?.trim() ? commitMessage : title;
 
-  await createCommit(octokit, headOwner, headRef, headSha, files, message, {
-    owner: headOwner,
-    repo: headRepo,
-  });
+  const newHeadSha = await createCommit(
+    octokit,
+    headOwner,
+    headRef,
+    headSha,
+    files,
+    message,
+    {
+      owner: headOwner,
+      repo: headRepo,
+    }
+  );
 
   return {
     url: pr.data.html_url,
     title,
+    headSha: newHeadSha,
   };
 }
 

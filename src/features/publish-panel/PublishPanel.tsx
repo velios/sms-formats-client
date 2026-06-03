@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
@@ -7,11 +8,13 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { isBankFormatFilePath } from "@/domain/format";
 import {
+  fetchOpenPRs,
   resolvePullRequestWorkspace,
   updatePullRequestHead,
 } from "@/domain/github";
 import type { BankInfo } from "@/domain/types";
 import { validateBankLevel } from "@/domain/validation";
+import { openPrsQueryKey } from "@/hooks/useGitHub";
 import { cn } from "@/lib/utils";
 import type { PublishStep } from "@/store";
 import { useDraftStore, usePublishStore, useSourceStore } from "@/store";
@@ -193,6 +196,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
   const sourceRef = useSourceStore((state) => state.sourceRef);
   const banks = useSourceStore((state) => state.banks);
   const repository = useSourceStore((state) => state.repository);
+  const queryClient = useQueryClient();
   const [token, setToken] = useState(publishStore.token ?? "");
 
   const changedFiles = draftStore
@@ -267,12 +271,16 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
       publishStore.setStep("syncing");
       const syncedResolution = await resolvePullRequestWorkspace(
         sourceRef.prNumber,
-        repository
+        repository,
+        { forceFresh: true, headShaOverride: result.headSha }
       );
       if (syncedResolution.status !== "supported") {
         publishStore.setError(t("publish.updateError"));
         return;
       }
+
+      const freshOpenPrs = await fetchOpenPRs(repository, { forceFresh: true });
+      queryClient.setQueryData(openPrsQueryKey(repository), freshOpenPrs);
 
       publishStore.setPrUrl(result.url);
       publishStore.setStep("done");
@@ -288,6 +296,7 @@ export function PublishPanel({ bankPath, bankName, onClose }: Props) {
     changedFiles,
     draftStore,
     publishStore,
+    queryClient,
     repository,
     sourceRef,
     t,

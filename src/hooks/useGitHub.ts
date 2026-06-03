@@ -11,10 +11,16 @@ function repoKey(repository: RepoRef): string {
   return `${repository.owner}/${repository.repo}`;
 }
 
+export function openPrsQueryKey(repository: RepoRef) {
+  return ["open-prs", repoKey(repository)] as const;
+}
+
+export type OpenPullRequests = Awaited<ReturnType<typeof fetchOpenPRs>>;
+
 export function useOpenPRs(enabled = true) {
   const repository = useSourceStore((state) => state.repository);
   return useQuery({
-    queryKey: ["open-prs", repoKey(repository)],
+    queryKey: openPrsQueryKey(repository),
     queryFn: () => fetchOpenPRs(repository),
     enabled,
     staleTime: SOURCE_CACHE_STALE_MS,

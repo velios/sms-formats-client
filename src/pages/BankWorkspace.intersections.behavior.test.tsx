@@ -1,4 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  fireEvent,
+  render as rtlRender,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const scrollIntoViewMock = vi.fn();
@@ -327,6 +334,17 @@ vi.mock("@/domain/github", async () => {
 });
 
 import { BankWorkspace } from "./BankWorkspace";
+
+function QueryWrapper({ children }: { children: ReactNode }) {
+  const [client] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  );
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
+function render(ui: ReactElement) {
+  return rtlRender(ui, { wrapper: QueryWrapper });
+}
 
 beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;

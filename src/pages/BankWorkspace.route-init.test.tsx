@@ -1,4 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  fireEvent,
+  render as rtlRender,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -278,6 +285,7 @@ vi.mock("@/domain/github", async () => {
     ...actual,
     approvePullRequest: vi.fn(),
     fetchFileContent: vi.fn(() => Promise.resolve("")),
+    fetchOpenPRs: vi.fn(() => Promise.resolve([])),
     fetchPullRequestApprovalByCurrentUser:
       mocks.fetchPullRequestApprovalByCurrentUser,
     fetchPullRequestFiles: mocks.fetchPullRequestFiles,
@@ -297,6 +305,17 @@ vi.mock("@/domain/github", async () => {
 
 import { getGitHubUserToken } from "@/domain/github";
 import { BankWorkspace } from "./BankWorkspace";
+
+function QueryWrapper({ children }: { children: ReactNode }) {
+  const [client] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  );
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
+function render(ui: ReactElement) {
+  return rtlRender(ui, { wrapper: QueryWrapper });
+}
 
 describe("BankWorkspace route init", () => {
   beforeEach(() => {
@@ -707,6 +726,8 @@ describe("BankWorkspace route init", () => {
       });
     mocks.updatePullRequestHead.mockResolvedValue({
       url: "https://github.com/zenmoney/sms-formats/pull/123",
+      title: "PR 123",
+      headSha: "new-head-sha",
     });
 
     render(<BankWorkspace />);
