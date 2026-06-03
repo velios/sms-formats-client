@@ -3,6 +3,7 @@ import type { RegexMatchResult } from "./regex";
 import { explainRegex, testRegex } from "./regex";
 import {
   buildTokenToCaptureGroupMap,
+  isCapturingGroupOpenerToken,
   resolveCaptureGroupRange,
   resolveTokenCaptureGroup,
   resolveTokenMatchRange,
@@ -196,6 +197,36 @@ describe("resolveTokenCaptureGroup", () => {
     // The capturing group should be group 1
     const capOpen = tokens.findIndex((t) => t.raw === "(");
     expect(map[capOpen]).toBe(1);
+  });
+});
+
+describe("isCapturingGroupOpenerToken", () => {
+  it("is true for a plain capturing opener", () => {
+    const tokens = tokensFor("^(\\d+)$");
+    const open = tokens.find((t) => t.raw === "(")!;
+    expect(isCapturingGroupOpenerToken(open)).toBe(true);
+  });
+
+  it("is true for a named capturing opener", () => {
+    const tokens = tokensFor("(?<y>\\d+)");
+    const open = tokens.find((t) => t.raw.startsWith("(?<y"))!;
+    expect(isCapturingGroupOpenerToken(open)).toBe(true);
+  });
+
+  it("is false for non-capturing and lookaround openers", () => {
+    for (const pattern of ["(?:\\d)", "(?=\\d)", "(?!\\d)", "(?<=\\d)x"]) {
+      const tokens = tokensFor(pattern);
+      const open = tokens.find((t) => t.raw.startsWith("(?"))!;
+      expect(isCapturingGroupOpenerToken(open)).toBe(false);
+    }
+  });
+
+  it("is false for a closing paren and for content tokens", () => {
+    const tokens = tokensFor("(\\d+)");
+    const close = tokens.find((t) => t.raw === ")")!;
+    const digit = tokens.find((t) => t.raw === "\\d")!;
+    expect(isCapturingGroupOpenerToken(close)).toBe(false);
+    expect(isCapturingGroupOpenerToken(digit)).toBe(false);
   });
 });
 

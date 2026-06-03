@@ -117,7 +117,7 @@
     "highlightModeGroups": "Группы",
     "highlightModePartsHint": "Раскраска по частям паттерна",
     "highlightModeGroupsHint": "Раскраска по группам захвата",
-    "whitespacePlusLabel": "Пробел → \\s+",
+    "whitespacePlusLabel": "\\s+ → Пробел",
     "whitespacePlusHint": "Пробел вводит \\s+ и рисуется пробелом; литеральный пробел показан точкой",
     "recognitionProgressWaiting": "Паттерн ещё не дочитан: ожидается продолжение",
     "invalidRegex": "Некорректное регулярное выражение",

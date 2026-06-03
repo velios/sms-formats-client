@@ -103,7 +103,7 @@
     "highlightModeGroups": "Groups",
     "highlightModePartsHint": "Color by pattern parts",
     "highlightModeGroupsHint": "Color by capture groups",
-    "whitespacePlusLabel": "Space → \\s+",
+    "whitespacePlusLabel": "\\s+ → Space",
     "whitespacePlusHint": "Space types \\s+ and renders as a space; a literal space shows as a dot",
     "recognitionProgressWaiting": "Pattern is unfinished: expecting more input",
     "invalidRegex": "Invalid regular expression",

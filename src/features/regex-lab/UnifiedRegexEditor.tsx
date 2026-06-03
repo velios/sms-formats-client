@@ -29,6 +29,7 @@ import type {
   PatternHighlightPlan,
   RegexPatternToken,
 } from "@/domain/format";
+import { isCapturingGroupOpenerToken } from "@/domain/format";
 
 export interface UnifiedRegexEditorHandle {
   /**
@@ -741,6 +742,19 @@ export const UnifiedRegexEditor = forwardRef<
           pos == null
             ? -1
             : toks.findIndex((t) => pos >= t.start && pos < t.end);
+        // In "groups" mode, the opening "(" of a capture group is excluded from
+        // the group hit-test: clicking it drops a caret immediately before the
+        // paren and clears any group selection, instead of selecting the group
+        // (ADR-0010 addendum). The caret is forced to the paren's start so it
+        // never lands inside the group on the glyph's right half.
+        if (idx >= 0 && view.state.field(tokenDecoField).mode === "groups") {
+          const token = toks[idx]!;
+          if (isCapturingGroupOpenerToken(token)) {
+            view.dispatch({ selection: { anchor: token.start } });
+            callbacksRef.current.onTokenMouseDown?.(null);
+            return true;
+          }
+        }
         callbacksRef.current.onTokenMouseDown?.(idx >= 0 ? idx : null);
         return false;
       },

@@ -23,6 +23,7 @@ import {
   buildTokenToCaptureGroupMap,
   countCaptureGroups,
   explainRegex,
+  isCapturingGroupOpenerToken,
   recognitionProgress,
   resolveCaptureGroupRange,
   resolveTokenMatchRange,
@@ -176,6 +177,25 @@ function WhitespacePlusToggle() {
       {t("editor.whitespacePlusLabel")}
     </label>
   );
+}
+
+// The hand cursor over the regex field marks a clickable capture group. The
+// opening "(" is excluded from the group hit-test (clicking it drops a caret
+// before the group), so it gets the text cursor, not the hand (ADR-0010).
+function shouldShowGroupPointer(
+  isGroupsMode: boolean,
+  hoveredTokenIndex: number | null,
+  tokens: RegexPatternToken[],
+  captureGroupMap: Array<number | null>
+): boolean {
+  if (!isGroupsMode || hoveredTokenIndex == null) {
+    return false;
+  }
+  const token = tokens[hoveredTokenIndex];
+  if (token != null && isCapturingGroupOpenerToken(token)) {
+    return false;
+  }
+  return (captureGroupMap[hoveredTokenIndex] ?? null) != null;
 }
 
 export function RegexLab({
@@ -378,12 +398,21 @@ export function RegexLab({
     () => (highlightMode === "groups" ? null : activePatternTokenIndex),
     [highlightMode, activePatternTokenIndex]
   );
-  const showPointerCursor = useMemo(() => {
-    if (highlightMode !== "groups" || hoveredPatternTokenIndex == null) {
-      return false;
-    }
-    return (tokenCaptureGroupMap[hoveredPatternTokenIndex] ?? null) != null;
-  }, [highlightMode, hoveredPatternTokenIndex, tokenCaptureGroupMap]);
+  const showPointerCursor = useMemo(
+    () =>
+      shouldShowGroupPointer(
+        highlightMode === "groups",
+        hoveredPatternTokenIndex,
+        explanation.patternTokens,
+        tokenCaptureGroupMap
+      ),
+    [
+      highlightMode,
+      hoveredPatternTokenIndex,
+      tokenCaptureGroupMap,
+      explanation.patternTokens,
+    ]
+  );
 
   const captureGroupCount = useMemo(
     () => countCaptureGroups(regex) ?? 0,

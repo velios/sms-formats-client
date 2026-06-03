@@ -43,6 +43,7 @@ export {
 } from "./template-to-regex";
 export {
   buildTokenToCaptureGroupMap,
+  isCapturingGroupOpenerToken,
   resolveCaptureGroupRange,
   resolveTokenCaptureGroup,
   resolveTokenMatchRange,

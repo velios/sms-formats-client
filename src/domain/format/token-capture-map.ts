@@ -69,6 +69,16 @@ function innermostCapture(stack: Array<number | null>): number | null {
 }
 
 /**
+ * True for a token that opens a *capturing* group — plain `(` or named
+ * `(?<name>`, but not `(?:`/lookaround. The click hit-test excludes this token
+ * so clicking the opening paren drops a caret before the group instead of
+ * selecting it (ADR-0010 addendum).
+ */
+export function isCapturingGroupOpenerToken(token: RegexPatternToken): boolean {
+  return isGroupOpener(token) && isCapturingGroupOpener(token.raw);
+}
+
+/**
  * Resolve a clicked token index to the capture group it belongs to.
  * Returns the 1-based group index, or null if the token is not inside
  * any capturing group.
