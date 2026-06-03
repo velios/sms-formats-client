@@ -645,6 +645,10 @@ function readRightPaneTab(): RightPaneTab {
     : "snippets";
 }
 
+function readWhitespacePlusMode(): boolean {
+  return localStorage.getItem("sms-formats-whitespace-plus-mode") === "1";
+}
+
 interface UIState {
   locale: string;
   setLocale: (l: string) => void;
@@ -652,6 +656,8 @@ interface UIState {
   setHighlightMode: (mode: HighlightMode) => void;
   rightPaneTab: RightPaneTab;
   setRightPaneTab: (tab: RightPaneTab) => void;
+  whitespacePlusMode: boolean;
+  setWhitespacePlusMode: (on: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -669,5 +675,13 @@ export const useUIStore = create<UIState>((set) => ({
   setRightPaneTab: (rightPaneTab) => {
     localStorage.setItem("sms-formats-right-pane-tab", rightPaneTab);
     set({ rightPaneTab });
+  },
+  whitespacePlusMode: readWhitespacePlusMode(),
+  setWhitespacePlusMode: (whitespacePlusMode) => {
+    localStorage.setItem(
+      "sms-formats-whitespace-plus-mode",
+      whitespacePlusMode ? "1" : "0"
+    );
+    set({ whitespacePlusMode });
   },
 }));

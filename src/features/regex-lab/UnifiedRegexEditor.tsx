@@ -1,16 +1,21 @@
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   Annotation,
   EditorState,
   type Extension,
   type Range,
+  RangeSet,
   StateEffect,
   StateField,
+  Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
   drawSelection,
   EditorView,
+  keymap,
+  WidgetType,
 } from "@codemirror/view";
 import {
   forwardRef,
@@ -49,6 +54,7 @@ interface TokenDecoState {
   mode: HighlightMode;
   plan: PatternHighlightPlan;
   selectedGroupRange: GroupRange | null;
+  whitespacePlusMode: boolean;
 }
 
 const emptyPlan: PatternHighlightPlan = { lit: [], colorGroups: [] };
@@ -58,7 +64,141 @@ const emptyDecoState: TokenDecoState = {
   mode: "groups",
   plan: emptyPlan,
   selectedGroupRange: null,
+  whitespacePlusMode: false,
 };
+
+/* ─── Режим `\s+` (ADR-0012) ─── */
+
+// `\s+` рисуется одним визуальным пробелом. CodeMirror НЕ заворачивает виджет в
+// band-mark, когда mark coextensive с replace-диапазоном (типичный пробел между
+// двумя capture-группами), поэтому фон кладётся на сам виджет — иначе белый шов.
+// `fill` — плоский цвет фона группы (режим «Группы») или null («Части»).
+class WhitespacePlusWidget extends WidgetType {
+  readonly fill: string | null;
+  constructor(fill: string | null) {
+    super();
+    this.fill = fill;
+  }
+  override eq(other: WhitespacePlusWidget) {
+    return other.fill === this.fill;
+  }
+  override toDOM() {
+    const span = document.createElement("span");
+    span.textContent = " ";
+    span.style.backgroundColor = this.fill ?? "";
+    return span;
+  }
+  override ignoreEvent() {
+    return false;
+  }
+}
+
+// Литеральный пробел — редкий и опасный, рисуется `·` с предупреждающей меткой.
+// Янтарный `·` рисуется поверх плоского фона группы (`fill`) — тот же шов-фикс.
+class LiteralSpaceWidget extends WidgetType {
+  readonly fill: string | null;
+  constructor(fill: string | null) {
+    super();
+    this.fill = fill;
+  }
+  override eq(other: LiteralSpaceWidget) {
+    return other.fill === this.fill;
+  }
+  override toDOM() {
+    const span = document.createElement("span");
+    span.textContent = "·";
+    span.className = "cm-wsplus-literal";
+    span.style.backgroundColor = this.fill ?? "";
+    return span;
+  }
+  override ignoreEvent() {
+    return false;
+  }
+}
+
+const whitespacePlusAtomicMarker = Decoration.replace({});
+
+// Диапазоны пары токенов «`\s` (escape) + непосредственно следующий `+`
+// (quantifier)». Строго `+`: `\s*`, `\s{2,}`, `\s+?` сюда не попадают.
+function whitespacePlusPairRanges(
+  tokens: RegexPatternToken[]
+): { from: number; to: number; tokenIndex: number }[] {
+  const ranges: { from: number; to: number; tokenIndex: number }[] = [];
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const a = tokens[i]!;
+    const b = tokens[i + 1]!;
+    if (
+      a.type === "escape" &&
+      a.raw === "\\s" &&
+      b.type === "quantifier" &&
+      b.raw === "+"
+    ) {
+      ranges.push({ from: a.start, to: b.end, tokenIndex: i });
+    }
+  }
+  return ranges;
+}
+
+// В режиме `\s+` находится ли позиция `pos` внутри класса символов `[...]`
+// текущего текста (с учётом экранирования).
+function charClassStateAt(text: string, pos: number): boolean {
+  let inClass = false;
+  const limit = Math.min(pos, text.length);
+  for (let i = 0; i < limit; i++) {
+    const ch = text[i];
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === "[" && !inClass) {
+      inClass = true;
+    } else if (ch === "]" && inClass) {
+      inClass = false;
+    }
+  }
+  return inClass;
+}
+
+// Преобразование вставляемого текста: пробел вне `[...]` → `\s+`; пробел
+// внутри класса, открытого САМИМ вставляемым текстом, сохраняется литералом
+// (сниппет вроде `[-. ]`); пробел внутри уже существовавшего класса
+// блокируется. `initialInClass` — состояние класса в точке вставки старого дока.
+function transformInsertedSpaces(s: string, initialInClass: boolean): string {
+  let inClass = initialInClass;
+  let classOpenedInInsert = false;
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]!;
+    if (ch === "\\") {
+      out += ch + (s[i + 1] ?? "");
+      i++;
+      continue;
+    }
+    if (ch === "[" && !inClass) {
+      inClass = true;
+      classOpenedInInsert = true;
+      out += ch;
+      continue;
+    }
+    if (ch === "]" && inClass) {
+      inClass = false;
+      classOpenedInInsert = false;
+      out += ch;
+      continue;
+    }
+    if (ch === " ") {
+      if (!inClass) {
+        out += "\\s+";
+      } else if (classOpenedInInsert) {
+        out += " ";
+      }
+      // иначе — пробел внутри ранее существовавшего класса: блок (drop)
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
 
 // Marks a transaction whose selection we set programmatically (group select /
 // toggle-collapse). The update listener skips token/selection resolution for it
@@ -81,7 +221,8 @@ const tokenDecoField = StateField.define<TokenDecoState>({
 
 function buildDecorations(
   decoState: TokenDecoState,
-  docLength: number
+  docLength: number,
+  docText: string
 ): DecorationSet {
   const { tokens, activeIndex, mode, plan, selectedGroupRange } = decoState;
   if (tokens.length === 0) {
@@ -144,7 +285,70 @@ function buildDecorations(
     decorations.push(overlay);
   }
 
+  if (decoState.whitespacePlusMode) {
+    pushWhitespacePlusDecorations(
+      decorations,
+      tokens,
+      docLength,
+      docText,
+      mode,
+      plan
+    );
+  }
+
   return Decoration.set(decorations, true);
+}
+
+// Плоский фон группы для виджета-пробела, зеркалит getGroupBandClass:
+// group<=0 → --c-group-0, иначе --c-group-1..5 (цикл по 5).
+function groupColorVar(group: number): string {
+  if (group <= 0) {
+    return "var(--c-group-0)";
+  }
+  return `var(--c-group-${((group - 1) % 5) + 1})`;
+}
+
+// Режим `\s+` (ADR-0012): `\s+` → визуальный пробел, литеральный пробел → `·` с
+// предупреждающей меткой. В режиме «Группы» виджет несёт плоский фон своей
+// группы (фикс белого шва, см. WhitespacePlusWidget); в «Частях» — fill = null.
+function pushWhitespacePlusDecorations(
+  decorations: Range<Decoration>[],
+  tokens: RegexPatternToken[],
+  docLength: number,
+  docText: string,
+  mode: HighlightMode,
+  plan: PatternHighlightPlan
+): void {
+  for (const r of whitespacePlusPairRanges(tokens)) {
+    if (r.to <= docLength) {
+      const fill =
+        mode === "groups" && plan.lit[r.tokenIndex]
+          ? groupColorVar(plan.colorGroups[r.tokenIndex] ?? 0)
+          : null;
+      decorations.push(
+        Decoration.replace({ widget: new WhitespacePlusWidget(fill) }).range(
+          r.from,
+          r.to
+        )
+      );
+    }
+  }
+  for (let p = 0; p < docText.length; p++) {
+    if (docText[p] !== " ") {
+      continue;
+    }
+    const tokenIndex = tokens.findIndex((t) => p >= t.start && p < t.end);
+    const fill =
+      mode === "groups" && tokenIndex >= 0 && plan.lit[tokenIndex]
+        ? groupColorVar(plan.colorGroups[tokenIndex] ?? 0)
+        : null;
+    decorations.push(
+      Decoration.replace({ widget: new LiteralSpaceWidget(fill) }).range(
+        p,
+        p + 1
+      )
+    );
+  }
 }
 
 /**
@@ -182,8 +386,26 @@ function buildOverlayDecoration(
 
 const tokenDecorations = EditorView.decorations.compute(
   [tokenDecoField],
-  (state) => buildDecorations(state.field(tokenDecoField), state.doc.length)
+  (state) =>
+    buildDecorations(
+      state.field(tokenDecoField),
+      state.doc.length,
+      state.doc.toString()
+    )
 );
+
+// `\s+` неделим: каретка перепрыгивает, Backspace сносит целиком (ADR-0012).
+const whitespacePlusAtomicRanges = EditorView.atomicRanges.of((view) => {
+  const st = view.state.field(tokenDecoField, false);
+  if (!st?.whitespacePlusMode || st.tokens.length === 0) {
+    return RangeSet.empty;
+  }
+  const docLength = view.state.doc.length;
+  const ranges = whitespacePlusPairRanges(st.tokens)
+    .filter((r) => r.to <= docLength)
+    .map((r) => whitespacePlusAtomicMarker.range(r.from, r.to));
+  return RangeSet.of(ranges, true);
+});
 
 const regexTokenDecorationClassMap: Record<string, string> = {
   anchor:
@@ -306,6 +528,12 @@ const baseTheme = EditorView.theme({
     background: "transparent !important",
     boxShadow: "none",
   },
+  // Литеральный пробел в режиме `\s+`: `·` с предупреждающей меткой (ADR-0012).
+  ".cm-wsplus-literal": {
+    color: "#b45309",
+    textDecoration: "underline dotted #b45309",
+    textUnderlineOffset: "2px",
+  },
 });
 
 /* ─── Single-line filter ─── */
@@ -321,6 +549,49 @@ const singleLineFilter: Extension = EditorState.transactionFilter.of((tr) => {
   return tr;
 });
 
+/* ─── Правило ввода режима `\s+` (ADR-0012) ─── */
+
+// Когда режим включён, любой литеральный пробел во вставляемом тексте (печать,
+// paste, сниппет) превращается в `\s+` — кроме пробела внутри класса `[...]`.
+const whitespacePlusInputFilter: Extension = EditorState.transactionFilter.of(
+  (tr) => {
+    if (!tr.docChanged) {
+      return tr;
+    }
+    const st = tr.startState.field(tokenDecoField, false);
+    if (!st?.whitespacePlusMode) {
+      return tr;
+    }
+    const oldDoc = tr.startState.doc.toString();
+    const specs: { from: number; to: number; insert: string }[] = [];
+    let touched = false;
+    let lastInsertEnd: number | null = null;
+    tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+      const text = inserted.toString();
+      if (!text.includes(" ")) {
+        specs.push({ from: fromA, to: toA, insert: text });
+        lastInsertEnd = fromA + text.length;
+        return;
+      }
+      const transformed = transformInsertedSpaces(
+        text,
+        charClassStateAt(oldDoc, fromA)
+      );
+      if (transformed !== text) {
+        touched = true;
+      }
+      specs.push({ from: fromA, to: toA, insert: transformed });
+      lastInsertEnd = fromA + transformed.length;
+    });
+    if (!touched) {
+      return tr;
+    }
+    return specs.length === 1 && lastInsertEnd != null
+      ? { changes: specs, selection: { anchor: lastInsertEnd } }
+      : { changes: specs };
+  }
+);
+
 /* ─── Component ─── */
 
 interface UnifiedRegexEditorProps {
@@ -331,6 +602,9 @@ interface UnifiedRegexEditorProps {
   tokens: RegexPatternToken[];
   canHighlight: boolean;
   highlightMode: HighlightMode;
+  /** Режим `\s+`: пробел вводит `\s+`, `\s+` рисуется пробелом, литеральный
+   * пробел — `·` (ADR-0012). */
+  whitespacePlusMode: boolean;
   highlightPlan: PatternHighlightPlan;
   activeTokenIndex: number | null;
   /** Bracket span of the selected capture group, or null. Drives a real CM
@@ -363,6 +637,7 @@ export const UnifiedRegexEditor = forwardRef<
     tokens,
     canHighlight,
     highlightMode,
+    whitespacePlusMode,
     highlightPlan,
     activeTokenIndex,
     selectedGroupRange = null,
@@ -482,12 +757,16 @@ export const UnifiedRegexEditor = forwardRef<
         EditorState.readOnly.of(readOnly),
         EditorView.editable.of(!readOnly),
         EditorState.allowMultipleSelections.of(false),
+        history(),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
         tokenDecoField,
         tokensForClickField,
         tokenDecorations,
+        whitespacePlusAtomicRanges,
         updateListener,
         mouseDownHandler,
         singleLineFilter,
+        whitespacePlusInputFilter,
       ],
     });
 
@@ -511,6 +790,8 @@ export const UnifiedRegexEditor = forwardRef<
     if (currentDoc !== regex) {
       view.dispatch({
         changes: { from: 0, to: currentDoc.length, insert: regex },
+        // External format swap must not pollute the user's undo stack.
+        annotations: Transaction.addToHistory.of(false),
       });
     }
   }, [regex]);
@@ -528,6 +809,7 @@ export const UnifiedRegexEditor = forwardRef<
       mode: highlightMode,
       plan: canHighlight ? highlightPlan : emptyPlan,
       selectedGroupRange: canHighlight ? selectedGroupRange : null,
+      whitespacePlusMode,
     };
     view.dispatch({
       effects: [
@@ -545,6 +827,7 @@ export const UnifiedRegexEditor = forwardRef<
     tokens,
     canHighlight,
     highlightMode,
+    whitespacePlusMode,
     highlightPlan,
     activeTokenIndex,
     selectedGroupRange,

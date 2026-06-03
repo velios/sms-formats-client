@@ -155,6 +155,29 @@ const progressWaitingClass =
   "ml-[1px] animate-pulse font-bold text-[color:var(--c-warning)]";
 const PROGRESS_WAITING_GLYPH = "▏";
 
+// Чек-блок режима `\s+` рядом с кнопками раскраски (ADR-0012).
+function WhitespacePlusToggle() {
+  const { t } = useTranslation();
+  const whitespacePlusMode = useUIStore((state) => state.whitespacePlusMode);
+  const setWhitespacePlusMode = useUIStore(
+    (state) => state.setWhitespacePlusMode
+  );
+  return (
+    <label
+      className="flex cursor-pointer select-none items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--c-border)] px-2 py-1 text-[color:var(--c-text-dim)] text-xs"
+      title={t("editor.whitespacePlusHint")}
+    >
+      <input
+        checked={whitespacePlusMode}
+        className="accent-[color:var(--c-border-focus)]"
+        onChange={(e) => setWhitespacePlusMode(e.target.checked)}
+        type="checkbox"
+      />
+      {t("editor.whitespacePlusLabel")}
+    </label>
+  );
+}
+
 export function RegexLab({
   regex,
   structuralIssues = [],
@@ -177,6 +200,7 @@ export function RegexLab({
   const { t, i18n } = useTranslation();
   const highlightMode = useUIStore((state) => state.highlightMode);
   const setHighlightMode = useUIStore((state) => state.setHighlightMode);
+  const whitespacePlusMode = useUIStore((state) => state.whitespacePlusMode);
   const [exampleSourceMode, setExampleSourceMode] =
     useState<ExampleSourceMode>("examples");
   const [activeIntersectionExampleIndex, setActiveIntersectionExampleIndex] =
@@ -630,6 +654,7 @@ export function RegexLab({
                 {t("editor.highlightModeParts")}
               </button>
             </div>
+            <WhitespacePlusToggle />
           </div>
           <div className={regexLabHeaderActionsClassName}>
             {!readOnly && (
@@ -682,6 +707,7 @@ export function RegexLab({
             selectedGroupRange={selectedGroupRange}
             showPointerCursor={showPointerCursor}
             tokens={explanation.patternTokens}
+            whitespacePlusMode={whitespacePlusMode}
           />
         </div>
       </div>

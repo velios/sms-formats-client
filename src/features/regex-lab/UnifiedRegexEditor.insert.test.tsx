@@ -19,6 +19,7 @@ function setup(regex: string, onRegexChange = vi.fn()) {
       ref={ref}
       regex={regex}
       tokens={[]}
+      whitespacePlusMode={false}
     />
   );
   const content = container.querySelector(".cm-content");
