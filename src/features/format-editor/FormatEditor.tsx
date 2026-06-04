@@ -509,11 +509,11 @@ export function FormatEditor({
       )}
 
       {mode === "raw" && (
-        <div className="overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
-          <div className="border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-elevated)] px-4 py-2 font-semibold text-[13px] text-[color:var(--c-text-muted)] uppercase tracking-[0.5px]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
+          <div className="shrink-0 border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-elevated)] px-4 py-2 font-semibold text-[13px] text-[color:var(--c-text-muted)] uppercase tracking-[0.5px]">
             {t("editor.raw")}
           </div>
-          <div className="p-4">
+          <div className="min-h-0 flex-1 overflow-auto p-4">
             <Textarea
               className="min-h-[20rem] font-mono"
               onChange={(e) => handleRawChange(e.target.value)}
