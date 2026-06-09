@@ -25,7 +25,6 @@ import {
   parsePullRequestRouteParams,
 } from "@/domain/bank-route";
 import {
-  calculateFormatIntersectionStats,
   type FormatIntersectionStat,
   isBankFormatFilePath,
   parseFormatFile,
@@ -53,15 +52,14 @@ import type { BankInfo, RepoRef, SourceRef } from "@/domain/types";
 import { validateBankLevel } from "@/domain/validation";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
+import { normalizeIntersectionExample } from "@/features/intersections/core";
+import { useIntersections } from "@/features/intersections/use-intersections";
 import { resolvePublishPreflightState } from "@/features/publish-panel/PublishPanel";
 import {
   type CommitMessageInput,
   UpdatePullRequestDialog,
 } from "@/features/publish-panel/UpdatePullRequestDialog";
-import {
-  type CachedFormatEntry,
-  prepareFormatEntries,
-} from "@/features/quick-check/format-entries";
+import type { CachedFormatEntry } from "@/features/quick-check/format-entries";
 import {
   type QuickCheckMode,
   QuickCheckPanel,
@@ -112,26 +110,6 @@ function getActiveExampleText(
   return context.examples[context.activeExampleIndex] ?? "";
 }
 
-function normalizeIntersectionExample(example: string): string {
-  return example.trim();
-}
-
-function buildCachedFormatEntryFromEditorContext(params: {
-  filePath: string;
-  regex: string;
-  examples: string[];
-}): CachedFormatEntry {
-  const { filePath, regex, examples } = params;
-  return {
-    filePath,
-    fileName: extractFormatFileName(filePath),
-    regex: regex.trim(),
-    examples: examples.map(normalizeIntersectionExample).filter(Boolean),
-    source: "draft",
-    fingerprint: `draft-live:${Date.now()}`,
-  };
-}
-
 function collectIntersectingExamples(params: {
   activeFilePath: string | null;
   activeRegex: string;
@@ -171,16 +149,6 @@ function collectIntersectingExamples(params: {
   }
 
   return result;
-}
-
-function resolveVisibleIntersectionEntries(params: {
-  entriesByPath: Map<string, CachedFormatEntry>;
-  deletedFormatFiles: Set<string>;
-}): CachedFormatEntry[] {
-  const { entriesByPath, deletedFormatFiles } = params;
-  return Array.from(entriesByPath.values()).filter(
-    (entry) => !deletedFormatFiles.has(entry.filePath)
-  );
 }
 
 const formatIntersectionMetricClassName =
@@ -2495,18 +2463,6 @@ export function BankWorkspace() {
   const [showQuickCheck, setShowQuickCheck] = useState(false);
   const [quickCheckMode, setQuickCheckMode] =
     useState<QuickCheckMode>("template-by-sms");
-  const [intersectionFormatEntries, setIntersectionFormatEntries] = useState<
-    Map<string, CachedFormatEntry>
-  >(new Map());
-  const [hasCalculatedIntersections, setHasCalculatedIntersections] =
-    useState(false);
-  const [intersectionLoadErrorsCount, setIntersectionLoadErrorsCount] =
-    useState(0);
-  const [calculateIntersectionsError, setCalculateIntersectionsError] =
-    useState<string | null>(null);
-  const [isCalculatingIntersections, setIsCalculatingIntersections] =
-    useState(false);
-  const intersectionRunIdRef = useRef(0);
   const [activeFormatSearchContext, setActiveFormatSearchContext] =
     useState<ActiveFormatSearchContext | null>(null);
   const [pendingFocusedFilePath, setPendingFocusedFilePath] = useState<
@@ -2516,10 +2472,6 @@ export function BankWorkspace() {
   const [formatTab, setFormatTab] = useState<
     "all" | "recent" | "intersections"
   >("all");
-  const [intersectionScope, setIntersectionScope] = useState<{
-    anchorPath: string;
-    formatPaths: string[];
-  } | null>(null);
   const sendersPath = `${bankPath}/senders.txt`;
   const { prChangedFiles, isPrChangedFilesReady } = usePullRequestChangedFiles({
     repository,
@@ -2689,21 +2641,37 @@ export function BankWorkspace() {
       ),
     [allFormatFiles, visibleDeletedFormatFiles]
   );
-  const visibleIntersectionEntries = useMemo(
-    () =>
-      resolveVisibleIntersectionEntries({
-        entriesByPath: intersectionFormatEntries,
-        deletedFormatFiles: visibleDeletedFormatFiles,
-      }),
-    [intersectionFormatEntries, visibleDeletedFormatFiles]
-  );
-  const formatIntersectionStats = useMemo(
-    () => calculateFormatIntersectionStats(visibleIntersectionEntries),
-    [visibleIntersectionEntries]
-  );
-
   const sourceHeadSha = sourceRef?.sha ?? null;
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
+
+  // The intersections tool owns its snapshot, badges and scope; the tab stays
+  // here, mapped from the scope signal in this one visible line (ADR-0013).
+  const intersections = useIntersections({
+    bankPath,
+    repository,
+    sourceRefName: sourceRefNameForContent,
+    prNumber: sourceRef?.type === "pr" ? (sourceRef.prNumber ?? null) : null,
+    formatPaths: quickCheckFormatPaths,
+    draftStore,
+    allFormatFiles,
+    deletedFormatFiles: visibleDeletedFormatFiles,
+    onScopeSignal: (signal) =>
+      setFormatTab((current) =>
+        signal === "raised"
+          ? "intersections"
+          : current === "intersections"
+            ? "all"
+            : current
+      ),
+  });
+  const calculateIntersectionsError =
+    intersections.error === null
+      ? null
+      : t(
+          intersections.error === "no-source"
+            ? "quickCheck.noSource"
+            : "quickCheck.intersectionsUnexpectedError"
+        );
   const updateSourceFromSession = useCallback(
     (session: ActiveRouteSession) => {
       setRepository(repository);
@@ -2798,19 +2766,8 @@ export function BankWorkspace() {
   }, [routeInitState.status]);
 
   useEffect(() => {
-    intersectionRunIdRef.current += 1;
-    setIntersectionFormatEntries(new Map());
-    setHasCalculatedIntersections(false);
-    setIntersectionLoadErrorsCount(0);
-    setCalculateIntersectionsError(null);
-    setIsCalculatingIntersections(false);
     setPendingFocusedFilePath(null);
   }, [bankPath, repository.owner, repository.repo, sourceRefNameForContent]);
-
-  useEffect(() => {
-    intersectionRunIdRef.current += 1;
-    setIsCalculatingIntersections(false);
-  }, [draftStore.drafts, quickCheckFormatPaths]);
 
   useEffect(() => {
     if (routeInitState.status !== "ready") {
@@ -2911,20 +2868,20 @@ export function BankWorkspace() {
       selectedFile && activeFormatSearchContext?.filePath === selectedFile
         ? activeFormatSearchContext.regex
         : selectedFile
-          ? (intersectionFormatEntries.get(selectedFile)?.regex ?? "")
+          ? (intersections.entries.get(selectedFile)?.regex ?? "")
           : "";
 
     return collectIntersectingExamples({
       activeFilePath: selectedFile,
       activeRegex,
-      entries: visibleIntersectionEntries,
+      entries: intersections.visibleEntries,
     });
   }, [
     activeFormatSearchContext?.filePath,
     activeFormatSearchContext?.regex,
-    intersectionFormatEntries,
+    intersections.entries,
     selectedFile,
-    visibleIntersectionEntries,
+    intersections.visibleEntries,
   ]);
 
   const {
@@ -2951,16 +2908,6 @@ export function BankWorkspace() {
       (path) => path === sendersPath || allFormatFiles.includes(path)
     );
   }, [allFormatFiles, bankPath, sendersPath]);
-
-  const intersectionScopeFiles = useMemo(() => {
-    if (!intersectionScope) {
-      return null;
-    }
-    return intersectionScope.formatPaths.filter(
-      (path) =>
-        allFormatFiles.includes(path) && !visibleDeletedFormatFiles.has(path)
-    );
-  }, [allFormatFiles, intersectionScope, visibleDeletedFormatFiles]);
 
   const handleSelectFile = useCallback(
     (f: string) => {
@@ -2990,106 +2937,16 @@ export function BankWorkspace() {
   }, [bankPath, navigateToRequestedFile, requestedFile, sendersPath]);
 
   const handleCalculateIntersections = useCallback(async () => {
+    // Confirming a recalculation is page-level UX policy, not an
+    // intersections invariant (ADR-0013), so it stays here.
     if (
-      hasCalculatedIntersections &&
+      intersections.hasCalculated &&
       !window.confirm(t("quickCheck.recalculateIntersectionsConfirm"))
     ) {
       return;
     }
-
-    setIntersectionScope(null);
-    setFormatTab((current) => (current === "intersections" ? "all" : current));
-
-    const runId = intersectionRunIdRef.current + 1;
-    intersectionRunIdRef.current = runId;
-
-    if (!sourceRefNameForContent) {
-      setCalculateIntersectionsError(t("quickCheck.noSource"));
-      setIntersectionLoadErrorsCount(0);
-      setIsCalculatingIntersections(false);
-      return;
-    }
-
-    setIsCalculatingIntersections(true);
-    setCalculateIntersectionsError(null);
-    setIntersectionLoadErrorsCount(0);
-
-    try {
-      const prNumber =
-        sourceRef?.type === "pr" && sourceRef.prNumber ? sourceRef.prNumber : 0;
-      if (!prNumber) {
-        throw new Error("missing-pr-number");
-      }
-      const prepared = await prepareFormatEntries({
-        filePaths: quickCheckFormatPaths,
-        draftStore,
-        prNumber,
-        sourceRefName: sourceRefNameForContent,
-        repository,
-      });
-      if (intersectionRunIdRef.current !== runId) {
-        return;
-      }
-
-      setIntersectionFormatEntries(
-        new Map(prepared.entries.map((entry) => [entry.filePath, entry]))
-      );
-      setHasCalculatedIntersections(true);
-      setIntersectionLoadErrorsCount(prepared.loadErrorsCount);
-    } catch {
-      if (intersectionRunIdRef.current !== runId) {
-        return;
-      }
-      setIntersectionLoadErrorsCount(0);
-      setCalculateIntersectionsError(
-        t("quickCheck.intersectionsUnexpectedError")
-      );
-    } finally {
-      if (intersectionRunIdRef.current === runId) {
-        setIsCalculatingIntersections(false);
-      }
-    }
-  }, [
-    draftStore,
-    hasCalculatedIntersections,
-    quickCheckFormatPaths,
-    repository,
-    sourceRefNameForContent,
-    t,
-  ]);
-
-  const handleScopeIntersections = useCallback(
-    (filePath: string) => {
-      const stat = formatIntersectionStats.get(filePath);
-      const otherPaths = stat?.intersectingFormatPaths ?? [];
-      setIntersectionScope({
-        anchorPath: filePath,
-        formatPaths: [filePath, ...otherPaths],
-      });
-      setFormatTab("intersections");
-    },
-    [formatIntersectionStats]
-  );
-
-  const handleFormatRegexBlurAfterEdit = useCallback(
-    (context: { filePath: string; regex: string; examples: string[] }) => {
-      if (
-        !hasCalculatedIntersections ||
-        visibleDeletedFormatFiles.has(context.filePath)
-      ) {
-        return;
-      }
-
-      const nextEntry = buildCachedFormatEntryFromEditorContext(context);
-      setIntersectionFormatEntries((prev) => {
-        const next = new Map(prev);
-        next.set(context.filePath, nextEntry);
-        return next;
-      });
-      setCalculateIntersectionsError(null);
-    },
-    [hasCalculatedIntersections, visibleDeletedFormatFiles]
-  );
+    await intersections.calculate();
+  }, [intersections.hasCalculated, intersections.calculate, t]);
 
   const quickCheckActiveFormatContext = activeFormatSearchContext
     ? {
@@ -3340,15 +3197,15 @@ export function BankWorkspace() {
           approvePullRequestLabel={approvePullRequestLabel}
           calculateIntersectionsError={calculateIntersectionsError}
           calculateIntersectionsWarning={
-            intersectionLoadErrorsCount > 0
+            intersections.loadErrorsCount > 0
               ? t("quickCheck.summaryLoadErrors", {
-                  count: intersectionLoadErrorsCount,
+                  count: intersections.loadErrorsCount,
                 })
               : null
           }
           canResetToSource={canResetToSource}
           isApprovingPullRequest={isApprovingPullRequest}
-          isCalculatingIntersections={isCalculatingIntersections}
+          isCalculatingIntersections={intersections.isCalculating}
           isCheckingPullRequestApproval={isCheckingPullRequestApproval}
           isPublishing={isPublishingQuickUpdate}
           isPullRequestApproved={isPullRequestApproved}
@@ -3381,12 +3238,12 @@ export function BankWorkspace() {
         <FormatsPanel
           createFormatDisabled={workspaceReadOnly}
           deletedFormatFiles={visibleDeletedFormatFiles}
-          formatIntersectionStats={formatIntersectionStats}
+          formatIntersectionStats={intersections.stats}
           formatSearch={formatSearch}
           formatTab={formatTab}
           handleSelectFile={handleSelectFile}
           handleSelectSenders={handleSelectSenders}
-          intersectionScopeFiles={intersectionScopeFiles}
+          intersectionScopeFiles={intersections.scopeFiles}
           localChangedFormatFiles={localChangedFormatFiles}
           localCreatedFormatFiles={localCreatedFormatFiles}
           localSendersChanged={localSendersChanged}
@@ -3395,7 +3252,7 @@ export function BankWorkspace() {
               current === filePath ? null : current
             )
           }
-          onScopeIntersections={handleScopeIntersections}
+          onScopeIntersections={intersections.scopeTo}
           pendingFocusedFilePath={pendingFocusedFilePath}
           recentFiles={recentFiles}
           refName={refName}
@@ -3413,8 +3270,8 @@ export function BankWorkspace() {
           sourceSendersChanged={sourceSendersChanged}
           t={t}
           totalFilesCount={
-            formatTab === "intersections" && intersectionScopeFiles
-              ? intersectionScopeFiles.length
+            formatTab === "intersections" && intersections.scopeFiles
+              ? intersections.scopeFiles.length
               : allFormatFiles.length + unsupportedSourceFiles.length + 1
           }
           tTemplate={t}
@@ -3454,7 +3311,7 @@ export function BankWorkspace() {
           allFormatFiles,
           handleRenameFile,
           onFormatSearchContextChange: setActiveFormatSearchContext,
-          onFormatRegexBlurAfterEdit: handleFormatRegexBlurAfterEdit,
+          onFormatRegexBlurAfterEdit: intersections.mergeLiveEdit,
           onOpenIntersectionFileInApp: handleOpenFileInApp,
           onOpenSmsByTemplate: () => {
             setQuickCheckMode("sms-by-template");
