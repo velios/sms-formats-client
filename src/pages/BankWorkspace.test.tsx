@@ -19,6 +19,7 @@ function renderFormatsPanel(params: {
   intersectingOtherFormats: number;
   deletedFormatFiles?: Set<string>;
   localChangedFormatFiles?: Set<string>;
+  localCreatedFormatFiles?: Set<string>;
   sourceFileStatuses?: Map<
     string,
     "add" | "modify" | "delete" | "rename" | "unsupported"
@@ -30,6 +31,7 @@ function renderFormatsPanel(params: {
     intersectingOtherFormats,
     deletedFormatFiles = new Set(),
     localChangedFormatFiles = new Set(),
+    localCreatedFormatFiles = new Set(),
     sourceFileStatuses = new Map(),
     unsupportedSourceFiles = [],
     visibleFormats = ["banks/pumb/formats/example.txt"],
@@ -61,6 +63,7 @@ function renderFormatsPanel(params: {
       handleSelectSenders={vi.fn()}
       intersectionScopeFiles={null}
       localChangedFormatFiles={localChangedFormatFiles}
+      localCreatedFormatFiles={localCreatedFormatFiles}
       localSendersChanged={false}
       onFocusedFilePathHandled={vi.fn()}
       onScopeIntersections={onScopeIntersections}
@@ -169,7 +172,13 @@ describe("FormatsPanel intersections", () => {
   it("renders unsupported PR files first and applies source/local status colors", () => {
     const { container } = renderFormatsPanel({
       intersectingOtherFormats: 0,
-      localChangedFormatFiles: new Set(["banks/pumb/formats/local-draft.txt"]),
+      localChangedFormatFiles: new Set([
+        "banks/pumb/formats/local-draft.txt",
+        "banks/pumb/formats/local-created.txt",
+      ]),
+      localCreatedFormatFiles: new Set([
+        "banks/pumb/formats/local-created.txt",
+      ]),
       sourceFileStatuses: new Map([
         ["banks/pumb/formats/local-draft.txt", "modify"],
         ["banks/pumb/formats/source-added.txt", "add"],
@@ -181,6 +190,7 @@ describe("FormatsPanel intersections", () => {
         "banks/pumb/formats/source-added.txt",
         "banks/pumb/formats/source-modified.txt",
         "banks/pumb/formats/local-draft.txt",
+        "banks/pumb/formats/local-created.txt",
       ],
     });
 
@@ -194,6 +204,7 @@ describe("FormatsPanel intersections", () => {
       "banks/pumb/formats/source-added.txt",
       "banks/pumb/formats/source-modified.txt",
       "banks/pumb/formats/local-draft.txt",
+      "banks/pumb/formats/local-created.txt",
     ]);
 
     expect(
@@ -210,13 +221,22 @@ describe("FormatsPanel intersections", () => {
         )
         ?.getAttribute("data-variant")
     ).toBe("modified");
+    // A file created locally (absent from head-ref) is green.
+    expect(
+      container
+        .querySelector(
+          '[data-file-path="banks/pumb/formats/local-created.txt"] [data-slot="badge"]'
+        )
+        ?.getAttribute("data-variant")
+    ).toBe("success");
+    // A file added in the PR lives in head-ref → yellow, not green.
     expect(
       container
         .querySelector(
           '[data-file-path="banks/pumb/formats/source-added.txt"] [data-slot="badge"]'
         )
         ?.getAttribute("data-variant")
-    ).toBe("success");
+    ).toBe("warning");
     expect(
       container
         .querySelector(

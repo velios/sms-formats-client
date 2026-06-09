@@ -1089,6 +1089,7 @@ export function FormatsPanel(params: {
   unsupportedSourceFiles: string[];
   deletedFormatFiles: Set<string>;
   localChangedFormatFiles: Set<string>;
+  localCreatedFormatFiles: Set<string>;
   sourceFileStatuses: Map<string, SourceFileStatus>;
   formatIntersectionStats: Map<string, FormatIntersectionStat>;
   pendingFocusedFilePath: string | null;
@@ -1123,6 +1124,7 @@ export function FormatsPanel(params: {
     unsupportedSourceFiles,
     deletedFormatFiles,
     localChangedFormatFiles,
+    localCreatedFormatFiles,
     sourceFileStatuses,
     formatIntersectionStats,
     pendingFocusedFilePath,
@@ -1299,17 +1301,21 @@ export function FormatsPanel(params: {
             (isSenders
               ? localSendersChanged
               : localChangedFormatFiles.has(path));
+          // Green is reserved for files the user created locally (absent from
+          // head-ref). A file added in the PR lives in head-ref and is just
+          // another head-ref↔origin/main difference — it stays yellow.
+          const isLocalCreated =
+            !(isSenders || isUnsupportedSourceFile) &&
+            localCreatedFormatFiles.has(path);
           const sourceIndicatorVariant = isSenders
             ? !localSendersChanged && sourceSendersChanged
               ? "warning"
               : null
             : !isLocalChanged && sourceFileStatus === "unsupported"
               ? "error"
-              : !isLocalChanged && sourceFileStatus === "add"
-                ? "success"
-                : !isLocalChanged && sourceFileStatus
-                  ? "warning"
-                  : null;
+              : !isLocalChanged && sourceFileStatus
+                ? "warning"
+                : null;
           const intersectionStats =
             isSenders || isDeleted || isUnsupportedSourceFile
               ? null
@@ -1410,7 +1416,12 @@ export function FormatsPanel(params: {
                   </span>
                 )}
               </div>
-              {isLocalChanged && (
+              {isLocalCreated && (
+                <StatusBadge className="text-xs" variant="success">
+                  ●
+                </StatusBadge>
+              )}
+              {!isLocalCreated && isLocalChanged && (
                 <StatusBadge className="text-xs" variant="modified">
                   ●
                 </StatusBadge>
@@ -2586,6 +2597,21 @@ export function BankWorkspace() {
     () => collectChangedFormatFiles(bankPath, localChangedFilesInBank),
     [bankPath, localChangedFilesInBank]
   );
+  const localCreatedFormatFiles = useMemo(
+    () =>
+      new Set(
+        draftStore
+          .getChangedFiles()
+          .filter(
+            (entry) =>
+              entry.remoteContent === "" &&
+              !entry.isDeleted &&
+              isBankFormatFilePath(entry.filePath, bankPath)
+          )
+          .map((entry) => entry.filePath)
+      ),
+    [bankPath, draftStore, draftStore.drafts]
+  );
   const localDeletedFormatFiles = useMemo(
     () =>
       new Set(
@@ -3362,6 +3388,7 @@ export function BankWorkspace() {
           handleSelectSenders={handleSelectSenders}
           intersectionScopeFiles={intersectionScopeFiles}
           localChangedFormatFiles={localChangedFormatFiles}
+          localCreatedFormatFiles={localCreatedFormatFiles}
           localSendersChanged={localSendersChanged}
           onFocusedFilePathHandled={(filePath) =>
             setPendingFocusedFilePath((current) =>
