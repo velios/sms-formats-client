@@ -33,6 +33,7 @@ import {
 } from "@/domain/format";
 import {
   approvePullRequest,
+  fetchFileContent,
   fetchOpenPRs,
   fetchPullRequestApprovalByCurrentUser,
   fetchPullRequestFiles,
@@ -1836,7 +1837,6 @@ function useQuickPullRequestUpdate(params: {
     sourceRef,
     t,
   } = params;
-  const queryClient = useQueryClient();
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
@@ -1952,16 +1952,10 @@ function useQuickPullRequestUpdate(params: {
         setPublishError(t("publish.updateError"));
         return false;
       }
-      useFileContentStore.getState().invalidatePullRequestFileContents({
-        repository,
-        prNumber,
-      });
       await onWorkspaceSynced(syncedResolution);
-      const freshOpenPrs = await fetchOpenPRs(repository, { forceFresh: true });
-      queryClient.setQueryData(openPrsQueryKey(repository), freshOpenPrs);
       return true;
     },
-    [changedFiles, onWorkspaceSynced, queryClient, repository, t]
+    [changedFiles, onWorkspaceSynced, repository, t]
   );
 
   const beginUpdate = useCallback(async () => {
@@ -2474,6 +2468,7 @@ export function BankWorkspace() {
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const sourceChangedFiles = useSourceStore((s) => s.sourceChangedFiles);
   const repository = useSourceStore((s) => s.repository);
+  const queryClient = useQueryClient();
 
   const bank = useMemo(
     () => banks.find((b) => b.folderPath === bankPath),
@@ -2715,18 +2710,59 @@ export function BankWorkspace() {
   );
   const handleWorkspaceSynced = useCallback(
     async (session: ActiveRouteSession) => {
+      // Resolve every async dependency (tree, open PRs, and the content of the
+      // file currently on screen) BEFORE touching any visible state. The writes
+      // below then run in one synchronous block, so React commits the new
+      // head-ref in a single pass instead of flickering through half-updated
+      // frames (old sha + cleared content, new sha + loading, …).
       const tree = await fetchRepoTree(session.headSha, repository);
+      const freshOpenPrs = await fetchOpenPRs(repository, { forceFresh: true });
+      const shownFilePath = requestedFile;
+      const primedContent =
+        shownFilePath == null
+          ? null
+          : await fetchFileContent(
+              shownFilePath,
+              session.headSha,
+              repository
+            ).catch(() => null);
+
+      const fileContentStore = useFileContentStore.getState();
+      fileContentStore.invalidatePullRequestFileContents({
+        repository,
+        prNumber: session.prNumber,
+      });
+      if (shownFilePath != null && primedContent != null) {
+        fileContentStore.setFileContentEntry({
+          repository,
+          prNumber: session.prNumber,
+          filePath: shownFilePath,
+          content: primedContent,
+          lastResolvedHeadSha: session.headSha,
+          loadedFrom: "prefetch",
+          status: "ready",
+        });
+      }
       setStaleWorkspaceSession(null);
       updateSourceFromSession(session);
       setTree(tree);
       setBanks(indexBanksFromTree(tree));
       useDraftStore.getState().discardAll();
+      queryClient.setQueryData(openPrsQueryKey(repository), freshOpenPrs);
       routeInit.showReadySession(
         session,
         session.writable ? "clean" : "read-only"
       );
     },
-    [repository, routeInit, setBanks, setTree, updateSourceFromSession]
+    [
+      queryClient,
+      repository,
+      requestedFile,
+      routeInit,
+      setBanks,
+      setTree,
+      updateSourceFromSession,
+    ]
   );
 
   useEffect(() => {
@@ -2775,10 +2811,6 @@ export function BankWorkspace() {
             setStaleWorkspaceSession(resolution);
             return;
           }
-          useFileContentStore.getState().invalidatePullRequestFileContents({
-            repository,
-            prNumber: routeInitState.session.prNumber,
-          });
           await handleWorkspaceSynced(resolution);
           return;
         }

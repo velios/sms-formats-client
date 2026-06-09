@@ -142,6 +142,7 @@ const mocks = vi.hoisted(() => {
       getCachedFileContent: vi.fn(() => undefined),
       invalidatePullRequestFileContents: vi.fn(),
       primeFileContent: vi.fn(() => Promise.resolve(null)),
+      setFileContentEntry: vi.fn(),
     },
     getCachedPullRequestApprovalPermission: vi.fn(() => false),
     getGitHubAuthChangeVersion: vi.fn(() => 0),
@@ -303,7 +304,11 @@ vi.mock("@/domain/github", async () => {
   };
 });
 
-import { getGitHubUserToken } from "@/domain/github";
+import {
+  fetchFileContent,
+  fetchOpenPRs,
+  getGitHubUserToken,
+} from "@/domain/github";
 import { BankWorkspace } from "./BankWorkspace";
 
 function QueryWrapper({ children }: { children: ReactNode }) {
@@ -375,6 +380,7 @@ describe("BankWorkspace route init", () => {
     mocks.fileContentStore.invalidatePullRequestFileContents.mockReset();
     mocks.fileContentStore.primeFileContent.mockReset();
     mocks.fileContentStore.primeFileContent.mockResolvedValue(null);
+    mocks.fileContentStore.setFileContentEntry.mockReset();
     mocks.indexBanksFromTree.mockReset();
     mocks.indexBanksFromTree.mockReturnValue(mocks.banks);
     mocks.resolvePullRequestWorkspace.mockReset();
@@ -793,5 +799,99 @@ describe("BankWorkspace route init", () => {
       })
     );
     expect(mocks.draftState.discardAll).toHaveBeenCalled();
+  });
+
+  it("defers every workspace mutation until all reads resolve, committing the new head in one pass", async () => {
+    vi.mocked(getGitHubUserToken).mockReturnValue("gh-token");
+    vi.mocked(fetchOpenPRs).mockClear();
+    vi.mocked(fetchFileContent).mockClear();
+    vi.mocked(fetchFileContent).mockResolvedValue("primed content");
+    mocks.draftState.getChangedFiles.mockReturnValue([
+      {
+        filePath: "src/TBank_123/senders.txt",
+        content: "T-BANK",
+        isDeleted: false,
+        baseSha: "head-sha",
+      },
+    ]);
+    const supportedAtHead = {
+      status: "supported" as const,
+      repository: { owner: "zenmoney", repo: "sms-formats" },
+      prNumber: 123,
+      headSha: "head-sha",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
+      changedFiles: [
+        { kind: "modify" as const, path: "src/TBank_123/formats/current.txt" },
+      ],
+    };
+    mocks.resolvePullRequestWorkspace
+      .mockResolvedValueOnce(supportedAtHead)
+      .mockResolvedValueOnce(supportedAtHead)
+      .mockResolvedValueOnce(supportedAtHead)
+      .mockResolvedValueOnce({ ...supportedAtHead, headSha: "new-head-sha" });
+    mocks.updatePullRequestHead.mockResolvedValue({
+      url: "https://github.com/zenmoney/sms-formats/pull/123",
+      title: "PR 123",
+      headSha: "new-head-sha",
+    });
+
+    render(<BankWorkspace />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toHaveTextContent(
+        "src/TBank_123/formats/current.txt"
+      )
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "publish.updatePR" }));
+    await waitFor(() =>
+      screen.getByRole("textbox", { name: "publish.commitTitleLabel" })
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "publish.commitTitleLabel" }),
+      { target: { value: "Sync" } }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "publish.updateAction" })
+    );
+
+    await waitFor(() =>
+      expect(mocks.sourceState.setSource).toHaveBeenCalledWith({
+        type: "pr",
+        name: "pr-123",
+        sha: "new-head-sha",
+        prNumber: 123,
+      })
+    );
+
+    const lastOrder = (mock: { mock: { invocationCallOrder: number[] } }) =>
+      mock.mock.invocationCallOrder.at(-1) ?? -1;
+    const readOrder = Math.max(
+      lastOrder(mocks.fetchRepoTree),
+      lastOrder(vi.mocked(fetchOpenPRs)),
+      lastOrder(vi.mocked(fetchFileContent))
+    );
+    const setSourceCalls = mocks.sourceState.setSource.mock.calls;
+    const newHeadIndex = setSourceCalls.findIndex(
+      ([arg]) => arg?.sha === "new-head-sha"
+    );
+    const setSourceNewHeadOrder =
+      mocks.sourceState.setSource.mock.invocationCallOrder[newHeadIndex];
+
+    // Every read must finish before any visible-state write, so React batches
+    // the whole transition into a single commit instead of flickering.
+    expect(
+      lastOrder(mocks.fileContentStore.invalidatePullRequestFileContents)
+    ).toBeGreaterThan(readOrder);
+    expect(setSourceNewHeadOrder).toBeGreaterThan(readOrder);
+    expect(mocks.fileContentStore.setFileContentEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: "src/TBank_123/formats/current.txt",
+        lastResolvedHeadSha: "new-head-sha",
+        status: "ready",
+      })
+    );
   });
 });
