@@ -206,6 +206,12 @@ function transformInsertedSpaces(s: string, initialInClass: boolean): string {
 // so it does not feed back into the group-toggle logic (see ADR-0010).
 const programmaticSelection = Annotation.define<boolean>();
 
+// Syncing the `regex` prop into the editor doc (file load / navigation) is not a
+// user edit: it must not feed back through onRegexChange (which would serialize a
+// canonical draft and falsely mark the file locally changed) nor be reshaped by
+// the `\s+` input filter (the stored regex is inserted verbatim).
+const externalSync = Annotation.define<boolean>();
+
 const setTokenDecoEffect = StateEffect.define<TokenDecoState>();
 
 const tokenDecoField = StateField.define<TokenDecoState>({
@@ -556,7 +562,7 @@ const singleLineFilter: Extension = EditorState.transactionFilter.of((tr) => {
 // paste, сниппет) превращается в `\s+` — кроме пробела внутри класса `[...]`.
 const whitespacePlusInputFilter: Extension = EditorState.transactionFilter.of(
   (tr) => {
-    if (!tr.docChanged) {
+    if (!tr.docChanged || tr.annotation(externalSync)) {
       return tr;
     }
     const st = tr.startState.field(tokenDecoField, false);
@@ -706,7 +712,10 @@ export const UnifiedRegexEditor = forwardRef<
     }
 
     const updateListener = EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
+      const isExternalSync = update.transactions.some((tr) =>
+        tr.annotation(externalSync)
+      );
+      if (update.docChanged && !isExternalSync) {
         callbacksRef.current.onRegexChange(update.state.doc.toString());
       }
       // Skip our own programmatic group selection: it must not re-resolve a
@@ -804,8 +813,12 @@ export const UnifiedRegexEditor = forwardRef<
     if (currentDoc !== regex) {
       view.dispatch({
         changes: { from: 0, to: currentDoc.length, insert: regex },
-        // External format swap must not pollute the user's undo stack.
-        annotations: Transaction.addToHistory.of(false),
+        // External format swap must not pollute the user's undo stack, nor be
+        // mistaken for a user edit by the update listener / `\s+` input filter.
+        annotations: [
+          Transaction.addToHistory.of(false),
+          externalSync.of(true),
+        ],
       });
     }
   }, [regex]);
