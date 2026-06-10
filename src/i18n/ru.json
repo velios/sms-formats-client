@@ -82,7 +82,7 @@
     "formatId": "ID формата (необязательно)",
     "recentBanks": "Недавние банки",
     "recentFormats": "Недавно просмотренные",
-    "resetToSource": "Откатить изменения во всех форматах к исходному",
+    "resetToSource": "Откатить все локальные изменения",
     "openFormatInRepo": "Открыть файл в GitHub",
     "openBankFolderInRepo": "Открыть папку банка в GitHub"
   },

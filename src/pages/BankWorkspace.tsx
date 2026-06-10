@@ -693,7 +693,10 @@ const workspaceExternalLinkClassName =
   "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
 
 const workspaceActionButtonClassName =
-  "min-h-[38px] w-full justify-start whitespace-normal px-3 py-1.5 text-left text-[13px] leading-[1.3]";
+  "min-h-8 w-full justify-start whitespace-normal px-2.5 py-1.5 text-left text-[13px] leading-[1.3]";
+
+const workspaceActionsDividerClassName =
+  "mx-0.5 my-2 h-px shrink-0 bg-[color:var(--c-border-soft,var(--c-border))]";
 
 function renderWorkspaceContent(params: {
   showSenders: boolean;
@@ -806,9 +809,9 @@ function BankActionsPanel(params: {
   } = params;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex shrink-0 flex-col gap-0.5 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] p-2.5">
       <Button
-        className={workspaceActionButtonClassName}
+        className="min-h-9 w-full justify-center whitespace-normal px-3 py-1.5 text-center font-semibold text-[13px] leading-[1.3]"
         disabled={publishDisabled || isPublishing}
         onClick={onPublish}
         type="button"
@@ -820,6 +823,7 @@ function BankActionsPanel(params: {
       {publishError && (
         <StatusBadge variant="error">{publishError}</StatusBadge>
       )}
+      <div className={workspaceActionsDividerClassName} />
       {showApprovePullRequestButton && (
         <Button
           className={workspaceActionButtonClassName}
@@ -830,7 +834,7 @@ function BankActionsPanel(params: {
           }
           onClick={onApprovePullRequest}
           type="button"
-          variant={isPullRequestApproved ? "success" : "default"}
+          variant={isPullRequestApproved ? "success" : "ghost"}
         >
           {approvePullRequestLabel}
         </Button>
@@ -842,7 +846,7 @@ function BankActionsPanel(params: {
         className={workspaceActionButtonClassName}
         onClick={onOpenValidation}
         type="button"
-        variant="default"
+        variant="ghost"
       >
         {t("editor.validation")}
       </Button>
@@ -850,7 +854,7 @@ function BankActionsPanel(params: {
         className={workspaceActionButtonClassName}
         onClick={onOpenTemplateBySms}
         type="button"
-        variant="default"
+        variant="ghost"
       >
         {t("quickCheck.openTemplateBySms")}
       </Button>
@@ -858,7 +862,7 @@ function BankActionsPanel(params: {
         className={workspaceActionButtonClassName}
         onClick={onOpenSmsByTemplate}
         type="button"
-        variant="default"
+        variant="ghost"
       >
         {t("quickCheck.openSmsByTemplate")}
       </Button>
@@ -867,7 +871,7 @@ function BankActionsPanel(params: {
         disabled={isCalculatingIntersections}
         onClick={onCalculateIntersections}
         type="button"
-        variant="default"
+        variant="ghost"
       >
         {isCalculatingIntersections ? <Spinner /> : null}
         {t(
@@ -884,12 +888,16 @@ function BankActionsPanel(params: {
           {calculateIntersectionsWarning}
         </StatusBadge>
       )}
+      <div className={workspaceActionsDividerClassName} />
       <Button
-        className={workspaceActionButtonClassName}
+        className={cn(
+          workspaceActionButtonClassName,
+          "text-[color:var(--c-error)] hover:bg-[color:var(--c-error-soft)] hover:text-[color:var(--c-error)]"
+        )}
         disabled={!canResetToSource}
         onClick={onResetToSource}
         type="button"
-        variant="default"
+        variant="ghost"
       >
         {t("bank.resetToSource")}
       </Button>

@@ -19,12 +19,6 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input {...props} />
-  ),
-}));
-
 vi.mock("@/components/ui/status-badge", () => ({
   StatusBadge: ({ children }: { children: React.ReactNode }) => (
     <span>{children}</span>
@@ -47,17 +41,29 @@ describe("SnippetsPanel", () => {
     expect(screen.getByText("([A-Z]{3})")).toBeInTheDocument();
   });
 
-  it("filters snippets by the search query", () => {
+  it("filters snippets by the selected group pill", () => {
     render(<SnippetsPanel onInsert={() => undefined} />);
     const before = getInsertButtons().length;
 
-    fireEvent.change(screen.getByPlaceholderText("snippets.search"), {
-      target: { value: "balance" },
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "snippets.groups.balance" })
+    );
 
     const after = getInsertButtons().length;
     expect(after).toBeLessThan(before);
-    expect(after).toBe(2);
+    expect(after).toBeGreaterThan(0);
+  });
+
+  it("shows all snippets again on the all-groups pill", () => {
+    render(<SnippetsPanel onInsert={() => undefined} />);
+    const before = getInsertButtons().length;
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "snippets.groups.balance" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "snippets.allGroups" }));
+
+    expect(getInsertButtons().length).toBe(before);
   });
 
   it("shows the gotcha line on cards that define one", () => {
@@ -72,9 +78,9 @@ describe("SnippetsPanel", () => {
     const onInsert = vi.fn();
     render(<SnippetsPanel onInsert={onInsert} />);
 
-    fireEvent.change(screen.getByPlaceholderText("snippets.search"), {
-      target: { value: "([A-Z]{3})" },
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "snippets.groups.currency" })
+    );
     fireEvent.click(getInsertButtons()[0]!);
 
     expect(onInsert).toHaveBeenCalledWith("([A-Z]{3})");

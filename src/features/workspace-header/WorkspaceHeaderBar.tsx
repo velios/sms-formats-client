@@ -30,7 +30,7 @@ const headerModeTabClassName = (isActive: boolean) =>
   cn(
     "inline-flex h-[26px] cursor-pointer items-center whitespace-nowrap rounded-[5px] border px-3 font-medium text-[12.5px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
     isActive
-      ? "border-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-2px_0_var(--c-accent)]"
+      ? "border-[color:var(--c-border)] bg-white text-[color:var(--c-accent)] shadow-[0_1px_2px_rgba(51,51,51,0.10)]"
       : "border-transparent bg-transparent text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
   );
 
@@ -62,9 +62,9 @@ export function WorkspaceHeaderBar({
   const showModeToggle = !showSenders && Boolean(selectedFile);
 
   return (
-    <div className="flex h-11 shrink-0 items-center rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] px-[14px]">
+    <div className="flex h-13 shrink-0 items-center rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] px-[14px]">
       {/* Bank zone — its trailing divider lands on the sidebar/work column boundary. */}
-      <div className="flex w-[calc(clamp(264px,19vw,340px)-15px)] min-w-0 shrink-0 items-center gap-2 pr-4">
+      <div className="flex w-[calc(clamp(264px,19vw,340px)+2px)] min-w-0 shrink-0 items-center gap-2 pr-4">
         <h2 className="m-0 truncate font-semibold text-[15px]">{bankName}</h2>
         <a
           aria-label={t("bank.openBankFolderInRepo")}
@@ -77,9 +77,8 @@ export function WorkspaceHeaderBar({
           ↗
         </a>
       </div>
-      <div className={headerDividerClassName} />
       {showModeToggle && (
-        <div className="ml-[15px] flex shrink-0 gap-[3px] rounded-[7px] border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-[3px]">
+        <div className="flex shrink-0 gap-[3px] rounded-[7px] border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-[3px]">
           <button
             className={headerModeTabClassName(mode === "structured")}
             onClick={() => onModeChange("structured")}
@@ -267,6 +266,7 @@ function WorkspaceFileControls({
 
   return (
     <div className="ml-4 flex min-w-0 flex-1 items-center gap-2">
+      <div className={headerDividerClassName} />
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <span className="truncate font-medium font-mono text-[13px]">
           {fileName}
