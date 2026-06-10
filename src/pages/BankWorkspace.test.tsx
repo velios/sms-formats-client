@@ -6,33 +6,40 @@ vi.mock("@/store", () => ({
   useSourceStore: () => ({}),
 }));
 
+import type { BankFileRecord } from "@/features/bank-inventory/core";
 import {
-  collectAllFormatFiles,
-  collectUnsupportedSourceFiles,
   FormatsPanel,
   resolveAutoSelectFile,
-  resolveVisibleDeletedFormatFiles,
+  resolveSourceChangeFacts,
   resolveWorkspaceEntryMode,
 } from "@/pages/BankWorkspace";
 
+function fileRecord(
+  path: string,
+  overrides: Partial<Omit<BankFileRecord, "path">> = {}
+): [string, BankFileRecord] {
+  return [
+    path,
+    {
+      path,
+      fileClass: "format",
+      local: "unchanged",
+      source: "unchanged",
+      isVisibleDeleted: false,
+      ...overrides,
+    },
+  ];
+}
+
 function renderFormatsPanel(params: {
   intersectingOtherFormats: number;
-  deletedFormatFiles?: Set<string>;
-  localChangedFormatFiles?: Set<string>;
-  localCreatedFormatFiles?: Set<string>;
-  sourceFileStatuses?: Map<
-    string,
-    "add" | "modify" | "delete" | "rename" | "unsupported"
-  >;
+  fileRecords?: Map<string, BankFileRecord>;
   unsupportedSourceFiles?: string[];
   visibleFormats?: string[];
 }) {
   const {
     intersectingOtherFormats,
-    deletedFormatFiles = new Set(),
-    localChangedFormatFiles = new Set(),
-    localCreatedFormatFiles = new Set(),
-    sourceFileStatuses = new Map(),
+    fileRecords = new Map(),
     unsupportedSourceFiles = [],
     visibleFormats = ["banks/pumb/formats/example.txt"],
   } = params;
@@ -42,7 +49,7 @@ function renderFormatsPanel(params: {
   const view = render(
     <FormatsPanel
       createFormatDisabled={false}
-      deletedFormatFiles={deletedFormatFiles}
+      fileRecords={fileRecords}
       formatIntersectionStats={
         new Map([
           [
@@ -62,9 +69,6 @@ function renderFormatsPanel(params: {
       handleSelectFile={handleSelectFile}
       handleSelectSenders={vi.fn()}
       intersectionScopeFiles={null}
-      localChangedFormatFiles={localChangedFormatFiles}
-      localCreatedFormatFiles={localCreatedFormatFiles}
-      localSendersChanged={false}
       onFocusedFilePathHandled={vi.fn()}
       onScopeIntersections={onScopeIntersections}
       pendingFocusedFilePath={null}
@@ -80,8 +84,6 @@ function renderFormatsPanel(params: {
       setShowCreateFormat={vi.fn()}
       showSearchIndexStatus={false}
       showSenders={false}
-      sourceFileStatuses={sourceFileStatuses}
-      sourceSendersChanged={false}
       t={(key) => key}
       totalFilesCount={visibleFormats.length + unsupportedSourceFiles.length}
       tTemplate={(key, options) =>
@@ -126,7 +128,12 @@ describe("FormatsPanel intersections", () => {
   it("does not render intersection indicators for deleted files", () => {
     renderFormatsPanel({
       intersectingOtherFormats: 2,
-      deletedFormatFiles: new Set(["banks/pumb/formats/example.txt"]),
+      fileRecords: new Map([
+        fileRecord("banks/pumb/formats/example.txt", {
+          local: "deleted",
+          isVisibleDeleted: true,
+        }),
+      ]),
     });
 
     expect(
@@ -139,51 +146,27 @@ describe("FormatsPanel intersections", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("includes PR-deleted format files in the combined file list", () => {
-    expect(
-      collectAllFormatFiles(
-        "banks/pumb",
-        ["banks/pumb/formats/existing.txt"],
-        [],
-        new Set(["banks/pumb/formats/deleted-in-pr.txt"])
-      )
-    ).toEqual([
-      "banks/pumb/formats/deleted-in-pr.txt",
-      "banks/pumb/formats/existing.txt",
-    ]);
-  });
-
-  it("collects changed PR files that do not match the format-file rule", () => {
-    expect(
-      collectUnsupportedSourceFiles({
-        bankPath: "banks/pumb",
-        sendersPath: "banks/pumb/senders.txt",
-        changedFiles: [
-          { kind: "add", path: "banks/pumb/formats/existing.txt" },
-          { kind: "add", path: "banks/pumb/formats/no-extension" },
-          { kind: "modify", path: "banks/pumb/notes.md" },
-          { kind: "modify", path: "banks/pumb/senders.txt" },
-          { kind: "modify", path: "banks/other/formats/skip.txt" },
-        ],
-      })
-    ).toEqual(["banks/pumb/formats/no-extension", "banks/pumb/notes.md"]);
-  });
-
   it("renders unsupported PR files first and applies source/local status colors", () => {
     const { container } = renderFormatsPanel({
       intersectingOtherFormats: 0,
-      localChangedFormatFiles: new Set([
-        "banks/pumb/formats/local-draft.txt",
-        "banks/pumb/formats/local-created.txt",
-      ]),
-      localCreatedFormatFiles: new Set([
-        "banks/pumb/formats/local-created.txt",
-      ]),
-      sourceFileStatuses: new Map([
-        ["banks/pumb/formats/local-draft.txt", "modify"],
-        ["banks/pumb/formats/source-added.txt", "add"],
-        ["banks/pumb/formats/source-modified.txt", "modify"],
-        ["banks/pumb/formats/unsupported", "unsupported"],
+      fileRecords: new Map([
+        fileRecord("banks/pumb/formats/local-draft.txt", {
+          local: "changed",
+          source: "changed",
+        }),
+        fileRecord("banks/pumb/formats/local-created.txt", {
+          local: "created",
+        }),
+        fileRecord("banks/pumb/formats/source-added.txt", {
+          source: "added",
+        }),
+        fileRecord("banks/pumb/formats/source-modified.txt", {
+          source: "changed",
+        }),
+        fileRecord("banks/pumb/formats/unsupported", {
+          fileClass: "unsupported",
+          source: "unsupported",
+        }),
       ]),
       unsupportedSourceFiles: ["banks/pumb/formats/unsupported"],
       visibleFormats: [
@@ -246,48 +229,71 @@ describe("FormatsPanel intersections", () => {
     ).toBe("warning");
   });
 
-  it("keeps source-deleted files struck through until a local draft overrides them", () => {
+  it("prefers session records with kind over store and fetched paths", () => {
     expect(
-      Array.from(
-        resolveVisibleDeletedFormatFiles({
-          localDeletedFormatFiles: new Set(),
-          sourceDeletedFormatFiles: new Set([
-            "banks/pumb/formats/deleted-in-pr.txt",
-          ]),
-          localChangedFormatFiles: new Set(),
-        })
-      )
-    ).toEqual(["banks/pumb/formats/deleted-in-pr.txt"]);
+      resolveSourceChangeFacts({
+        sourceRefType: "pr",
+        sessionChangedFiles: [
+          { kind: "delete", path: "banks/pumb/formats/gone.txt" },
+        ],
+        storeChangedFilePaths: ["banks/pumb/formats/from-store.txt"],
+        fetchedPrChangedFilePaths: ["banks/pumb/formats/from-fetch.txt"],
+        isPrChangedFilesReady: false,
+      })
+    ).toEqual({
+      records: [{ kind: "delete", path: "banks/pumb/formats/gone.txt" }],
+      isSelectionReady: true,
+    });
+  });
+
+  it("degrades fallback providers to kind-less records", () => {
+    expect(
+      resolveSourceChangeFacts({
+        sourceRefType: "pr",
+        sessionChangedFiles: [],
+        storeChangedFilePaths: ["banks/pumb/formats/from-store.txt"],
+        fetchedPrChangedFilePaths: [],
+        isPrChangedFilesReady: false,
+      })
+    ).toEqual({
+      records: [{ path: "banks/pumb/formats/from-store.txt" }],
+      isSelectionReady: true,
+    });
 
     expect(
-      Array.from(
-        resolveVisibleDeletedFormatFiles({
-          localDeletedFormatFiles: new Set(),
-          sourceDeletedFormatFiles: new Set([
-            "banks/pumb/formats/deleted-in-pr.txt",
-          ]),
-          localChangedFormatFiles: new Set([
-            "banks/pumb/formats/deleted-in-pr.txt",
-          ]),
-        })
-      )
-    ).toEqual([]);
+      resolveSourceChangeFacts({
+        sourceRefType: "pr",
+        sessionChangedFiles: [],
+        storeChangedFilePaths: [],
+        fetchedPrChangedFilePaths: ["banks/pumb/formats/from-fetch.txt"],
+        isPrChangedFilesReady: true,
+      })
+    ).toEqual({
+      records: [{ path: "banks/pumb/formats/from-fetch.txt" }],
+      isSelectionReady: true,
+    });
+  });
+
+  it("holds selection readiness until the PR file fetch settles", () => {
+    expect(
+      resolveSourceChangeFacts({
+        sourceRefType: "pr",
+        sessionChangedFiles: [],
+        storeChangedFilePaths: [],
+        fetchedPrChangedFilePaths: [],
+        isPrChangedFilesReady: false,
+      }).isSelectionReady
+    ).toBe(false);
 
     expect(
-      Array.from(
-        resolveVisibleDeletedFormatFiles({
-          localDeletedFormatFiles: new Set([
-            "banks/pumb/formats/deleted-in-pr.txt",
-          ]),
-          sourceDeletedFormatFiles: new Set([
-            "banks/pumb/formats/deleted-in-pr.txt",
-          ]),
-          localChangedFormatFiles: new Set([
-            "banks/pumb/formats/deleted-in-pr.txt",
-          ]),
-        })
-      )
-    ).toEqual(["banks/pumb/formats/deleted-in-pr.txt"]);
+      resolveSourceChangeFacts({
+        sourceRefType: "branch",
+        sessionChangedFiles: [],
+        storeChangedFilePaths: [],
+        fetchedPrChangedFilePaths: [],
+        isPrChangedFilesReady: false,
+      }).isSelectionReady
+    ).toBe(true);
   });
 
   it("prioritizes stale drafts over read-only when opening a PR workspace", () => {
