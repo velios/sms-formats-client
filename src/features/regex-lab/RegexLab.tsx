@@ -25,7 +25,6 @@ import {
   explainRegex,
   isCapturingGroupOpenerToken,
   recognitionProgress,
-  resolveCaptureGroupRange,
   resolveTokenMatchRange,
   testRegex,
 } from "@/domain/format";
@@ -40,6 +39,7 @@ import {
   UnifiedRegexEditor,
   type UnifiedRegexEditorHandle,
 } from "./UnifiedRegexEditor";
+import { useGroupSelection } from "./use-group-selection";
 
 interface Props {
   regex: string;
@@ -247,9 +247,6 @@ export function RegexLab({
   const [selectedPatternTokenIndex, setSelectedPatternTokenIndex] = useState<
     number | null
   >(null);
-  const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(
-    null
-  );
   const [hoveredPatternTokenIndex, setHoveredPatternTokenIndex] = useState<
     number | null
   >(null);
@@ -260,10 +257,6 @@ export function RegexLab({
   const [isSnippetLibraryOpen, setIsSnippetLibraryOpen] = useState(false);
   const [isCookbookOpen, setIsCookbookOpen] = useState(false);
   const regexEditorRef = useRef<UnifiedRegexEditorHandle>(null);
-  // Armed right before a snippet insert that replaces the selected group, so the
-  // regex-change reset can tell that edit apart from typing/external changes and
-  // keep the group selected for iterative swaps (ADR-0010).
-  const insertionIsReplacingGroupRef = useRef(false);
 
   const matchResult = useMemo(
     () => testRegex(regex, activeExample),
@@ -324,18 +317,21 @@ export function RegexLab({
     selectedPatternTokenIndex;
   const exampleTabRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
-  // Bracket span of the explicitly selected capture group (regex-field click or
-  // table icon), used to drive a real CM selection (ADR-0010).
-  const selectedGroupRange = useMemo(
-    () =>
-      selectedGroupIndex == null
-        ? null
-        : resolveCaptureGroupRange(
-            explanation.patternTokens,
-            selectedGroupIndex
-          ),
-    [selectedGroupIndex, explanation.patternTokens]
-  );
+  // The Group selection tool: a pure reducer + thin hook owns the selection
+  // index, the bracket range, and every reset rule (ADR-0015). Mode gating and
+  // the token→group-number resolve stay here, at the caller.
+  const {
+    selectedIndex: selectedGroupIndex,
+    range: selectedGroupRange,
+    toggle: toggleGroupSelection,
+    deselect: deselectGroup,
+    armReplace: armGroupReplace,
+  } = useGroupSelection({
+    tokens: explanation.patternTokens,
+    highlightMode,
+    regex,
+    activeExample,
+  });
 
   // Insert a snippet. With a group selected, replace that group's bracket span
   // (the explicit source of truth) and keep the selection alive for iterative
@@ -343,7 +339,7 @@ export function RegexLab({
   const handleInsertSnippet = useCallback(
     (pattern: string) => {
       if (selectedGroupRange) {
-        insertionIsReplacingGroupRef.current = true;
+        armGroupReplace();
         regexEditorRef.current?.insertAtCursor(pattern, {
           from: selectedGroupRange.start,
           to: selectedGroupRange.end,
@@ -352,7 +348,7 @@ export function RegexLab({
       }
       regexEditorRef.current?.insertAtCursor(pattern);
     },
-    [selectedGroupRange]
+    [selectedGroupRange, armGroupReplace]
   );
 
   // A selected group is the source of truth for the synchronized highlight;
@@ -467,38 +463,6 @@ export function RegexLab({
     setSelectedPatternTokenIndex(null);
   }, [activeExample, regex]);
 
-  // Switching the active example always drops the group selection.
-  useEffect(() => {
-    setSelectedGroupIndex(null);
-  }, [activeExample]);
-
-  // A regex change drops the group selection too — typing/external/format
-  // changes reset it. The one exception is our own snippet insert into the
-  // selected group: the armed flag lets iterative swaps survive (ADR-0010).
-  useEffect(() => {
-    if (insertionIsReplacingGroupRef.current) {
-      insertionIsReplacingGroupRef.current = false;
-      return;
-    }
-    setSelectedGroupIndex(null);
-  }, [regex]);
-
-  // After a snippet insert, re-resolve group N on the new tokens: if it vanished
-  // (snippet without brackets, group count fell below N) drop the selection so
-  // it softly collapses to a caret (ADR-0010).
-  useEffect(() => {
-    if (selectedGroupIndex != null && selectedGroupRange == null) {
-      setSelectedGroupIndex(null);
-    }
-  }, [selectedGroupIndex, selectedGroupRange]);
-
-  // Group selection is a groups-mode affordance; drop it when leaving the mode.
-  useEffect(() => {
-    if (highlightMode !== "groups") {
-      setSelectedGroupIndex(null);
-    }
-  }, [highlightMode]);
-
   // The snippets tab is editor-only; drop back to explanation in read-only mode.
   useEffect(() => {
     if (readOnly && rightPaneTab === "snippets") {
@@ -594,23 +558,23 @@ export function RegexLab({
       if (highlightMode === "groups" && tokenIndex != null) {
         const group = tokenCaptureGroupMap[tokenIndex] ?? null;
         if (group != null) {
-          setSelectedGroupIndex((prev) => (prev === group ? null : group));
+          toggleGroupSelection(group);
           return;
         }
       }
-      setSelectedGroupIndex(null);
+      deselectGroup();
     },
-    [highlightMode, tokenCaptureGroupMap]
+    [highlightMode, tokenCaptureGroupMap, toggleGroupSelection, deselectGroup]
   );
 
   // The explanation list selects a single token and always clears any group
   // selection.
   const handleExplanationTokenActivate = useCallback(
     (tokenIndex: number) => {
-      setSelectedGroupIndex(null);
+      deselectGroup();
       handlePatternTokenActivate(tokenIndex);
     },
-    [handlePatternTokenActivate]
+    [handlePatternTokenActivate, deselectGroup]
   );
 
   // Table-row icon: toggle the selection of this exact group — the only way to
@@ -622,11 +586,9 @@ export function RegexLab({
       if (highlightMode !== "groups") {
         return;
       }
-      setSelectedGroupIndex((prev) =>
-        prev === groupIndex ? null : groupIndex
-      );
+      toggleGroupSelection(groupIndex);
     },
-    [highlightMode]
+    [highlightMode, toggleGroupSelection]
   );
 
   const handleToggleExampleSource = useCallback(() => {
