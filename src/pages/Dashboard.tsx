@@ -29,21 +29,21 @@ interface OpenPullRequestItem {
 }
 
 const dashboardPanelClassName =
-  "flex min-h-0 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
+  "flex h-full min-h-0 w-full max-w-[1280px] flex-col overflow-hidden rounded-lg border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
 
 const dashboardPanelHeaderClassName =
-  "flex items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-3 text-[13px] font-semibold tracking-[0.5px] text-[color:var(--c-text-muted)] uppercase";
+  "flex h-[52px] shrink-0 items-center gap-2.5 border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-5";
 
 const dashboardRowClassName = (isActive: boolean) =>
   cn(
-    "flex cursor-pointer items-center gap-3 border-[color:var(--c-border)] border-b px-4 py-3 text-[13px] last:border-b-0",
+    "grid cursor-pointer grid-cols-[52px_minmax(0,1fr)_280px_116px] items-center gap-x-4 border-[color:var(--c-border)] border-b px-5 py-2.5 text-[13px]",
     isActive
       ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
       : "hover:bg-[color:var(--c-bg-hover)]"
   );
 
 const dashboardIconLinkClassName =
-  "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[11px] leading-none text-[color:var(--c-text-dim)] no-underline hover:text-[color:var(--c-accent)] hover:no-underline";
+  "inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded text-[11px] leading-none text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
 
 function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => {
@@ -160,29 +160,27 @@ export function Dashboard() {
   }, [normalizedQuery, sortedPRs]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex justify-end">
-        <div className="w-full max-w-md">
+    <div className="flex h-full min-h-0 justify-center">
+      <div className={dashboardPanelClassName}>
+        <div className={dashboardPanelHeaderClassName}>
+          <span className="font-semibold text-[color:var(--c-text-muted)] text-xs uppercase tracking-[0.5px]">
+            {t("source.pullRequest", { defaultValue: "Pull Requests" })}
+          </span>
+          <span className="inline-flex h-[18px] items-center rounded-full bg-[color:var(--c-border)] px-[7px] font-semibold text-[11px] text-[color:var(--c-text-muted)] tabular-nums">
+            {sortedPRs.length}
+          </span>
+          <div className="flex-1" />
           <Input
             aria-label={t("source.search", {
               defaultValue: "Search pull requests",
             })}
-            className="bg-[color:var(--c-bg-input)]"
+            className="w-[340px] bg-[color:var(--c-bg-input)] px-3 text-[13px]"
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("source.search", {
               defaultValue: "Search by title, branch, or PR number",
             })}
             value={query}
           />
-        </div>
-      </div>
-
-      <div className={dashboardPanelClassName}>
-        <div className={dashboardPanelHeaderClassName}>
-          <span>
-            {t("source.pullRequest", { defaultValue: "Pull Requests" })} ·{" "}
-            {sortedPRs.length}
-          </span>
         </div>
 
         <div className="min-h-0 overflow-y-auto">
@@ -249,22 +247,19 @@ export function Dashboard() {
                   role="button"
                   tabIndex={0}
                 >
-                  <span className="text-[color:var(--c-text-muted)] text-xs">
+                  <span className="text-[color:var(--c-text-dim)] text-xs tabular-nums">
                     #{pullRequest.number}
                   </span>
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="inline-flex min-w-0 max-w-full items-center gap-1">
-                      <span className="min-w-0 truncate text-sm">
+                  <div className="flex min-w-0 flex-col gap-[3px]">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="min-w-0 truncate font-medium text-sm">
                         {pullRequest.title}
                       </span>
                       {hasLocalDrafts && (
-                        <StatusBadge
-                          className="h-4 min-w-4 shrink-0 px-1 text-[10px] leading-none"
+                        <span
+                          className="inline-flex h-2 w-2 shrink-0 rounded-full bg-[color:var(--c-warning)]"
                           title={localDraftsTitle}
-                          variant="modified"
-                        >
-                          ●
-                        </StatusBadge>
+                        />
                       )}
                       <a
                         aria-label={`PR #${pullRequest.number}`}
@@ -278,27 +273,34 @@ export function Dashboard() {
                         ↗
                       </a>
                     </div>
-                    <span className="truncate text-[color:var(--c-text-dim)] text-xs">
+                    <span className="truncate font-mono text-[color:var(--c-text-dim)] text-xs">
                       {pullRequest.headRef}
                     </span>
                   </div>
-                  <PullRequestLabels
-                    className="ml-2 flex-[0_1_220px] justify-end"
-                    labels={pullRequest.labels}
-                    neutralLabels={
-                      pullRequest.lastCommitAuthorLogin
-                        ? [pullRequest.lastCommitAuthorLogin]
-                        : []
-                    }
-                  />
-                  <StatusBadge variant="info">
-                    ✓ {pullRequest.approvedCount}
-                  </StatusBadge>
-                  {pullRequest.failedValidationCount > 0 && (
-                    <StatusBadge variant="error">
-                      ✗ {pullRequest.failedValidationCount}
+                  <div className="flex min-w-0 items-center justify-end gap-1.5 overflow-hidden">
+                    <PullRequestLabels
+                      className="justify-end"
+                      labels={pullRequest.labels}
+                    />
+                    {pullRequest.lastCommitAuthorLogin && (
+                      <span
+                        className="inline-flex h-5 max-w-[160px] items-center truncate whitespace-nowrap rounded-full px-2 font-semibold text-[11px] text-[color:var(--c-text-muted)] leading-none shadow-[inset_0_0_0_1px_var(--c-border)]"
+                        title={pullRequest.lastCommitAuthorLogin}
+                      >
+                        {pullRequest.lastCommitAuthorLogin}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <StatusBadge className="shrink-0" variant="info">
+                      ✓ {pullRequest.approvedCount}
                     </StatusBadge>
-                  )}
+                    {pullRequest.failedValidationCount > 0 && (
+                      <StatusBadge className="shrink-0" variant="error">
+                        ✗ {pullRequest.failedValidationCount}
+                      </StatusBadge>
+                    )}
+                  </div>
                 </div>
               );
             })
