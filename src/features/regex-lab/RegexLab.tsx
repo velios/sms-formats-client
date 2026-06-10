@@ -873,61 +873,15 @@ export function RegexLab({
             />
           </div>
 
-          <div className={cn(regexLabPanelClassName, "flex min-h-0 flex-col")}>
-            <div
-              className={cn(
-                regexLabPanelHeaderClassName,
-                "justify-start px-0 py-0"
-              )}
-            >
-              <div
-                className={cn(regexLabTabListClassName, "w-full border-b-0")}
-              >
-                {!readOnly && (
-                  <button
-                    className={regexLabTabClassName(
-                      rightPaneTab === "snippets"
-                    )}
-                    onClick={() => setRightPaneTab("snippets")}
-                    type="button"
-                  >
-                    {t("snippets.open").toUpperCase()}
-                  </button>
-                )}
-                <button
-                  className={regexLabTabClassName(
-                    rightPaneTab === "explanation"
-                  )}
-                  onClick={() => setRightPaneTab("explanation")}
-                  type="button"
-                >
-                  {t("editor.explanation").toUpperCase()}
-                </button>
-                <button
-                  className={regexLabTabClassName(rightPaneTab === "quickref")}
-                  onClick={() => setRightPaneTab("quickref")}
-                  type="button"
-                >
-                  QUICK REF
-                </button>
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {rightPaneTab === "explanation" && (
-                <ExplanationPanel
-                  activePatternTokenIndex={activePatternTokenIndex}
-                  errorMessage={matchResult.error}
-                  explanation={explanation}
-                  onPatternTokenActivate={handleExplanationTokenActivate}
-                  onPatternTokenHover={setHoveredPatternTokenIndex}
-                />
-              )}
-              {rightPaneTab === "quickref" && <QuickReference />}
-              {rightPaneTab === "snippets" && !readOnly && (
-                <SnippetsPanel onInsert={handleInsertSnippet} />
-              )}
-            </div>
-          </div>
+          <RegexLabRightPane
+            activePatternTokenIndex={activePatternTokenIndex}
+            errorMessage={matchResult.error}
+            explanation={explanation}
+            onInsertSnippet={handleInsertSnippet}
+            onPatternTokenActivate={handleExplanationTokenActivate}
+            onPatternTokenHover={setHoveredPatternTokenIndex}
+            readOnly={readOnly}
+          />
         </div>
       </div>
 
@@ -954,6 +908,80 @@ export function RegexLab({
       {isCookbookOpen && (
         <CookbookModal onClose={() => setIsCookbookOpen(false)} />
       )}
+    </div>
+  );
+}
+
+// Right pane of the lab: the snippets/explanation/quick-ref tab strip and the
+// active panel. Reads the persisted tab from the UI store, like the highlight
+// mode switch in the parent that also flips it.
+function RegexLabRightPane({
+  activePatternTokenIndex,
+  errorMessage,
+  explanation,
+  onInsertSnippet,
+  onPatternTokenActivate,
+  onPatternTokenHover,
+  readOnly,
+}: {
+  activePatternTokenIndex: number | null;
+  errorMessage: string | null;
+  explanation: RegexExplanation;
+  onInsertSnippet: (pattern: string) => void;
+  onPatternTokenActivate: (tokenIndex: number) => void;
+  onPatternTokenHover: (tokenIndex: number | null) => void;
+  readOnly: boolean;
+}) {
+  const { t } = useTranslation();
+  const rightPaneTab = useUIStore((state) => state.rightPaneTab);
+  const setRightPaneTab = useUIStore((state) => state.setRightPaneTab);
+
+  return (
+    <div className={cn(regexLabPanelClassName, "flex min-h-0 flex-col")}>
+      <div
+        className={cn(regexLabPanelHeaderClassName, "justify-start px-0 py-0")}
+      >
+        <div className={cn(regexLabTabListClassName, "w-full border-b-0")}>
+          {!readOnly && (
+            <button
+              className={regexLabTabClassName(rightPaneTab === "snippets")}
+              onClick={() => setRightPaneTab("snippets")}
+              type="button"
+            >
+              {t("snippets.open").toUpperCase()}
+            </button>
+          )}
+          <button
+            className={regexLabTabClassName(rightPaneTab === "explanation")}
+            onClick={() => setRightPaneTab("explanation")}
+            type="button"
+          >
+            {t("editor.explanation").toUpperCase()}
+          </button>
+          <button
+            className={regexLabTabClassName(rightPaneTab === "quickref")}
+            onClick={() => setRightPaneTab("quickref")}
+            type="button"
+          >
+            QUICK REF
+          </button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {rightPaneTab === "explanation" && (
+          <ExplanationPanel
+            activePatternTokenIndex={activePatternTokenIndex}
+            errorMessage={errorMessage}
+            explanation={explanation}
+            onPatternTokenActivate={onPatternTokenActivate}
+            onPatternTokenHover={onPatternTokenHover}
+          />
+        )}
+        {rightPaneTab === "quickref" && <QuickReference />}
+        {rightPaneTab === "snippets" && !readOnly && (
+          <SnippetsPanel onInsert={onInsertSnippet} />
+        )}
+      </div>
     </div>
   );
 }
