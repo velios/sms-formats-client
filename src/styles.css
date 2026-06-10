@@ -38,6 +38,52 @@
   --c-group-border-4: #e1abf5;
   --c-group-border-5: #ef9b95;
 
+  /* Token tones ("parts" mode chips in the regex field and explanation
+     code chips): border / bg / text per token type. */
+  --c-tone-anchor-border: #d9ab54;
+  --c-tone-anchor-bg: #ffd78a;
+  --c-tone-anchor-text: #5f3b00;
+  --c-tone-group-border: #77c790;
+  --c-tone-group-bg: #b9f0c8;
+  --c-tone-group-text: #0f4c2a;
+  --c-tone-quantifier-border: #7fb2ea;
+  --c-tone-quantifier-bg: #bcdcff;
+  --c-tone-quantifier-text: #1b4b78;
+  --c-tone-alternation-border: #e28d8d;
+  --c-tone-alternation-bg: #ffc7c7;
+  --c-tone-alternation-text: #7d1d1d;
+  --c-tone-escape-border: #ac8fe8;
+  --c-tone-escape-bg: #dbcaff;
+  --c-tone-escape-text: #3f2a82;
+  --c-tone-charclass-border: #8dbce8;
+  --c-tone-charclass-bg: #c8e5ff;
+  --c-tone-charclass-text: #1b4f86;
+  --c-tone-meta-border: #97bde8;
+  --c-tone-meta-bg: #cfe3ff;
+  --c-tone-meta-text: #1f4f80;
+  --c-tone-literal-border: #bdc8d3;
+  --c-tone-literal-bg: #e9eff6;
+  --c-tone-literal-text: #2a3e54;
+
+  /* Soft tone pairs ("pattern parts" cards on the explanation tab); text
+     colors are shared with the chip tones above. */
+  --c-tone-anchor-soft-border: #ecd39b;
+  --c-tone-anchor-soft-bg: #fff4d6;
+  --c-tone-group-soft-border: #bde0c7;
+  --c-tone-group-soft-bg: #e7faec;
+  --c-tone-quantifier-soft-border: #b8d5f3;
+  --c-tone-quantifier-soft-bg: #e6f3ff;
+  --c-tone-alternation-soft-border: #efc0c0;
+  --c-tone-alternation-soft-bg: #ffeaea;
+  --c-tone-escape-soft-border: #cdbcf1;
+  --c-tone-escape-soft-bg: #f1eaff;
+  --c-tone-charclass-soft-border: #c1daf1;
+  --c-tone-charclass-soft-bg: #e9f4ff;
+  --c-tone-meta-soft-border: #c6daf1;
+  --c-tone-meta-soft-bg: #ebf4ff;
+  --c-tone-literal-soft-border: #d2dbe5;
+  --c-tone-literal-soft-bg: #f3f6fa;
+
   --c-success-soft: rgba(30, 105, 51, 0.12);
   --c-warning-soft: rgba(183, 127, 43, 0.14);
   --c-error-soft: rgba(153, 54, 54, 0.12);

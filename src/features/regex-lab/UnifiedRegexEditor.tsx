@@ -416,20 +416,20 @@ const whitespacePlusAtomicRanges = EditorView.atomicRanges.of((view) => {
 
 const regexTokenDecorationClassMap: Record<string, string> = {
   anchor:
-    "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
+    "rounded-[2px] border border-[color:var(--c-tone-anchor-border)] bg-[color:var(--c-tone-anchor-bg)] px-[1px] font-semibold text-[color:var(--c-tone-anchor-text)]",
   group:
-    "rounded-[2px] border border-[#77c790] bg-[#b9f0c8] px-[1px] font-semibold text-[#0f4c2a]",
+    "rounded-[2px] border border-[color:var(--c-tone-group-border)] bg-[color:var(--c-tone-group-bg)] px-[1px] font-semibold text-[color:var(--c-tone-group-text)]",
   quantifier:
-    "rounded-[2px] border border-[#7fb2ea] bg-[#bcdcff] px-[1px] font-semibold text-[#1b4b78]",
+    "rounded-[2px] border border-[color:var(--c-tone-quantifier-border)] bg-[color:var(--c-tone-quantifier-bg)] px-[1px] font-semibold text-[color:var(--c-tone-quantifier-text)]",
   alternation:
-    "rounded-[2px] border border-[#e28d8d] bg-[#ffc7c7] px-[1px] font-semibold text-[#7d1d1d]",
+    "rounded-[2px] border border-[color:var(--c-tone-alternation-border)] bg-[color:var(--c-tone-alternation-bg)] px-[1px] font-semibold text-[color:var(--c-tone-alternation-text)]",
   escape:
-    "rounded-[2px] border border-[#ac8fe8] bg-[#dbcaff] px-[1px] font-semibold text-[#3f2a82]",
+    "rounded-[2px] border border-[color:var(--c-tone-escape-border)] bg-[color:var(--c-tone-escape-bg)] px-[1px] font-semibold text-[color:var(--c-tone-escape-text)]",
   charclass:
-    "rounded-[2px] border border-[#8dbce8] bg-[#c8e5ff] px-[1px] font-semibold text-[#1b4f86]",
-  meta: "rounded-[2px] border border-[#97bde8] bg-[#cfe3ff] px-[1px] font-semibold text-[#1f4f80]",
+    "rounded-[2px] border border-[color:var(--c-tone-charclass-border)] bg-[color:var(--c-tone-charclass-bg)] px-[1px] font-semibold text-[color:var(--c-tone-charclass-text)]",
+  meta: "rounded-[2px] border border-[color:var(--c-tone-meta-border)] bg-[color:var(--c-tone-meta-bg)] px-[1px] font-semibold text-[color:var(--c-tone-meta-text)]",
   literal:
-    "rounded-[2px] border border-[#bdc8d3] bg-[#e9eff6] px-[1px] font-semibold text-[#2a3e54]",
+    "rounded-[2px] border border-[color:var(--c-tone-literal-border)] bg-[color:var(--c-tone-literal-bg)] px-[1px] font-semibold text-[color:var(--c-tone-literal-text)]",
 };
 
 // Solid capture-group bands (match-driven), mirroring the test string's
@@ -444,7 +444,7 @@ const groupBandClassMap = [
 const fullMatchBandClass =
   "rounded-[2px] bg-[color:var(--c-group-0)] shadow-[inset_0_-2px_0_var(--c-group-border-0)] font-semibold";
 const activeTokenOutlineClass =
-  "rounded-[2px] outline outline-2 outline-[#125a96] outline-offset-[-1px]";
+  "rounded-[2px] outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]";
 // +2 over the 14px base; only safe in this pure-CodeMirror field (ADR-0010).
 const selectedGroupFontClass = "text-[16px]";
 
@@ -537,8 +537,8 @@ const baseTheme = EditorView.theme({
   },
   // Литеральный пробел в режиме `\s+`: `·` с предупреждающей меткой (ADR-0012).
   ".cm-wsplus-literal": {
-    color: "#b45309",
-    textDecoration: "underline dotted #b45309",
+    color: "var(--c-warning)",
+    textDecoration: "underline dotted var(--c-warning)",
     textUnderlineOffset: "2px",
   },
 });

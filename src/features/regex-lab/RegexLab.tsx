@@ -75,13 +75,13 @@ type ExampleSourceMode = "examples" | "intersections";
 const regexLabPanelClassName =
   "overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
 const regexLabPanelHeaderClassName =
-  "flex items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.5px] text-[color:var(--c-text-muted)]";
+  "flex min-h-10 items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-1 text-[12px] font-semibold uppercase tracking-[0.5px] text-[color:var(--c-text-muted)]";
 const regexLabHeaderActionsClassName = "flex flex-wrap items-center gap-2";
 const regexLabPanelBodyClassName = "p-4";
 const regexLabTabListClassName =
   "flex gap-0 border-b border-[color:var(--c-border)]";
 const regexLabHeaderButtonClassName =
-  "border-[color:transparent] text-[color:var(--c-text-muted)] shadow-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)] focus-visible:ring-[color:var(--c-border-focus)]";
+  "h-[26px] px-2.5 border-[color:transparent] text-[color:var(--c-text-muted)] shadow-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)] focus-visible:ring-[color:var(--c-border-focus)]";
 const regexLabTabClassName = (isActive: boolean) =>
   cn(
     "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid px-4 py-2 font-medium text-[13px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
@@ -98,30 +98,37 @@ const highlightModeSegmentClassName = (isActive: boolean) =>
   );
 const regexTokenToneClassMap: Record<string, string> = {
   anchor:
-    "rounded-[2px] border border-[#d9ab54] bg-[#ffd78a] px-[1px] font-semibold text-[#5f3b00]",
+    "rounded-[2px] border border-[color:var(--c-tone-anchor-border)] bg-[color:var(--c-tone-anchor-bg)] px-[1px] font-semibold text-[color:var(--c-tone-anchor-text)]",
   group:
-    "rounded-[2px] border border-[#77c790] bg-[#b9f0c8] px-[1px] font-semibold text-[#0f4c2a]",
+    "rounded-[2px] border border-[color:var(--c-tone-group-border)] bg-[color:var(--c-tone-group-bg)] px-[1px] font-semibold text-[color:var(--c-tone-group-text)]",
   quantifier:
-    "rounded-[2px] border border-[#7fb2ea] bg-[#bcdcff] px-[1px] font-semibold text-[#1b4b78]",
+    "rounded-[2px] border border-[color:var(--c-tone-quantifier-border)] bg-[color:var(--c-tone-quantifier-bg)] px-[1px] font-semibold text-[color:var(--c-tone-quantifier-text)]",
   alternation:
-    "rounded-[2px] border border-[#e28d8d] bg-[#ffc7c7] px-[1px] font-semibold text-[#7d1d1d]",
+    "rounded-[2px] border border-[color:var(--c-tone-alternation-border)] bg-[color:var(--c-tone-alternation-bg)] px-[1px] font-semibold text-[color:var(--c-tone-alternation-text)]",
   escape:
-    "rounded-[2px] border border-[#ac8fe8] bg-[#dbcaff] px-[1px] font-semibold text-[#3f2a82]",
+    "rounded-[2px] border border-[color:var(--c-tone-escape-border)] bg-[color:var(--c-tone-escape-bg)] px-[1px] font-semibold text-[color:var(--c-tone-escape-text)]",
   charclass:
-    "rounded-[2px] border border-[#8dbce8] bg-[#c8e5ff] px-[1px] font-semibold text-[#1b4f86]",
-  meta: "rounded-[2px] border border-[#97bde8] bg-[#cfe3ff] px-[1px] font-semibold text-[#1f4f80]",
+    "rounded-[2px] border border-[color:var(--c-tone-charclass-border)] bg-[color:var(--c-tone-charclass-bg)] px-[1px] font-semibold text-[color:var(--c-tone-charclass-text)]",
+  meta: "rounded-[2px] border border-[color:var(--c-tone-meta-border)] bg-[color:var(--c-tone-meta-bg)] px-[1px] font-semibold text-[color:var(--c-tone-meta-text)]",
   literal:
-    "rounded-[2px] border border-[#bdc8d3] bg-[#e9eff6] px-[1px] font-semibold text-[#2a3e54]",
+    "rounded-[2px] border border-[color:var(--c-tone-literal-border)] bg-[color:var(--c-tone-literal-bg)] px-[1px] font-semibold text-[color:var(--c-tone-literal-text)]",
 };
 const patternBlockToneClassMap: Record<string, string> = {
-  anchor: "border-[#ecd39b] bg-[#fff4d6] text-[#5f3b00]",
-  group: "border-[#bde0c7] bg-[#e7faec] text-[#0f4c2a]",
-  quantifier: "border-[#b8d5f3] bg-[#e6f3ff] text-[#1b4b78]",
-  alternation: "border-[#efc0c0] bg-[#ffeaea] text-[#7d1d1d]",
-  escape: "border-[#cdbcf1] bg-[#f1eaff] text-[#3f2a82]",
-  charclass: "border-[#c1daf1] bg-[#e9f4ff] text-[#1b4f86]",
-  meta: "border-[#c6daf1] bg-[#ebf4ff] text-[#1f4f80]",
-  literal: "border-[#d2dbe5] bg-[#f3f6fa] text-[#2a3e54]",
+  anchor:
+    "border-[color:var(--c-tone-anchor-soft-border)] bg-[color:var(--c-tone-anchor-soft-bg)] text-[color:var(--c-tone-anchor-text)]",
+  group:
+    "border-[color:var(--c-tone-group-soft-border)] bg-[color:var(--c-tone-group-soft-bg)] text-[color:var(--c-tone-group-text)]",
+  quantifier:
+    "border-[color:var(--c-tone-quantifier-soft-border)] bg-[color:var(--c-tone-quantifier-soft-bg)] text-[color:var(--c-tone-quantifier-text)]",
+  alternation:
+    "border-[color:var(--c-tone-alternation-soft-border)] bg-[color:var(--c-tone-alternation-soft-bg)] text-[color:var(--c-tone-alternation-text)]",
+  escape:
+    "border-[color:var(--c-tone-escape-soft-border)] bg-[color:var(--c-tone-escape-soft-bg)] text-[color:var(--c-tone-escape-text)]",
+  charclass:
+    "border-[color:var(--c-tone-charclass-soft-border)] bg-[color:var(--c-tone-charclass-soft-bg)] text-[color:var(--c-tone-charclass-text)]",
+  meta: "border-[color:var(--c-tone-meta-soft-border)] bg-[color:var(--c-tone-meta-soft-bg)] text-[color:var(--c-tone-meta-text)]",
+  literal:
+    "border-[color:var(--c-tone-literal-soft-border)] bg-[color:var(--c-tone-literal-soft-bg)] text-[color:var(--c-tone-literal-text)]",
 };
 
 const matchHighlightBaseClass =
@@ -711,6 +718,7 @@ export function RegexLab({
               {!isShowingIntersectionExamples && (
                 <Button
                   aria-label={t("editor.addExample")}
+                  className={regexLabHeaderButtonClassName}
                   disabled={readOnly}
                   onClick={onAddExample}
                   size="sm"

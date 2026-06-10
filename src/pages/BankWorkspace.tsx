@@ -659,7 +659,7 @@ function buildSearchIndexingMeta(params: {
 }
 
 const workspacePanelHeaderClassName =
-  "flex items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-2 text-[13px] font-semibold tracking-[0.5px] text-[color:var(--c-text-muted)] uppercase";
+  "flex min-h-10 items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-1 text-[12px] font-semibold tracking-[0.5px] text-[color:var(--c-text-muted)] uppercase";
 
 const workspaceTabsClassName =
   "flex gap-0 border-b border-[color:var(--c-border)]";
