@@ -1,0 +1,1781 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  html,body{height:100%;margin:0;overflow:hidden;background:#e5e5e5;color:#333333;font-family:'Geist',system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  *{box-sizing:border-box}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#d7d7d7;border-radius:4px}
+  ::-webkit-scrollbar-thumb:hover{background:#9a9a9a}
+  input::placeholder,textarea::placeholder{color:#8a8a8a}
+  textarea::selection{background:rgba(52,100,163,0.18)}
+</style>
+</helmet>
+
+<div style="display:flex;height:100vh;min-width:1200px;flex-direction:column;background:#e5e5e5;color:#333333">
+
+  <!-- ─── App header ─── -->
+  <header style="display:flex;height:52px;flex-shrink:0;align-items:center;gap:14px;border-bottom:1px solid #e3e3e3;background:#fdfdfd;padding:8px 24px">
+    <button onClick="{{ goHome }}" style="border:none;background:none;cursor:pointer;white-space:nowrap;font-weight:600;font-size:16px;color:#333333;font-family:inherit;padding:0">Zenmoney SMS Formats</button>
+    <span style="color:#8a8a8a">/</span>
+    <button style="display:inline-flex;align-items:center;gap:6px;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd;color:#333333;font-size:13px;font-weight:500;height:30px;padding:0 10px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">zenmoney&#8209;mock / sms&#8209;formats <span style="color:#8a8a8a;font-size:10px">▾</span></button>
+    <sc-if value="{{ isWorkspace }}" hint-placeholder-val="{{ false }}">
+      <button style="display:inline-flex;align-items:center;gap:6px;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd;color:#3464a3;font-size:13px;font-weight:500;height:30px;padding:0 10px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">PR #{{ sourcePrNum }} · {{ sourceBranch }} <span style="color:#8a8a8a;font-size:10px">▾</span></button>
+    </sc-if>
+    <div style="flex:1"></div>
+    <span title="Статус прав в репозитории" style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(52,100,163,0.12);color:#3464a3;font-size:11px;font-weight:600;padding:3px 8px;white-space:nowrap">общий ключ</span>
+    <button style="display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid transparent;background:transparent;color:#333333;font-size:12px;font-weight:500;height:32px;padding:0 12px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">EN</button>
+    <button onClick="{{ openSettings }}" title="Настройки GitHub токена" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:999px;border:1px solid transparent;background:transparent;color:#333333;font-size:16px;cursor:pointer" style-hover="background:#f0f0f0">⚙</button>
+  </header>
+
+  <main style="flex:1;overflow:hidden;padding:24px">
+
+    <!-- ─── Dashboard ─── -->
+    <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Dashboard" style="display:flex;height:100%;min-height:0;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:flex-end">
+          <div style="width:100%;max-width:448px">
+            <input aria-label="Поиск pull request" placeholder="Поиск по заголовку, ветке или номеру PR" value="{{ prQuery }}" onChange="{{ onPrQuery }}" style="height:36px;width:100%;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 12px;font-size:14px;color:#333333;outline:none;font-family:inherit" style-focus="border-color:#2c5c97;box-shadow:0 0 0 2px rgba(44,92,151,0.2)">
+          </div>
+        </div>
+        <div style="display:flex;min-height:0;flex-direction:column;overflow:hidden;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd">
+          <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e3e3;background:#f0f0f0;padding:12px 16px;font-size:13px;font-weight:600;letter-spacing:0.5px;color:#6c6c6c;text-transform:uppercase;flex-shrink:0">
+            <span>PR (Pull Request) · {{ prCount }}</span>
+          </div>
+          <div style="min-height:0;overflow-y:auto">
+            <sc-for list="{{ prRows }}" as="pr" hint-placeholder-count="5">
+              <div onClick="{{ pr.open }}" role="button" tabIndex="0" style="{{ pr.rowStyle }}" style-hover="background:#e9e9e9">
+                <span style="color:#6c6c6c;font-size:12px;flex-shrink:0">#{{ pr.num }}</span>
+                <div style="display:flex;min-width:0;flex:1;flex-direction:column;gap:4px">
+                  <div style="display:inline-flex;min-width:0;max-width:100%;align-items:center;gap:4px">
+                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px">{{ pr.title }}</span>
+                    <sc-if value="{{ pr.hasDrafts }}" hint-placeholder-val="{{ false }}">
+                      <span title="Есть несохранённые локальные правки в этом PR" style="display:inline-flex;align-items:center;justify-content:center;height:16px;min-width:16px;flex-shrink:0;border-radius:4px;background:rgba(183,127,43,0.14);color:#b77f2b;font-size:10px;line-height:1;padding:0 4px;font-weight:600">●</span>
+                    </sc-if>
+                    <a href="{{ pr.url }}" target="_blank" rel="noreferrer" onClick="{{ stop }}" title="{{ pr.url }}" style="display:inline-flex;height:16px;width:16px;flex-shrink:0;align-items:center;justify-content:center;border-radius:999px;font-size:11px;line-height:1;color:#8a8a8a;text-decoration:none" style-hover="color:#3464a3">↗</a>
+                  </div>
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8a8a8a;font-size:12px">{{ pr.branch }}</span>
+                </div>
+                <div style="display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;flex:0 1 220px;min-width:0;margin-left:8px">
+                  <sc-for list="{{ pr.labels }}" as="lb" hint-placeholder-count="1">
+                    <span style="{{ lb.style }}">{{ lb.name }}</span>
+                  </sc-for>
+                  <span style="display:inline-flex;align-items:center;max-width:180px;height:20px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:600;line-height:1;color:#6c6c6c;box-shadow:inset 0 0 0 1px #e3e3e3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pr.author }}</span>
+                </div>
+                <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(52,100,163,0.12);color:#3464a3;font-size:11px;font-weight:600;padding:3px 8px;flex-shrink:0">✓ {{ pr.approved }}</span>
+                <sc-if value="{{ pr.hasFailed }}" hint-placeholder-val="{{ false }}">
+                  <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(153,54,54,0.12);color:#993636;font-size:11px;font-weight:600;padding:3px 8px;flex-shrink:0">✗ {{ pr.failed }}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noPrs }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:16px;color:#6c6c6c;font-size:14px">Банки не найдены</div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ─── Bank workspace ─── -->
+    <sc-if value="{{ isWorkspace }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Workspace" style="display:grid;height:100%;min-height:0;grid-template-columns:320px 1fr;gap:24px">
+
+        <!-- Sidebar -->
+        <div style="display:flex;min-height:0;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:8px">
+            <h2 style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:16px">{{ bankName }}</h2>
+            <a href="{{ bankUrl }}" target="_blank" rel="noreferrer" title="Открыть папку банка в GitHub" style="display:inline-flex;height:20px;width:20px;flex-shrink:0;align-items:center;justify-content:center;border-radius:4px;font-size:12px;color:#8a8a8a;text-decoration:none" style-hover="background:rgba(52,100,163,0.14);color:#3464a3">↗</a>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button onClick="{{ onPublish }}" style="{{ publishStyle }}">Обновить Pull Request</button>
+            <sc-if value="{{ publishMsg }}" hint-placeholder-val="{{ false }}">
+              <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(30,105,51,0.12);color:#1e6933;font-size:11px;font-weight:600;padding:3px 8px;align-self:flex-start">{{ publishMsg }}</span>
+            </sc-if>
+            <button onClick="{{ onValidation }}" style="{{ actionBtnStyle }}" style-hover="background:#f0f0f0">Валидация</button>
+            <button onClick="{{ onTplBySms }}" style="{{ actionBtnStyle }}" style-hover="background:#f0f0f0">Поиск шаблона по СМС</button>
+            <button onClick="{{ onSmsByTpl }}" style="{{ actionBtnStyle }}" style-hover="background:#f0f0f0">Поиск СМС по шаблону</button>
+            <button onClick="{{ onIntersections }}" style="{{ actionBtnStyle }}" style-hover="background:#f0f0f0">{{ intersectionsLabel }}</button>
+            <button onClick="{{ onResetAll }}" style="{{ resetAllStyle }}">Откатить изменения во всех форматах к исходному</button>
+          </div>
+
+          <div style="display:flex;min-height:0;flex:1;flex-direction:column;overflow:hidden;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd">
+            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e3e3;background:#f0f0f0;padding:4px 8px 4px 16px;font-size:13px;font-weight:600;letter-spacing:0.5px;color:#6c6c6c;text-transform:uppercase;flex-shrink:0">
+              <span>Файлы <span style="font-size:12px;color:#6c6c6c;text-transform:none">({{ filesCount }})</span></span>
+              <button onClick="{{ onCreate }}" aria-label="Создать формат" style="display:inline-flex;align-items:center;justify-content:center;height:28px;width:28px;border-radius:6px;border:1px solid transparent;background:transparent;color:#333333;font-size:15px;cursor:pointer" style-hover="background:#e9e9e9">+</button>
+            </div>
+            <div style="display:flex;gap:0;border-bottom:1px solid #e3e3e3;flex-shrink:0">
+              <sc-for list="{{ fileTabs }}" as="ft" hint-placeholder-count="2">
+                <button onClick="{{ ft.set }}" style="{{ ft.style }}">{{ ft.label }}</button>
+              </sc-for>
+            </div>
+            <div style="border-bottom:1px solid #e3e3e3;padding:8px;flex-shrink:0">
+              <input aria-label="Поиск файла" placeholder="Поиск файла…" value="{{ fileSearch }}" onChange="{{ onFileSearch }}" style="height:28px;width:100%;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 8px;font-size:12px;color:#333333;outline:none;font-family:inherit" style-focus="border-color:#2c5c97">
+            </div>
+            <div style="min-height:0;overflow-y:auto">
+              <sc-for list="{{ fileRows }}" as="f" hint-placeholder-count="6">
+                <div onClick="{{ f.select }}" role="button" tabIndex="0" style="{{ f.rowStyle }}" style-hover="background:#e9e9e9">
+                  <div style="display:flex;min-width:0;flex:1;align-items:center;gap:8px">
+                    <span style="{{ f.nameStyle }}">{{ f.name }}</span>
+                    <sc-if value="{{ f.hasMetrics }}" hint-placeholder-val="{{ false }}">
+                      <span style="display:inline-flex;align-items:center;gap:2px;flex-shrink:0;border-radius:4px;border:1px solid #e3e3e3;background:#f0f0f0;padding:2px 6px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1;color:#6c6c6c;font-variant-numeric:tabular-nums">
+                        <span style="{{ f.mOwnStyle }}">{{ f.mTotal }}</span> / <span style="{{ f.mOwnStyle }}">{{ f.mOwn }}</span> / <button onClick="{{ f.onInterClick }}" style="{{ f.mInterStyle }}">{{ f.mInter }}</button>
+                      </span>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ f.hasDot }}" hint-placeholder-val="{{ false }}">
+                    <span style="{{ f.dotStyle }}">●</span>
+                  </sc-if>
+                  <a href="{{ f.url }}" target="_blank" rel="noreferrer" onClick="{{ stop }}" title="Открыть файл в GitHub" style="display:inline-flex;height:20px;width:20px;flex-shrink:0;align-items:center;justify-content:center;margin-left:auto;border-radius:4px;font-size:12px;color:#8a8a8a;text-decoration:none" style-hover="background:rgba(52,100,163,0.14);color:#3464a3">↗</a>
+                </div>
+              </sc-for>
+              <sc-if value="{{ noFiles }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:16px;color:#6c6c6c;font-size:12px">Ничего не найдено</div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main content -->
+        <div style="display:flex;min-height:0;min-width:0;flex-direction:column;gap:16px;overflow:hidden">
+
+          <!-- Senders editor -->
+          <sc-if value="{{ showSenders }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;min-height:0;flex:1;flex-direction:column;overflow:hidden;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd">
+              <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e3e3;background:#f0f0f0;padding:8px 16px;font-size:13px;font-weight:600;letter-spacing:0.5px;color:#6c6c6c;text-transform:uppercase;flex-shrink:0">
+                <span style="display:inline-flex;align-items:center;gap:8px">senders.txt
+                  <sc-if value="{{ sendersModified }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(183,127,43,0.14);color:#b77f2b;font-size:11px;font-weight:600;padding:2px 8px;text-transform:none;letter-spacing:0">Изменено</span>
+                  </sc-if>
+                </span>
+              </div>
+              <div style="display:flex;min-height:0;flex:1;flex-direction:column;gap:8px;padding:16px">
+                <div style="color:#6c6c6c;font-size:12px">Один отправитель на строку. Пустые строки допускаются. Строки с # также являются отправителями.</div>
+                <textarea spellCheck="{{ false }}" value="{{ sendersText }}" onChange="{{ onSendersChange }}" style="flex:1;min-height:200px;width:100%;resize:none;border-radius:4px;border:1px solid #e3e3e3;background:#ffffff;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;color:#333333;outline:none" style-focus="border-color:#2c5c97"></textarea>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- Format editor -->
+          <sc-if value="{{ showFormat }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;min-height:52px;flex-shrink:0;flex-wrap:wrap;align-items:center;gap:8px">
+              <div style="display:flex;flex-shrink:0;gap:4px;border-radius:6px;border:1px solid #e3e3e3;background:#f0f0f0;padding:4px">
+                <sc-for list="{{ modeTabs }}" as="mt" hint-placeholder-count="2">
+                  <button onClick="{{ mt.set }}" style="{{ mt.style }}">{{ mt.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display:flex;min-width:0;flex:1;align-items:center;gap:8px;margin-left:8px">
+                <span style="font-weight:500;font-family:'JetBrains Mono',monospace">{{ fileName }}</span>
+                <button onClick="{{ onRename }}" style="{{ renameStyle }}">Переименовать</button>
+                <a href="{{ fileUrl }}" target="_blank" rel="noreferrer" title="Открыть файл в GitHub" style="display:inline-flex;height:28px;width:28px;align-items:center;justify-content:center;border-radius:6px;font-size:13px;color:#333333;text-decoration:none" style-hover="background:#f0f0f0">↗</a>
+                <sc-if value="{{ isModified }}" hint-placeholder-val="{{ false }}">
+                  <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(183,127,43,0.14);color:#b77f2b;font-size:11px;font-weight:600;padding:3px 8px">Изменено</span>
+                </sc-if>
+                <sc-if value="{{ isDeleted }}" hint-placeholder-val="{{ false }}">
+                  <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(183,127,43,0.14);color:#b77f2b;font-size:11px;font-weight:600;padding:3px 8px">Удалён</span>
+                </sc-if>
+              </div>
+              <div style="display:flex;flex-shrink:0;align-items:center;gap:4px">
+                <button onClick="{{ onUndo }}" style="{{ undoStyle }}">↶ Отменить</button>
+                <button onClick="{{ onRedo }}" style="{{ redoStyle }}">↷ Повторить</button>
+                <button onClick="{{ onDelete }}" style="{{ delStyle }}">✕ Удалить формат</button>
+                <button onClick="{{ onResetFile }}" style="{{ resetFileStyle }}">⟲ Откатить к исходному</button>
+              </div>
+            </div>
+
+            <!-- RAW mode -->
+            <sc-if value="{{ rawMode }}" hint-placeholder-val="{{ false }}">
+              <sc-if value="{{ hasRawIssues }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+                  <sc-for list="{{ rawIssues }}" as="ri" hint-placeholder-count="1">
+                    <div style="border-radius:4px;background:rgba(183,127,43,0.14);padding:8px 12px;color:#b77f2b;font-size:12px">{{ ri.msg }}</div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <div style="display:flex;min-height:0;flex:1;flex-direction:column;overflow:hidden;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd">
+                <div style="flex-shrink:0;border-bottom:1px solid #e3e3e3;background:#f0f0f0;padding:8px 16px;font-weight:600;font-size:13px;color:#6c6c6c;text-transform:uppercase;letter-spacing:0.5px">Итоговый файл</div>
+                <div style="min-height:0;flex:1;overflow:auto;padding:16px">
+                  <textarea rows="20" spellCheck="{{ false }}" value="{{ rawValue }}" onChange="{{ onRawChange }}" readOnly="{{ editorReadOnly }}" style="min-height:320px;width:100%;height:100%;resize:none;border-radius:4px;border:1px solid #e3e3e3;background:#ffffff;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;color:#333333;outline:none" style-focus="border-color:#2c5c97"></textarea>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- STRUCTURED mode -->
+            <sc-if value="{{ structuredMode }}" hint-placeholder-val="{{ true }}">
+              <!-- Regex panel -->
+              <div style="flex-shrink:0;overflow:hidden;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd">
+                <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e3e3;background:#f0f0f0;padding:5px 16px;font-size:13px;font-weight:600;letter-spacing:0.5px;color:#6c6c6c;text-transform:uppercase">
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <span>Регулярное выражение</span>
+                    <div role="group" aria-label="Режим раскраски" style="display:flex;align-items:center;overflow:hidden;border-radius:4px;border:1px solid #e3e3e3">
+                      <sc-for list="{{ hlTabs }}" as="ht" hint-placeholder-count="2">
+                        <button onClick="{{ ht.set }}" title="{{ ht.title }}" style="{{ ht.style }}">{{ ht.label }}</button>
+                      </sc-for>
+                    </div>
+                    <label title="Пробел вводит \s+ и рисуется пробелом; литеральный пробел показан точкой" style="display:flex;cursor:pointer;user-select:none;align-items:center;gap:6px;border-radius:4px;border:1px solid #e3e3e3;padding:4px 8px;color:#8a8a8a;font-size:12px;font-weight:500;text-transform:none;letter-spacing:0">
+                      <input type="checkbox" checked="{{ wsPlus }}" onChange="{{ onWsPlus }}" style="accent-color:#2c5c97;margin:0">
+                      \s+ → Пробел
+                    </label>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+                    <button onClick="{{ onOpenSnipLib }}" style="{{ headerGhostStyle }}" style-hover="background:#fdfdfd;color:#3464a3">Сниппеты</button>
+                    <button onClick="{{ onOpenCookbook }}" style="{{ headerGhostStyle }}" style-hover="background:#fdfdfd;color:#3464a3">Cookbook</button>
+                    <button onClick="{{ onSmsByTpl }}" style="{{ headerGhostStyle }}" style-hover="background:#fdfdfd;color:#3464a3">Поиск СМС по шаблону</button>
+                  </div>
+                </div>
+                <div style="padding:16px">
+                  <div style="position:relative;overflow:hidden;border-radius:4px;border:1px solid #e3e3e3;background:#ffffff">
+                    <div aria-hidden="true" style="pointer-events:none;position:absolute;inset:0;overflow:hidden;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;white-space:pre-wrap;overflow-wrap:break-word;color:#333333">{{ regexOverlay }}</div>
+                    <textarea rows="2" spellCheck="{{ false }}" value="{{ regexValue }}" onChange="{{ onRegexChange }}" onSelect="{{ onRegexSelect }}" onMouseUp="{{ onRegexMouseUp }}" onKeyDown="{{ onRegexKeyDown }}" readOnly="{{ editorReadOnly }}" ref="{{ regexRef }}" style="position:relative;z-index:1;display:block;width:100%;resize:none;border:none;background:transparent;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:transparent;caret-color:#333333;outline:none;white-space:pre-wrap;overflow-wrap:break-word"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:grid;min-height:0;flex:1;gap:16px;grid-template-rows:auto minmax(0,1fr)">
+                <!-- Test string panel -->
+                <div style="display:flex;flex-direction:column;overflow:hidden;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd">
+                  <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e3e3;background:#f0f0f0;padding:5px 16px;font-size:13px;font-weight:600;letter-spacing:0.5px;color:#6c6c6c;text-transform:uppercase">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      Тестовая строка
+                      <sc-if value="{{ showAddExample }}" hint-placeholder-val="{{ true }}">
+                        <button onClick="{{ onAddExample }}" aria-label="Добавить пример" style="{{ addExampleStyle }}" style-hover="background:#e9e9e9">+</button>
+                      </sc-if>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+                      <sc-if value="{{ hasInterToggle }}" hint-placeholder-val="{{ false }}">
+                        <button onClick="{{ onInterToggle }}" style="{{ headerGhostStyle }}" style-hover="background:#fdfdfd;color:#3464a3">{{ interToggleLabel }}</button>
+                      </sc-if>
+                      <button onClick="{{ onTplBySms }}" style="{{ headerGhostStyle }}" style-hover="background:#fdfdfd;color:#3464a3">Поиск шаблона по СМС</button>
+                      <a href="{{ regex101Url }}" target="_blank" rel="noopener noreferrer" style="{{ headerGhostLinkStyle }}" style-hover="background:#fdfdfd;color:#3464a3">Открыть в regex101</a>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #e3e3e3">
+                    <sc-for list="{{ exampleTabs }}" as="et" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center">
+                        <button onClick="{{ et.activate }}" style="{{ et.style }}">#{{ et.label }} <span style="{{ et.markStyle }}">{{ et.mark }}</span></button>
+                        <sc-if value="{{ et.removable }}" hint-placeholder-val="{{ false }}">
+                          <button onClick="{{ et.remove }}" title="Удалить пример" style="border:none;background:transparent;cursor:pointer;color:#8a8a8a;font-size:11px;padding:2px 4px;border-radius:4px" style-hover="background:#e9e9e9;color:#993636">×</button>
+                        </sc-if>
+                        <sc-if value="{{ et.openable }}" hint-placeholder-val="{{ false }}">
+                          <button onClick="{{ et.openFile }}" title="{{ et.openTitle }}" style="border:none;background:transparent;cursor:pointer;color:#8a8a8a;font-size:11px;padding:2px 4px;border-radius:4px" style-hover="background:#e9e9e9;color:#3464a3">↗</button>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="padding:16px">
+                    <div style="position:relative;overflow:hidden;border-radius:4px;border:1px solid #e3e3e3;background:#ffffff">
+                      <div aria-hidden="true" style="pointer-events:none;position:absolute;inset:0;min-height:60px;overflow:hidden;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;overflow-wrap:break-word;color:#333333">{{ testOverlay }}</div>
+                      <textarea rows="3" spellCheck="{{ false }}" value="{{ testValue }}" onChange="{{ onTestChange }}" readOnly="{{ testReadOnly }}" style="position:relative;z-index:1;display:block;min-height:60px;width:100%;resize:none;border:none;background:transparent;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;color:transparent;caret-color:#333333;outline:none;white-space:pre-wrap;overflow-wrap:break-word"></textarea>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Bottom: match info + right tabs -->
+                <div style="display:grid;min-height:0;gap:16px;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr)">
+                  <div style="display:flex;min-height:0;flex-direction:column;overflow:hidden;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd">
+                    <div style="flex-shrink:0;border-bottom:1px solid #e3e3e3;background:#f0f0f0;padding:8px 16px;font-size:13px;font-weight:600;letter-spacing:0.5px;color:#6c6c6c;text-transform:uppercase">Информация о совпадении</div>
+                    <div style="display:flex;min-height:0;height:100%;flex-direction:column;overflow-y:auto;padding:16px">
+                      <sc-if value="{{ hasMatchIssues }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;flex-direction:column;gap:4px">
+                          <sc-for list="{{ matchIssues }}" as="mi" hint-placeholder-count="1">
+                            <div style="border-radius:4px;background:rgba(153,54,54,0.12);padding:8px 12px;color:#993636;font-size:12px">{{ mi.msg }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ showMatchBody }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;flex-direction:column;gap:8px">
+                          <sc-if value="{{ matchedFull }}" hint-placeholder-val="{{ true }}">
+                            <div onMouseEnter="{{ onFullEnter }}" onMouseLeave="{{ onFullLeave }}" style="{{ fullRowStyle }}">
+                              <span style="display:inline-block;height:12px;width:12px;flex-shrink:0;border-radius:999px;background:#9fcfff"></span>
+                              <span style="color:#6c6c6c;font-size:14px;flex-shrink:0">Полное совпадение:</span>
+                              <span style="border-radius:3px;background:#ffffff;padding:2px 6px;font-family:'JetBrains Mono',monospace;font-size:13px;min-width:0;overflow-wrap:break-word">{{ fullMatchText }}</span>
+                            </div>
+                          </sc-if>
+                          <sc-if value="{{ noMatch }}" hint-placeholder-val="{{ false }}">
+                            <div style="color:#6c6c6c;font-size:14px">Нет совпадения</div>
+                          </sc-if>
+                          <sc-if value="{{ missingMappings }}" hint-placeholder-val="{{ false }}">
+                            <div style="border-radius:4px;background:rgba(153,54,54,0.12);padding:8px 12px;color:#993636;font-size:12px">Не все группы сопоставлены со столбцами</div>
+                          </sc-if>
+                          <sc-if value="{{ hasGroups }}" hint-placeholder-val="{{ true }}">
+                            <div style="margin-top:4px;font-weight:500;color:#6c6c6c;font-size:14px">Группы захвата:</div>
+                            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                              <thead>
+                                <tr style="text-align:left;color:#8a8a8a">
+                                  <th style="padding:3px 6px;font-weight:500"></th>
+                                  <th style="padding:3px 6px;font-weight:500">#</th>
+                                  <th style="padding:3px 6px;font-weight:500">Value</th>
+                                  <th style="padding:3px 6px;font-weight:500">Столбцы</th>
+                                  <th style="padding:3px 6px;font-weight:500"></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <sc-for list="{{ groupRows }}" as="g" hint-placeholder-count="3">
+                                  <tr onMouseEnter="{{ g.enter }}" onMouseLeave="{{ g.leave }}" style="{{ g.rowStyle }}">
+                                    <td style="padding:3px 6px"><span style="{{ g.dotStyle }}"></span></td>
+                                    <td style="padding:3px 6px;color:#6c6c6c">{{ g.idx }}</td>
+                                    <td style="padding:3px 6px;font-family:'JetBrains Mono',monospace">{{ g.value }}</td>
+                                    <td style="padding:3px 6px">
+                                      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+                                        <button onClick="{{ g.openPicker }}" style="{{ g.colBtnStyle }}">{{ g.colBtnLabel }}</button>
+                                        <sc-if value="{{ g.hasCol }}" hint-placeholder-val="{{ false }}">
+                                          <button onClick="{{ g.clearCol }}" title="Закрыть" style="border:none;background:transparent;cursor:pointer;color:#6c6c6c;font-size:13px;padding:2px 6px;border-radius:4px" style-hover="background:#e9e9e9">×</button>
+                                        </sc-if>
+                                        <sc-if value="{{ g.hasParam }}" hint-placeholder-val="{{ false }}">
+                                          <input value="{{ g.paramValue }}" onChange="{{ g.onParam }}" placeholder="{{ g.paramHint }}" style="height:30px;width:150px;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#333333;outline:none" style-focus="border-color:#2c5c97">
+                                        </sc-if>
+                                      </div>
+                                    </td>
+                                    <td style="padding:3px 6px;text-align:right">
+                                      <button onClick="{{ g.selectG }}" title="{{ g.selTitle }}" style="{{ g.selStyle }}">⌖</button>
+                                    </td>
+                                  </tr>
+                                </sc-for>
+                              </tbody>
+                            </table>
+                          </sc-if>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;min-height:0;flex-direction:column;overflow:hidden;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd">
+                    <div style="display:flex;flex-shrink:0;border-bottom:1px solid #e3e3e3;background:#f0f0f0">
+                      <sc-for list="{{ rightTabs }}" as="rt" hint-placeholder-count="3">
+                        <button onClick="{{ rt.set }}" style="{{ rt.style }}">{{ rt.label }}</button>
+                      </sc-for>
+                    </div>
+                    <div style="min-height:0;flex:1;overflow:hidden">
+
+                      <sc-if value="{{ showSnippets }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;height:100%;min-height:0;flex-direction:column">
+                          <div style="display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #e3e3e3;padding:8px;flex-shrink:0">
+                            <sc-for list="{{ snipGroups }}" as="sg" hint-placeholder-count="5">
+                              <button onClick="{{ sg.set }}" style="{{ sg.style }}">{{ sg.label }}</button>
+                            </sc-for>
+                          </div>
+                          <div style="min-height:0;flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px">
+                            <sc-for list="{{ snipCards }}" as="sn" hint-placeholder-count="3">
+                              <div style="display:flex;flex-direction:column;gap:6px;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:10px 12px">
+                                <div style="display:flex;align-items:center;gap:8px">
+                                  <code style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#1b4b78;background:#e6f3ff;border-radius:3px;padding:2px 6px;overflow-wrap:anywhere">{{ sn.pattern }}</code>
+                                  <span style="{{ sn.kindStyle }}">{{ sn.kindLabel }}</span>
+                                  <button onClick="{{ sn.insert }}" style="margin-left:auto;display:inline-flex;align-items:center;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd;color:#333333;font-size:12px;font-weight:500;height:26px;padding:0 10px;cursor:pointer;font-family:inherit;flex-shrink:0" style-hover="background:#f0f0f0;color:#3464a3">Вставить</button>
+                                </div>
+                                <div style="font-size:12px;color:#333333">{{ sn.desc }}</div>
+                                <sc-if value="{{ sn.hasTrigger }}" hint-placeholder-val="{{ false }}">
+                                  <div style="font-size:11px;color:#6c6c6c"><span style="font-weight:600">Когда:</span> {{ sn.trigger }}</div>
+                                </sc-if>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ showExplanation }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;height:100%;min-height:0;flex-direction:column;overflow-y:auto;padding:16px">
+                          <sc-if value="{{ hasExplError }}" hint-placeholder-val="{{ false }}">
+                            <div style="border-radius:4px;background:rgba(153,54,54,0.12);padding:8px 12px;color:#993636;font-size:12px">{{ explError }}</div>
+                          </sc-if>
+                          <sc-if value="{{ hasExplTokens }}" hint-placeholder-val="{{ true }}">
+                            <div style="display:flex;flex-direction:column;gap:4px">
+                              <div style="font-weight:500;color:#6c6c6c;font-size:14px;margin-bottom:4px">Части паттерна</div>
+                              <sc-for list="{{ explTokens }}" as="tk" hint-placeholder-count="6">
+                                <div onClick="{{ tk.activate }}" onMouseEnter="{{ tk.enter }}" onMouseLeave="{{ tk.leave }}" role="button" tabIndex="0" style="{{ tk.blockStyle }}">
+                                  <code style="{{ tk.codeStyle }}">{{ tk.raw }}</code>
+                                  <span style="min-width:0;flex:1;font-size:13px">{{ tk.desc }}</span>
+                                </div>
+                              </sc-for>
+                            </div>
+                          </sc-if>
+                          <sc-if value="{{ explEmpty }}" hint-placeholder-val="{{ false }}">
+                            <div style="color:#6c6c6c;font-size:14px">—</div>
+                          </sc-if>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ showQuickref }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;height:100%;min-height:0;flex-direction:column">
+                          <div style="padding:8px;border-bottom:1px solid #e3e3e3;flex-shrink:0">
+                            <input placeholder="Поиск токена…" value="{{ qrSearch }}" onChange="{{ onQrSearch }}" style="height:28px;width:100%;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 8px;font-size:12px;color:#333333;outline:none;font-family:inherit" style-focus="border-color:#2c5c97">
+                          </div>
+                          <div style="min-height:0;flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:12px">
+                            <sc-for list="{{ qrCats }}" as="qc" hint-placeholder-count="3">
+                              <div style="display:flex;flex-direction:column;gap:2px">
+                                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#8a8a8a;margin-bottom:4px">{{ qc.label }}</div>
+                                <sc-for list="{{ qc.items }}" as="qi" hint-placeholder-count="4">
+                                  <div style="display:flex;align-items:baseline;gap:10px;padding:3px 0">
+                                    <code style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#1b4b78;background:#e6f3ff;border-radius:3px;padding:1px 6px;flex-shrink:0">{{ qi.token }}</code>
+                                    <span style="font-size:12px;color:#333333">{{ qi.desc }}</span>
+                                  </div>
+                                </sc-for>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+
+  <!-- ─── Modals ─── -->
+
+  <sc-if value="{{ showColumns }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(51,51,51,0.6);padding:20px">
+      <div onClick="{{ stop }}" style="display:flex;max-height:calc(100vh - 40px);width:100%;max-width:760px;flex-direction:column;border-radius:10px;background:#fdfdfd;box-shadow:0 6px 20px rgba(51,51,51,0.16);padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="margin:0;font-size:16px;font-weight:600">{{ colTitle }}</h2>
+          <button onClick="{{ closeModal }}" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#6c6c6c;border-radius:4px;padding:2px 8px" style-hover="background:#f0f0f0">×</button>
+        </div>
+        <input autoFocus="{{ true }}" placeholder="Поиск столбца…" value="{{ colSearch }}" onChange="{{ onColSearch }}" style="height:36px;width:100%;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 12px;font-size:14px;color:#333333;outline:none;font-family:inherit" style-focus="border-color:#2c5c97">
+        <div style="margin-top:8px;min-height:0;flex:1;overflow-y:auto;border-radius:4px;border:1px solid #e3e3e3">
+          <sc-for list="{{ colRows }}" as="c" hint-placeholder-count="6">
+            <button onClick="{{ c.pick }}" style="{{ c.style }}" style-hover="background:#e9e9e9">
+              <span style="font-weight:500;font-family:'JetBrains Mono',monospace;flex-shrink:0">{{ c.name }}</span>
+              <span style="color:#6c6c6c;font-size:13px;text-align:left">{{ c.desc }}</span>
+              <sc-if value="{{ c.isParam }}" hint-placeholder-val="{{ false }}">
+                <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(52,100,163,0.12);color:#3464a3;font-size:11px;font-weight:600;padding:2px 8px;flex-shrink:0">Параметр</span>
+              </sc-if>
+              <sc-if value="{{ c.isUsed }}" hint-placeholder-val="{{ false }}">
+                <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(183,127,43,0.14);color:#b77f2b;font-size:11px;font-weight:600;padding:2px 8px;flex-shrink:0">Уже используется</span>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+        <div style="margin-top:20px;display:flex;justify-content:flex-end">
+          <button onClick="{{ closeModal }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd;color:#333333;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">Отмена</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showCreate }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(51,51,51,0.6);padding:20px">
+      <div onClick="{{ stop }}" style="width:100%;max-width:480px;border-radius:10px;background:#fdfdfd;box-shadow:0 6px 20px rgba(51,51,51,0.16);padding:24px">
+        <h2 style="margin:0 0 16px;font-size:16px;font-weight:600">Создать формат</h2>
+        <label style="display:block;font-size:12px;color:#6c6c6c;margin-bottom:6px">Название формата</label>
+        <input autoFocus="{{ true }}" placeholder="naprimer: vozvrat" value="{{ createName }}" onChange="{{ onCreateName }}" style="height:36px;width:100%;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 12px;font-size:14px;color:#333333;outline:none;font-family:'JetBrains Mono',monospace" style-focus="border-color:#2c5c97">
+        <sc-if value="{{ createError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:8px;border-radius:4px;background:rgba(153,54,54,0.12);padding:8px 12px;color:#993636;font-size:12px">{{ createError }}</div>
+        </sc-if>
+        <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px">
+          <button onClick="{{ closeModal }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid transparent;background:transparent;color:#333333;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">Отмена</button>
+          <button onClick="{{ submitCreate }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid #3464a3;background:#3464a3;color:#ffffff;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#2b64ad">Создать</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showUpdate }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(51,51,51,0.6);padding:20px">
+      <div onClick="{{ stop }}" style="width:100%;max-width:560px;border-radius:10px;background:#fdfdfd;box-shadow:0 6px 20px rgba(51,51,51,0.16);padding:24px">
+        <h2 style="margin:0 0 16px;font-size:16px;font-weight:600">Обновление Pull Request</h2>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div>
+            <label style="display:block;font-size:12px;color:#6c6c6c;margin-bottom:6px">Заголовок коммита</label>
+            <input placeholder="Коротко: что меняет этот коммит" value="{{ commitTitle }}" onChange="{{ onCommitTitle }}" style="height:36px;width:100%;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 12px;font-size:14px;color:#333333;outline:none;font-family:inherit" style-focus="border-color:#2c5c97">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:#6c6c6c;margin-bottom:6px">Описание коммита</label>
+            <textarea rows="3" placeholder="Необязательно: детали изменения" value="{{ commitDesc }}" onChange="{{ onCommitDesc }}" style="width:100%;resize:none;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:8px 12px;font-size:14px;color:#333333;outline:none;font-family:inherit" style-focus="border-color:#2c5c97"></textarea>
+          </div>
+        </div>
+        <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:8px">
+          <button onClick="{{ closeModal }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid transparent;background:transparent;color:#333333;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">Отмена</button>
+          <button onClick="{{ submitUpdateDefault }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd;color:#333333;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">Обновить со стандартным заголовком</button>
+          <button onClick="{{ submitUpdate }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid #3464a3;background:#3464a3;color:#ffffff;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#2b64ad">Обновить</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showValidation }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(51,51,51,0.6);padding:20px">
+      <div onClick="{{ stop }}" style="display:flex;max-height:calc(100vh - 40px);width:100%;max-width:640px;flex-direction:column;border-radius:10px;background:#fdfdfd;box-shadow:0 6px 20px rgba(51,51,51,0.16);padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="margin:0;font-size:16px;font-weight:600">Валидация</h2>
+          <button onClick="{{ closeModal }}" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#6c6c6c;border-radius:4px;padding:2px 8px" style-hover="background:#f0f0f0">×</button>
+        </div>
+        <div style="margin-bottom:12px;display:flex;gap:8px">
+          <sc-if value="{{ valAllOk }}" hint-placeholder-val="{{ false }}">
+            <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(30,105,51,0.12);color:#1e6933;font-size:12px;font-weight:600;padding:4px 10px">Все проверки пройдены</span>
+          </sc-if>
+          <sc-if value="{{ valHasErrors }}" hint-placeholder-val="{{ false }}">
+            <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(153,54,54,0.12);color:#993636;font-size:12px;font-weight:600;padding:4px 10px">{{ valErrCount }} ошибок</span>
+          </sc-if>
+          <sc-if value="{{ valHasWarnings }}" hint-placeholder-val="{{ false }}">
+            <span style="display:inline-flex;align-items:center;border-radius:4px;background:rgba(183,127,43,0.14);color:#b77f2b;font-size:12px;font-weight:600;padding:4px 10px">{{ valWarnCount }} предупреждений</span>
+          </sc-if>
+        </div>
+        <div style="min-height:0;flex:1;overflow-y:auto;border-radius:4px;border:1px solid #e3e3e3">
+          <sc-for list="{{ valRows }}" as="v" hint-placeholder-count="3">
+            <div style="display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid #e3e3e3;padding:8px 12px">
+              <span style="{{ v.badgeStyle }}">{{ v.badge }}</span>
+              <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6c6c6c">{{ v.file }}</span>
+                <span style="font-size:13px">{{ v.msg }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:20px;display:flex;justify-content:flex-end">
+          <button onClick="{{ closeModal }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd;color:#333333;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">Закрыть</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showQuickCheck }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(51,51,51,0.6);padding:20px">
+      <div onClick="{{ stop }}" style="display:flex;max-height:calc(100vh - 40px);width:100%;max-width:720px;flex-direction:column;border-radius:10px;background:#fdfdfd;box-shadow:0 6px 20px rgba(51,51,51,0.16);padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="margin:0;font-size:16px;font-weight:600">{{ qcTitle }}</h2>
+          <button onClick="{{ closeModal }}" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#6c6c6c;border-radius:4px;padding:2px 8px" style-hover="background:#f0f0f0">×</button>
+        </div>
+        <sc-if value="{{ qcIsSmsMode }}" hint-placeholder-val="{{ true }}">
+          <label style="display:block;font-size:12px;color:#6c6c6c;margin-bottom:6px">Текст SMS</label>
+          <textarea rows="3" placeholder="Вставьте SMS для проверки по regex банка" value="{{ qcSms }}" onChange="{{ onQcSms }}" style="width:100%;resize:none;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#333333;outline:none" style-focus="border-color:#2c5c97"></textarea>
+        </sc-if>
+        <sc-if value="{{ qcIsTplMode }}" hint-placeholder-val="{{ false }}">
+          <label style="display:block;font-size:12px;color:#6c6c6c;margin-bottom:6px">Регулярное выражение шаблона</label>
+          <textarea rows="2" placeholder="Шаблон берется из поля «Регулярное выражение» активного формата" value="{{ qcRegex }}" onChange="{{ onQcRegex }}" style="width:100%;resize:none;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#333333;outline:none" style-focus="border-color:#2c5c97"></textarea>
+        </sc-if>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:12px">
+          <button onClick="{{ runQc }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid #3464a3;background:#3464a3;color:#ffffff;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#2b64ad">Проверить</button>
+          <span style="font-size:12px;color:#6c6c6c">Проверка по всем форматам банка: {{ qcScopeCount }}</span>
+        </div>
+        <sc-if value="{{ qcError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:10px;border-radius:4px;background:rgba(153,54,54,0.12);padding:8px 12px;color:#993636;font-size:12px">{{ qcError }}</div>
+        </sc-if>
+        <sc-if value="{{ qcHasResults }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">
+            <sc-for list="{{ qcSummary }}" as="qs" hint-placeholder-count="2">
+              <span style="display:inline-flex;align-items:center;border-radius:4px;background:#f0f0f0;color:#6c6c6c;font-size:11px;font-weight:600;padding:3px 8px">{{ qs.text }}</span>
+            </sc-for>
+          </div>
+          <div style="margin-top:8px;min-height:0;flex:1;overflow-y:auto;border-radius:4px;border:1px solid #e3e3e3">
+            <sc-for list="{{ qcRows }}" as="q" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:10px;border-bottom:1px solid #e3e3e3;padding:8px 12px">
+                <span style="{{ q.badgeStyle }}">{{ q.badge }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#333333;flex-shrink:0">{{ q.file }}</span>
+                <span style="font-size:12px;color:#6c6c6c;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ q.detail }}</span>
+                <button onClick="{{ q.openInApp }}" title="Открыть в приложении" style="margin-left:auto;border:none;background:transparent;cursor:pointer;color:#8a8a8a;font-size:12px;padding:2px 6px;border-radius:4px;flex-shrink:0" style-hover="background:#e9e9e9;color:#3464a3">↗</button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showSnipLib }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(51,51,51,0.6);padding:20px">
+      <div onClick="{{ stop }}" style="display:flex;max-height:calc(100vh - 40px);height:640px;width:100%;max-width:760px;flex-direction:column;border-radius:10px;background:#fdfdfd;box-shadow:0 6px 20px rgba(51,51,51,0.16);padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="margin:0;font-size:16px;font-weight:600">Библиотека сниппетов</h2>
+          <button onClick="{{ closeModal }}" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#6c6c6c;border-radius:4px;padding:2px 8px" style-hover="background:#f0f0f0">×</button>
+        </div>
+        <input placeholder="Поиск по паттерну, описанию, сущности…" value="{{ libSearch }}" onChange="{{ onLibSearch }}" style="height:36px;width:100%;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 12px;font-size:14px;color:#333333;outline:none;font-family:inherit" style-focus="border-color:#2c5c97">
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0">
+          <sc-for list="{{ libGroups }}" as="lg" hint-placeholder-count="6">
+            <button onClick="{{ lg.set }}" style="{{ lg.style }}">{{ lg.label }}</button>
+          </sc-for>
+        </div>
+        <div style="margin-top:8px;min-height:0;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px">
+          <sc-for list="{{ libCards }}" as="lc" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;gap:6px;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <code style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#1b4b78;background:#e6f3ff;border-radius:3px;padding:2px 6px;overflow-wrap:anywhere">{{ lc.pattern }}</code>
+                <span style="{{ lc.kindStyle }}">{{ lc.kindLabel }}</span>
+                <button onClick="{{ lc.insert }}" style="margin-left:auto;display:inline-flex;align-items:center;border-radius:6px;border:1px solid #e3e3e3;background:#fdfdfd;color:#333333;font-size:12px;font-weight:500;height:26px;padding:0 10px;cursor:pointer;font-family:inherit;flex-shrink:0" style-hover="background:#f0f0f0;color:#3464a3">Вставить</button>
+              </div>
+              <div style="font-size:12px;color:#333333">{{ lc.desc }}</div>
+              <sc-if value="{{ lc.hasTrigger }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:11px;color:#6c6c6c"><span style="font-weight:600">Когда:</span> {{ lc.trigger }}</div>
+              </sc-if>
+              <sc-if value="{{ lc.hasGotcha }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:11px;color:#b77f2b"><span style="font-weight:600">Грабли:</span> {{ lc.gotcha }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ libEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:16px;color:#6c6c6c;font-size:13px">Ничего не найдено</div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showCookbook }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(51,51,51,0.6);padding:20px">
+      <div onClick="{{ stop }}" style="display:flex;max-height:calc(100vh - 40px);width:100%;max-width:720px;flex-direction:column;border-radius:10px;background:#fdfdfd;box-shadow:0 6px 20px rgba(51,51,51,0.16);padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <h2 style="margin:0;font-size:16px;font-weight:600">Regex Cookbook</h2>
+          <div style="display:flex;align-items:center;gap:8px">
+            <a href="#" style="font-size:12px;color:#3464a3;text-decoration:none">Открыть на GitHub</a>
+            <button onClick="{{ closeModal }}" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#6c6c6c;border-radius:4px;padding:2px 8px" style-hover="background:#f0f0f0">×</button>
+          </div>
+        </div>
+        <div style="min-height:0;flex:1;overflow-y:auto;font-size:14px;line-height:1.6;color:#333333">
+          <h3 style="font-size:16px;font-weight:600;margin:16px 0 6px">Порядок работы над форматом</h3>
+          <p style="margin:6px 0">Сначала зафиксируйте литералы шаблона (всё, что не меняется от SMS к SMS), затем замените переменные куски группами захвата из библиотеки сниппетов. Каждая группа захвата сопоставляется со столбцом — порядок групп строго следует порядку токенов в SMS.</p>
+          <h3 style="font-size:16px;font-weight:600;margin:16px 0 6px">Суммы и балансы</h3>
+          <p style="margin:6px 0">Дефолт для суммы — <code style="font-family:'JetBrains Mono',monospace;font-size:0.88em;background:#ffffff;border:1px solid #e3e3e3;border-radius:3px;padding:1px 5px">(\d[\d\s.,]*)</code>. Знак минуса выносится из группы захвата, иначе значение не совпадёт с value. Для баланса почти всегда нужны обязательные копейки: <code style="font-family:'JetBrains Mono',monospace;font-size:0.88em;background:#ffffff;border:1px solid #e3e3e3;border-radius:3px;padding:1px 5px">(-?\d[\d\s.,]*[.,]\d{2})</code>, иначе в группу утечёт время.</p>
+          <h3 style="font-size:16px;font-weight:600;margin:16px 0 6px">Пересечения форматов</h3>
+          <p style="margin:6px 0">Regex одного формата не должен совпадать с примерами другого. Кнопка «Посчитать пересечения» проверяет каждый regex против всех примеров банка; красный счётчик в списке файлов открывает scoped-вкладку «Пересечения».</p>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showSettings }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(51,51,51,0.6);padding:20px">
+      <div onClick="{{ stop }}" style="width:100%;max-width:520px;border-radius:10px;background:#fdfdfd;box-shadow:0 6px 20px rgba(51,51,51,0.16);padding:24px">
+        <h2 style="margin:0 0 16px;font-size:16px;font-weight:600">GitHub токен для API запросов</h2>
+        <label style="display:block;font-size:12px;color:#6c6c6c;margin-bottom:6px">GitHub Personal Access Token</label>
+        <input type="password" placeholder="ghp_..." value="{{ tokenInput }}" onChange="{{ onTokenInput }}" style="height:36px;width:100%;border-radius:6px;border:1px solid #e3e3e3;background:#ffffff;padding:0 12px;font-size:14px;color:#333333;outline:none;font-family:'JetBrains Mono',monospace" style-focus="border-color:#2c5c97">
+        <div style="margin-top:8px;font-size:13px;color:#6c6c6c">Токен будет сохранён локально в браузере и использован для GitHub API запросов.</div>
+        <div style="margin-top:24px;display:flex;justify-content:flex-end;gap:8px">
+          <button style="margin-right:auto;display:inline-flex;align-items:center;border-radius:6px;border:1px solid #993636;background:rgba(153,54,54,0.1);color:#993636;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:rgba(153,54,54,0.15)">Сбросить всё</button>
+          <button style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid #993636;background:rgba(153,54,54,0.1);color:#993636;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:rgba(153,54,54,0.15)">Сбросить токен</button>
+          <button onClick="{{ closeModal }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid transparent;background:transparent;color:#333333;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#f0f0f0">Отмена</button>
+          <button onClick="{{ closeModal }}" style="display:inline-flex;align-items:center;border-radius:6px;border:1px solid #3464a3;background:#3464a3;color:#ffffff;font-size:13px;font-weight:500;height:34px;padding:0 14px;cursor:pointer;font-family:inherit" style-hover="background:#2b64ad">Сохранить</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.historyMap = {};
+    this.regexEl = null;
+    this.keepGroupSelected = false;
+    const F = (name, regex, columns, examples, opts) => {
+      const o = opts || {};
+      return {
+        name, regex, columns: columns.slice(), examples: examples.slice(),
+        deleted: false, created: !!o.created, sourceChanged: !!o.sourceChanged,
+        original: o.created ? null : {
+          regex: o.origRegex != null ? o.origRegex : regex,
+          columns: (o.origColumns || columns).slice(),
+          examples: (o.origExamples || examples).slice()
+        }
+      };
+    };
+    this.state = {
+      screen: "dashboard",
+      prQuery: "",
+      sourcePr: { num: 218, branch: "aqua/pokupka-popolnenie" },
+      files: [
+        F("pokupka.txt",
+          "Karta \\*(\\d{4})\\. Pokupka (\\d[\\d\\s.,]*) ([A-Z]{3})\\. (.+)\\. Dostupno (\\d[\\d\\s.,]*) RUB",
+          ["syncid#ccard", "outcome", "instrument", "payee", "av_balance"],
+          ["Karta *4312. Pokupka 450.50 RUB. MAGNIT MOSKVA. Dostupno 12 345.67 RUB",
+           "Karta *4312. Pokupka 1 200 RUB. PYATEROCHKA 7642. Dostupno 11 145.17 RUB",
+           "Karta *9907. Pokupka 89.90 USD. STEAMGAMES.COM. Dostupno 1 055.27 RUB"],
+          { sourceChanged: true }),
+        F("popolnenie.txt",
+          "Schet \\*(\\d{4})\\. Popolnenie (\\d[\\d\\s.,]*) ([A-Z]{3})\\. Dostupno (\\d[\\d\\s.,]*) RUB",
+          ["syncid", "income", "instrument", "av_balance"],
+          ["Schet *7204. Popolnenie 15 000 RUB. Dostupno 27 345.67 RUB",
+           "Schet *7204. Popolnenie 2 500.00 RUB. Dostupno 29 845.67 RUB"],
+          { origRegex: "Schet \\*(\\d{4})\\. Popolnenie (\\d[\\d\\s.,]*) RUB\\. Dostupno (\\d[\\d\\s.,]*) RUB",
+            origColumns: ["syncid", "income", "av_balance"] }),
+        F("perevod-ishodyashchiy.txt",
+          "Perevod (\\d[\\d\\s.,]*) RUB so scheta \\*(\\d{4})\\. (.+)\\. Komissiya (\\d[\\d\\s.,]*) RUB",
+          ["outcome", "syncid", "payee", "fee"],
+          ["Perevod 3 000 RUB so scheta *7204. IVANOV IVAN I. Komissiya 30 RUB"],
+          { created: true }),
+        F("snyatie.txt",
+          "Vydacha (\\d[\\d\\s.,]*) RUB\\. Karta \\*(\\d{4})\\. ATM (.+)\\. Dostupno (\\d[\\d\\s.,]*) RUB",
+          ["outcome", "syncid#ccard", "comment", "av_balance"],
+          ["Vydacha 5 000 RUB. Karta *4312. ATM AQB-0412. Dostupno 6 055.27 RUB",
+           "Vydacha 10 000 RUB. Karta *9907. ATM AQB-1180. Dostupno 45 210.00 RUB",
+           "Vydacha nalichnyh 3 000 RUB. Karta *4312. Dostupno 3 055.27 RUB"]),
+        F("otkaz.txt",
+          "Pokupka (\\d[\\d\\s.,]*) RUB\\.",
+          ["outcome", "comment"],
+          ["Otkaz. Pokupka 2 500 RUB. Karta *4312. Prevyshen limit"])
+      ],
+      sendersText: "AQUABANK\nAquaBank\nAKVA-BANK\n2204\n",
+      sendersOriginal: "AQUABANK\nAquaBank\nAKVA-BANK\n2204\n",
+      selected: "pokupka.txt",
+      formatTab: "all",
+      fileSearch: "",
+      recent: ["pokupka.txt"],
+      editorMode: "structured",
+      activeExample: 0,
+      highlightMode: "groups",
+      rightTab: "snippets",
+      wsPlus: false,
+      hoveredGroup: null,
+      selectedGroup: null,
+      activeToken: null,
+      exampleSource: "examples",
+      activeInterExample: 0,
+      interCalculated: false,
+      interStats: null,
+      interScope: null,
+      modal: null,
+      colPickerGroup: null,
+      colSearch: "",
+      qrSearch: "",
+      snipGroup: "all",
+      libSearch: "",
+      libGroup: "all",
+      qcMode: "template-by-sms",
+      qcSms: "",
+      qcRegex: "",
+      qcResults: null,
+      qcError: null,
+      createName: "",
+      createError: null,
+      commitTitle: "",
+      commitDesc: "",
+      publishMsg: null,
+      tokenInput: ""
+    };
+  }
+
+  // ─── data dictionaries ───
+  allowedColumns() {
+    return [
+      { name: "payee", desc: "Получатель платежа" },
+      { name: "income", desc: "Сумма прихода" },
+      { name: "outcome", desc: "Сумма расхода" },
+      { name: "fee", desc: "Комиссия" },
+      { name: "cashback", desc: "Кешбэк" },
+      { name: "op_income", desc: "Доход в исходной сумме" },
+      { name: "op_outcome", desc: "Расход в исходной сумме" },
+      { name: "balance", desc: "Баланс" },
+      { name: "av_balance", desc: "Доступный баланс" },
+      { name: "comment", desc: "Комментарий" },
+      { name: "instrument", desc: "Валюта операции" },
+      { name: "op_instrument", desc: "Исходная валюта" },
+      { name: "acc_instrument", desc: "Валюта счёта" },
+      { name: "date", desc: "Дата операции", param: true, hint: "dd.MM.yyyy" },
+      { name: "syncid", desc: "Идентификатор счёта/карты", param: true, hint: "ccard / checking" },
+      { name: "mcc", desc: "MCC-код" }
+    ];
+  }
+  snippets() {
+    return [
+      { group: "amount", pattern: "(\\d[\\d\\s.,]*)", kind: "default", desc: "Сумма: начинается с цифры, дальше цифры, пробелы, точки и запятые. Ловит и целые (1000), и дробные (1 000,00).", trigger: "Когда сумма может быть без копеек.", gotcha: "Знак минус выносим из захвата: -?(\\d[\\d\\s.,]*), иначе -73.66 не совпадёт с value=73.66." },
+      { group: "amount", pattern: "-?(\\d[\\d\\s.,]*)", kind: "default", desc: "Сумма со знаком минуса в SMS, который НЕ должен попасть в value: -? вне группы захвата.", trigger: "В SMS перед суммой стоит -/+, а value задаётся без знака." },
+      { group: "amount", pattern: "(\\d[\\d\\s.,]*[.,]\\d{2})", kind: "alt", desc: "Сумма с обязательными двумя знаками после разделителя. Жёсткий конец не даёт захватить лишнее.", trigger: "Сумма всегда с 2 знаками после разделителя." },
+      { group: "balance", pattern: "(-?\\d[\\d\\s.,]*[.,]\\d{2})", kind: "default", desc: "Баланс: допускает минус, обязательные 2 знака, жёсткий конец отрезает хвост (время, валюту, точку).", trigger: "Баланс почти всегда с копейками.", gotcha: "Если за балансом сразу идёт время (9141.03 15:43) — обязательно [.,]\\d{2}, иначе в баланс утечёт время." },
+      { group: "balance", pattern: "(-?\\d[\\d\\s.,]*)", kind: "alt", desc: "Баланс без принудительных центов.", trigger: "Баланс в шаблоне бывает целым." },
+      { group: "currency", pattern: "([A-Z]{3})", kind: "default", desc: "Валюта: ISO-код из 3 латинских букв (USD, VND, RUB).", trigger: "Валюта в SMS — ISO-код." },
+      { group: "currency", pattern: "(\\S+)", kind: "alt", desc: "Короткий символ или не-ISO токен валюты, отделённый пробелом ($, Rs, ₸).", trigger: "Валюта — символ/короткий код." },
+      { group: "syncid", pattern: "(\\d{4})", kind: "default", desc: "Последние 4 цифры нашего идентификатора (не контрагента). Якорим по маске.", trigger: "Дефолт (≈90% свежих).", gotcha: "Карта контрагента (на карту **** 4567) — НЕ syncid." },
+      { group: "syncid", pattern: "\\*{2,4}(\\d{4})", kind: "default", desc: "4 цифры после маски из звёздочек (*1234, **5678, ***2771).", trigger: "id замаскирован звёздочками слева." },
+      { group: "syncid", pattern: "(\\d{3,4})", kind: "alt", desc: "Идентификатор из 3 или 4 цифр.", trigger: "В шаблоне встречается и 3, и 4 цифры." },
+      { group: "date", pattern: "(\\d{2}[-./]\\d{2}[-./]\\d{2,4})", kind: "default", desc: "Дата день-месяц-год (колонка date#dMy). Разделитель -, . или /; год 2 или 4 цифры.", trigger: "Дефолт: порядок день-месяц-год.", gotcha: "Время (HH:mm) всегда вне группы даты." },
+      { group: "payee", pattern: "(.+?)", kind: "default", desc: "Получатель: нежадный захват до следующего литерала шаблона.", trigger: "Получатель ограничен явным разделителем." },
+      { group: "payee", pattern: "([^.]+)", kind: "alt", desc: "Получатель до ближайшей точки.", trigger: "Название мерчанта не содержит точек." },
+      { group: "glue", pattern: "\\s+", kind: "default", desc: "Гибкая склейка: один и более пробельных символов между токенами шаблона.", trigger: "Количество пробелов в SMS плавает." },
+      { group: "glue", pattern: "\\.", kind: "alt", desc: "Литеральная точка — частый разделитель предложений в банковских SMS.", trigger: "" }
+    ];
+  }
+  snippetGroupLabels() {
+    return [["all", "Все"], ["amount", "Суммы"], ["balance", "Баланс"], ["currency", "Валюта"], ["syncid", "Счёт / карта"], ["date", "Дата"], ["payee", "Получатель"], ["glue", "Склейка"]];
+  }
+  quickRef() {
+    return [
+      { label: "Частые", items: [[".", "Любой символ кроме перевода строки"], ["\\d", "Цифра (0–9)"], ["\\D", "Не цифра"], ["\\w", "Словесный символ (a–z, A–Z, 0–9, _)"], ["\\s", "Пробельный символ"], ["\\S", "Не пробельный символ"]] },
+      { label: "Якоря", items: [["^", "Начало строки"], ["$", "Конец строки"], ["\\b", "Граница слова"], ["\\B", "Не граница слова"]] },
+      { label: "Квантификаторы", items: [["*", "0 или более"], ["+", "1 или более"], ["?", "0 или 1"], ["{n}", "Ровно n"], ["{n,m}", "От n до m"], ["+?", "1 или более (ленивый)"]] },
+      { label: "Группы", items: [["(...)", "Группа захвата"], ["(?:...)", "Группа без захвата"], ["(?=...)", "Положительный просмотр вперёд"], ["(?!...)", "Отрицательный просмотр вперёд"], ["|", "Альтернатива (или)"]] },
+      { label: "Классы символов", items: [["[abc]", "Любой из a, b, c"], ["[^abc]", "Любой кроме a, b, c"], ["[a-z]", "Диапазон a–z"], ["[0-9]", "Диапазон цифр"]] }
+    ];
+  }
+  prData() {
+    return [
+      { num: 218, title: "АкваБанк: формат покупки и пополнения", branch: "aqua/pokupka-popolnenie", author: "marina-k", approved: 1, failed: 0, hasDrafts: true, labels: [{ name: "аква-банк", bg: "#d5ebff", fg: "#1b4b78" }] },
+      { num: 217, title: "Северный Банк: SMS о переводах между счетами", branch: "severnyy/perevody", author: "d-volkov", approved: 2, failed: 0, hasDrafts: false, labels: [{ name: "северный-банк", bg: "#c4e8ac", fg: "#0f4c2a" }] },
+      { num: 214, title: "ФинКарт: снятие наличных и баланс", branch: "finkart/snyatie-balans", author: "a-petrova", approved: 0, failed: 0, hasDrafts: false, labels: [{ name: "финкарт", bg: "#f6d7a6", fg: "#5f3b00" }, { name: "needs-review", bg: "#dbcaff", fg: "#3f2a82" }] },
+      { num: 211, title: "Юнион Кредит: правка формата отказа", branch: "union/otkaz-fix", author: "s-grigoriev", approved: 1, failed: 2, hasDrafts: false, labels: [{ name: "юнион-кредит", bg: "#ffc7c7", fg: "#7d1d1d" }] },
+      { num: 208, title: "МетаПэй: новые отправители", branch: "metapay/senders", author: "marina-k", approved: 0, failed: 0, hasDrafts: false, labels: [{ name: "метапэй", bg: "#f2cfff", fg: "#3f2a82" }] }
+    ];
+  }
+
+  // ─── regex engine ───
+  test(pattern, text) {
+    if (!pattern || !pattern.trim()) return { matched: false, groups: [], error: null };
+    let re;
+    try { re = new RegExp(pattern, "d"); } catch (e) { return { matched: false, groups: [], error: String(e.message || e) }; }
+    const m = re.exec(text);
+    if (!m) return { matched: false, groups: [], error: null };
+    const ind = m.indices || [];
+    const groups = [];
+    for (let i = 1; i < m.length; i++) {
+      const r = ind[i];
+      if (r) groups.push({ index: i, start: r[0], end: r[1], value: m[i] == null ? "" : m[i] });
+      else groups.push({ index: i, start: -1, end: -1, value: m[i] == null ? "" : m[i] });
+    }
+    const fi = ind[0] || [m.index, m.index + m[0].length];
+    return { matched: true, error: null, start: fi[0], end: fi[1], full: m[0], groups };
+  }
+  countGroups(p) {
+    try { return new RegExp(p + "|").exec("").length - 1; } catch (e) { return 0; }
+  }
+  tokenize(p) {
+    const toks = []; const charGroup = new Array(p.length).fill(null); const spans = {};
+    let i = 0, group = 0, litStart = -1; const stack = [];
+    const push = (s, e, type, desc) => toks.push({ raw: p.slice(s, e), start: s, end: e, type, desc });
+    const flushLit = (upTo) => { if (litStart >= 0 && litStart < upTo) { push(litStart, upTo, "literal", "Литерал «" + p.slice(litStart, upTo) + "»"); } litStart = -1; };
+    const escMap = { d: "Цифра (0–9)", D: "Не цифра", w: "Словесный символ (a–z, 0–9, _)", W: "Не словесный символ", s: "Пробельный символ", S: "Не пробельный символ", b: "Граница слова", B: "Не граница слова", n: "Перевод строки", t: "Табуляция" };
+    while (i < p.length) {
+      const c = p[i];
+      if ((c === "*" || c === "+" || c === "?" || c === "{") && litStart >= 0 && i - litStart > 1) {
+        push(litStart, i - 1, "literal", "Литерал «" + p.slice(litStart, i - 1) + "»");
+        push(i - 1, i, "literal", "Символ «" + p[i - 1] + "»");
+        litStart = -1;
+      }
+      if (c === "\\") {
+        flushLit(i);
+        const nxt = p[i + 1] || "";
+        const type = (nxt === "b" || nxt === "B") ? "anchor" : "escape";
+        push(i, i + 2, type, escMap[nxt] || ("Символ «" + nxt + "»"));
+        i += 2; continue;
+      }
+      if (c === "[") {
+        flushLit(i);
+        let j = i + 1; if (p[j] === "^") j++; if (p[j] === "]") j++;
+        while (j < p.length && p[j] !== "]") { if (p[j] === "\\") j++; j++; }
+        const end = Math.min(j + 1, p.length);
+        const neg = p[i + 1] === "^";
+        push(i, end, "charclass", (neg ? "Один символ НЕ из набора " : "Один символ из набора ") + p.slice(i, end));
+        i = end; continue;
+      }
+      if (c === "(") {
+        flushLit(i);
+        if (p[i + 1] === "?") {
+          const three = p.slice(i, i + 3), four = p.slice(i, i + 4);
+          let len = 3, d = "Группа без захвата — начало";
+          if (three === "(?=") d = "Просмотр вперёд (положительный) — начало";
+          else if (three === "(?!") d = "Просмотр вперёд (отрицательный) — начало";
+          else if (four === "(?<=") { len = 4; d = "Просмотр назад (положительный) — начало"; }
+          else if (four === "(?<!") { len = 4; d = "Просмотр назад (отрицательный) — начало"; }
+          push(i, i + len, "meta", d); stack.push({ cap: false }); i += len; continue;
+        }
+        group++; push(i, i + 1, "group", "Группа захвата №" + group + " — начало");
+        stack.push({ cap: true, index: group, start: i }); i++; continue;
+      }
+      if (c === ")") {
+        flushLit(i);
+        const top = stack.pop();
+        if (top && top.cap) {
+          push(i, i + 1, "group", "Группа захвата №" + top.index + " — конец");
+          spans[top.index] = [top.start, i + 1];
+          for (let k = top.start; k <= i; k++) { if (charGroup[k] === null) charGroup[k] = top.index; }
+        } else { push(i, i + 1, "meta", "Конец группы"); }
+        i++; continue;
+      }
+      if (c === "|") { flushLit(i); push(i, i + 1, "alternation", "Альтернатива — любой из вариантов"); i++; continue; }
+      if (c === "^") { flushLit(i); push(i, i + 1, "anchor", "Начало строки"); i++; continue; }
+      if (c === "$") { flushLit(i); push(i, i + 1, "anchor", "Конец строки"); i++; continue; }
+      if (c === ".") { flushLit(i); push(i, i + 1, "meta", "Любой символ, кроме перевода строки"); i++; continue; }
+      if (c === "*" || c === "+" || c === "?") {
+        flushLit(i);
+        let end = i + 1, lazy = false;
+        if (p[end] === "?") { lazy = true; end++; }
+        const base = c === "*" ? "0 или более раз" : c === "+" ? "1 или более раз" : "0 или 1 раз";
+        push(i, end, "quantifier", base + (lazy ? " (ленивый)" : ""));
+        i = end; continue;
+      }
+      if (c === "{") {
+        const m2 = /^\{(\d+)(,(\d*))?\}/.exec(p.slice(i));
+        if (m2) {
+          flushLit(i);
+          let end = i + m2[0].length, lazy = false;
+          if (p[end] === "?") { lazy = true; end++; }
+          const d = m2[2] == null ? ("Ровно " + m2[1] + " раз") : (m2[3] ? "От " + m2[1] + " до " + m2[3] + " раз" : m2[1] + " или более раз");
+          push(i, end, "quantifier", d + (lazy ? " (ленивый)" : ""));
+          i = end; continue;
+        }
+      }
+      if (litStart < 0) litStart = i;
+      i++;
+    }
+    flushLit(p.length);
+    return { tokens: toks, charGroup, spans };
+  }
+
+  // ─── style helpers ───
+  toneStyle(type) {
+    const m = { anchor: ["#d9ab54", "#ffd78a", "#5f3b00"], group: ["#77c790", "#b9f0c8", "#0f4c2a"], quantifier: ["#7fb2ea", "#bcdcff", "#1b4b78"], alternation: ["#e28d8d", "#ffc7c7", "#7d1d1d"], escape: ["#ac8fe8", "#dbcaff", "#3f2a82"], charclass: ["#8dbce8", "#c8e5ff", "#1b4f86"], meta: ["#97bde8", "#cfe3ff", "#1f4f80"], literal: ["#bdc8d3", "#e9eff6", "#2a3e54"] };
+    const t = m[type] || m.literal;
+    return { borderRadius: 2, boxShadow: "inset 0 0 0 1px " + t[0], background: t[1], color: t[2], fontWeight: 600 };
+  }
+  blockTone(type) {
+    const m = { anchor: ["#ecd39b", "#fff4d6", "#5f3b00"], group: ["#bde0c7", "#e7faec", "#0f4c2a"], quantifier: ["#b8d5f3", "#e6f3ff", "#1b4b78"], alternation: ["#efc0c0", "#ffeaea", "#7d1d1d"], escape: ["#cdbcf1", "#f1eaff", "#3f2a82"], charclass: ["#c1daf1", "#e9f4ff", "#1b4f86"], meta: ["#c6daf1", "#ebf4ff", "#1f4f80"], literal: ["#d2dbe5", "#f3f6fa", "#2a3e54"] };
+    return m[type] || m.literal;
+  }
+  groupPalette(idx) {
+    const fills = ["#c4e8ac", "#f6d7a6", "#c8c8ff", "#f2cfff", "#ffc5bf"];
+    const borders = ["#9fcba1", "#e0bf8b", "#acadfc", "#e1abf5", "#ef9b95"];
+    const k = (idx - 1) % 5;
+    return { fill: fills[k], border: borders[k] };
+  }
+  btn(disabled, variant) {
+    const base = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, whiteSpace: "nowrap", borderRadius: 6, border: "1px solid #e3e3e3", background: "#fdfdfd", color: "#333333", fontWeight: 500, fontSize: 13, height: 32, padding: "0 12px", cursor: "pointer", fontFamily: "inherit" };
+    if (variant === "primary") { base.border = "1px solid #3464a3"; base.background = "#3464a3"; base.color = "#ffffff"; }
+    if (variant === "ghost") { base.border = "1px solid transparent"; base.background = "transparent"; }
+    if (disabled) { base.opacity = 0.5; base.cursor = "default"; base.pointerEvents = "none"; }
+    return base;
+  }
+  actionBtn(disabled, variant) {
+    const b = this.btn(disabled, variant);
+    return Object.assign(b, { minHeight: 38, height: "auto", width: "100%", justifyContent: "flex-start", textAlign: "left", whiteSpace: "normal", padding: "6px 12px", lineHeight: 1.3 });
+  }
+  tabStyle(active) {
+    return {
+      cursor: "pointer", border: "none", borderBottom: active ? "2px solid #3464a3" : "2px solid transparent",
+      background: active ? "#fdfdfd" : "transparent", color: active ? "#3464a3" : "#6c6c6c",
+      padding: "8px 16px", fontWeight: 500, fontSize: 13, fontFamily: "inherit",
+      boxShadow: active ? "inset 0 -1px 0 rgba(52,100,163,0.14)" : "none"
+    };
+  }
+  chipStyle(active) {
+    return {
+      cursor: "pointer", border: "1px solid " + (active ? "#3464a3" : "#e3e3e3"), borderRadius: 999,
+      background: active ? "rgba(52,100,163,0.12)" : "#fdfdfd", color: active ? "#3464a3" : "#6c6c6c",
+      padding: "3px 10px", fontSize: 11, fontWeight: 600, fontFamily: "inherit"
+    };
+  }
+  segStyle(active) {
+    return {
+      cursor: "pointer", border: "none", padding: "4px 10px", fontWeight: 500, fontSize: 12,
+      textTransform: "none", letterSpacing: 0, fontFamily: "inherit",
+      background: active ? "#3464a3" : "#fdfdfd", color: active ? "#fdfdfd" : "#6c6c6c"
+    };
+  }
+  badgeStyle(kind) {
+    const m = { success: ["rgba(30,105,51,0.12)", "#1e6933"], warning: ["rgba(183,127,43,0.14)", "#b77f2b"], error: ["rgba(153,54,54,0.12)", "#993636"], info: ["rgba(52,100,163,0.12)", "#3464a3"], neutral: ["#f0f0f0", "#6c6c6c"] };
+    const t = m[kind] || m.neutral;
+    return { display: "inline-flex", alignItems: "center", borderRadius: 4, background: t[0], color: t[1], fontSize: 11, fontWeight: 600, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" };
+  }
+
+  // ─── format file helpers ───
+  getFile(name) { return this.state.files.find(f => f.name === name); }
+  currentFile() {
+    const s = this.state;
+    if (s.selected === "senders.txt") return null;
+    return this.getFile(s.selected) || null;
+  }
+  serializeFmt(f) {
+    const parts = [f.regex, "", "-----COLUMNS-----", f.columns.join(";")];
+    for (const ex of f.examples) parts.push("", "-----EXAMPLE-----", ex);
+    return parts.join("\n") + "\n";
+  }
+  parseFmt(raw) {
+    const lines = raw.split("\n");
+    const ci = lines.findIndex(l => l.trim() === "-----COLUMNS-----");
+    const exIdx = [];
+    lines.forEach((l, i) => { if (l.trim() === "-----EXAMPLE-----") exIdx.push(i); });
+    const regex = ci === -1 ? (lines[0] || "").trim() : lines.slice(0, ci).join("\n").trim();
+    const colLine = ci === -1 ? "" : (lines[ci + 1] || "").trim();
+    const columns = colLine ? colLine.split(";").map(s => s.trim()).filter(Boolean) : [];
+    const examples = [];
+    for (let k = 0; k < exIdx.length; k++) {
+      const start = exIdx[k] + 1;
+      const end = k + 1 < exIdx.length ? exIdx[k + 1] : lines.length;
+      const txt = lines.slice(start, end).filter(l => l.trim() !== "-----COLUMNS-----").join("\n").trim();
+      if (txt) examples.push(txt);
+    }
+    const issues = [];
+    if (ci === -1) issues.push("Отсутствует маркер -----COLUMNS-----");
+    if (exIdx.length === 0) issues.push("Отсутствует маркер -----EXAMPLE-----");
+    return { regex, columns, examples, issues };
+  }
+  isLocalChanged(f) {
+    if (f.created || f.deleted) return true;
+    if (!f.original) return true;
+    return this.serializeFmt(f) !== this.serializeFmt(f.original);
+  }
+
+  // ─── history ───
+  snap(f) { return { regex: f.regex, columns: f.columns.slice(), examples: f.examples.slice() }; }
+  ensureHistory(name) {
+    if (!this.historyMap[name]) {
+      const f = this.getFile(name);
+      if (f) this.historyMap[name] = { stack: [this.snap(f)], idx: 0 };
+    }
+    return this.historyMap[name];
+  }
+  mutateFile(name, mut) {
+    this.ensureHistory(name);
+    this.setState(s => ({
+      files: s.files.map(f => {
+        if (f.name !== name) return f;
+        const nf = Object.assign({}, f, { columns: f.columns.slice(), examples: f.examples.slice() });
+        mut(nf);
+        return nf;
+      })
+    }), () => {
+      const f = this.getFile(name);
+      const h = this.historyMap[name];
+      if (f && h) { h.stack = h.stack.slice(0, h.idx + 1); h.stack.push(this.snap(f)); h.idx++; }
+    });
+  }
+  restoreSnap(name, sn) {
+    this.setState(s => ({
+      files: s.files.map(f => f.name === name ? Object.assign({}, f, { regex: sn.regex, columns: sn.columns.slice(), examples: sn.examples.slice() }) : f),
+      selectedGroup: null, activeToken: null
+    }));
+  }
+  undo() {
+    const name = this.state.selected;
+    const h = this.historyMap[name];
+    if (!h || h.idx <= 0) return;
+    h.idx--; this.restoreSnap(name, h.stack[h.idx]);
+  }
+  redo() {
+    const name = this.state.selected;
+    const h = this.historyMap[name];
+    if (!h || h.idx >= h.stack.length - 1) return;
+    h.idx++; this.restoreSnap(name, h.stack[h.idx]);
+  }
+
+  // ─── mutations ───
+  applyRegex(v) {
+    const f = this.currentFile();
+    if (!f || f.deleted) return;
+    const keep = this.keepGroupSelected; this.keepGroupSelected = false;
+    this.mutateFile(f.name, nf => { nf.regex = v; });
+    if (!keep) this.setState({ selectedGroup: null, activeToken: null });
+  }
+  insertSnippet(pat) {
+    const f = this.currentFile();
+    if (!f || f.deleted) return;
+    const sel = this.state.selectedGroup;
+    let next = null;
+    if (sel != null) {
+      const spans = this.tokenize(f.regex).spans;
+      const sp = spans[sel];
+      if (sp) { next = f.regex.slice(0, sp[0]) + pat + f.regex.slice(sp[1]); this.keepGroupSelected = true; }
+    }
+    if (next == null) {
+      const pos = this.regexEl ? this.regexEl.selectionStart : f.regex.length;
+      next = f.regex.slice(0, pos) + pat + f.regex.slice(pos);
+    }
+    this.applyRegex(next);
+    this.setState({ modal: null });
+  }
+  selectFile(name) {
+    this.ensureHistory(name);
+    this.setState(s => {
+      const recent = [name].concat(s.recent.filter(r => r !== name)).slice(0, 10);
+      return { selected: name, recent, activeExample: 0, selectedGroup: null, activeToken: null, hoveredGroup: null, exampleSource: "examples", activeInterExample: 0 };
+    });
+  }
+  calcIntersections() {
+    const stats = {};
+    const fs = this.state.files.filter(f => !f.deleted);
+    for (const f of fs) {
+      let own = 0;
+      for (const ex of f.examples) if (this.test(f.regex, ex).matched) own++;
+      const paths = [];
+      for (const o of fs) {
+        if (o === f) continue;
+        if (o.examples.some(ex => this.test(f.regex, ex).matched)) paths.push(o.name);
+      }
+      stats[f.name] = { total: f.examples.length, own, inter: paths.length, paths };
+    }
+    this.setState({ interStats: stats, interCalculated: true });
+  }
+  computeIssues() {
+    const issues = [];
+    for (const f of this.state.files) {
+      if (f.deleted) continue;
+      let valid = true;
+      try { new RegExp(f.regex); } catch (e) { valid = false; issues.push({ file: f.name, level: "error", msg: "Некорректная регулярная конструкция" }); }
+      if (!f.regex.trim()) issues.push({ file: f.name, level: "error", msg: "Отсутствует регулярное выражение" });
+      if (f.examples.filter(e => e.trim()).length === 0) issues.push({ file: f.name, level: "error", msg: "Нет ни одного примера" });
+      if (valid && f.regex.trim()) {
+        f.examples.forEach((ex, k) => {
+          if (ex.trim() && !this.test(f.regex, ex).matched) issues.push({ file: f.name, level: "error", msg: "Пример #" + (k + 1) + " не совпадает с regex данного формата" });
+        });
+      }
+      const g = this.countGroups(f.regex);
+      if (g !== f.columns.length) issues.push({ file: f.name, level: "error", msg: "Количество групп захвата (" + g + ") ≠ количеству столбцов (" + f.columns.length + ")" });
+      for (const c of f.columns) {
+        const base = c.split("#")[0];
+        if (base && !this.allowedColumns().some(a => a.name === base)) issues.push({ file: f.name, level: "error", msg: "Недопустимый столбец: " + c });
+      }
+    }
+    for (const f of this.state.files) {
+      if (f.deleted) continue;
+      for (const o of this.state.files) {
+        if (o === f || o.deleted || !o.regex.trim()) continue;
+        if (f.examples.some(ex => ex.trim() && this.test(o.regex, ex).matched)) {
+          issues.push({ file: f.name, level: "warning", msg: "Пример совпадает с regex другого формата: " + o.name });
+        }
+      }
+    }
+    return issues;
+  }
+  runQuickCheck() {
+    const s = this.state;
+    if (s.qcMode === "template-by-sms") {
+      const sms = s.qcSms.trim();
+      if (!sms) { this.setState({ qcError: "Введите текст SMS для проверки.", qcResults: null }); return; }
+      const rows = s.files.filter(f => !f.deleted).map(f => {
+        const r = this.test(f.regex, sms);
+        const st = r.error ? "invalid" : r.matched ? "match" : "no";
+        return { file: f.name, status: st, detail: r.matched ? r.full : "" };
+      });
+      const matched = rows.filter(r => r.status === "match").length;
+      this.setState({ qcError: null, qcResults: { rows, summary: ["Проверено regex: " + rows.length + " / " + rows.length, "Совпадений: " + matched] } });
+    } else {
+      const pat = s.qcRegex.trim();
+      if (!pat) { this.setState({ qcError: "Введите регулярное выражение шаблона.", qcResults: null }); return; }
+      let re;
+      try { re = new RegExp(pat); } catch (e) { this.setState({ qcError: "Некорректный шаблон: " + e.message, qcResults: null }); return; }
+      const rows = []; let total = 0;
+      for (const f of s.files) {
+        if (f.deleted) continue;
+        f.examples.forEach((ex, i) => { total++; if (re.test(ex)) rows.push({ file: f.name, status: "match", detail: "строка #" + (i + 1) + ": " + ex }); });
+      }
+      this.setState({ qcError: null, qcResults: { rows, summary: ["Проверено СМС: " + total, "Совпавших СМС: " + rows.length] } });
+    }
+  }
+  publishAll() {
+    this.setState(s => {
+      const files = s.files.filter(f => !f.deleted).map(f => {
+        if (!this.isLocalChanged(f)) return f;
+        return Object.assign({}, f, { created: false, sourceChanged: true, original: { regex: f.regex, columns: f.columns.slice(), examples: f.examples.slice() } });
+      });
+      const selectedGone = !files.some(f => f.name === s.selected) && s.selected !== "senders.txt";
+      return {
+        files,
+        sendersOriginal: s.sendersText,
+        modal: null, commitTitle: "", commitDesc: "",
+        publishMsg: "PR успешно обновлён!",
+        selected: selectedGone ? (files[0] ? files[0].name : "senders.txt") : s.selected
+      };
+    }, () => {
+      clearTimeout(this._pubTimer);
+      this._pubTimer = setTimeout(() => this.setState({ publishMsg: null }), 4000);
+    });
+  }
+  resetAll() {
+    this.historyMap = {};
+    this.setState(s => {
+      const files = s.files.filter(f => f.original).map(f => Object.assign({}, f, {
+        regex: f.original.regex, columns: f.original.columns.slice(), examples: f.original.examples.slice(), deleted: false
+      }));
+      const selectedGone = !files.some(f => f.name === s.selected) && s.selected !== "senders.txt";
+      return { files, sendersText: s.sendersOriginal, selected: selectedGone ? (files[0] ? files[0].name : "senders.txt") : s.selected, selectedGroup: null, activeToken: null, interCalculated: false, interStats: null, interScope: null, formatTab: s.formatTab === "intersections" ? "all" : s.formatTab };
+    });
+  }
+
+  // ─── overlays (React elements) ───
+  buildRegexOverlay(f) {
+    const s = this.state;
+    const regex = f ? f.regex : "";
+    if (!regex) return React.createElement("span", { style: { color: "#8a8a8a" } }, "\u200b");
+    const tk = this.tokenize(regex);
+    if (s.highlightMode === "parts") {
+      return tk.tokens.map((t, idx) => {
+        const st = this.toneStyle(t.type);
+        if (idx === s.activeToken) { st.outline = "2px solid #3464a3"; st.outlineOffset = -1; }
+        return React.createElement("span", { key: idx, style: st }, t.raw);
+      });
+    }
+    const out = []; let st0 = 0;
+    for (let i = 1; i <= regex.length; i++) {
+      if (i === regex.length || tk.charGroup[i] !== tk.charGroup[st0]) {
+        const g = tk.charGroup[st0];
+        let style = {};
+        if (g != null) {
+          const pal = this.groupPalette(g);
+          style = { background: pal.fill, boxShadow: "inset 0 -2px 0 " + pal.border, borderRadius: 2 };
+          if (g === s.selectedGroup) { style.boxShadow = "inset 0 0 0 2px #1f2933"; style.background = "rgba(31,41,51,0.16)"; }
+        }
+        out.push(React.createElement("span", { key: st0, style }, regex.slice(st0, i)));
+        st0 = i;
+      }
+    }
+    return out;
+  }
+  buildTestOverlay(text, result) {
+    const s = this.state;
+    if (!text) return React.createElement("span", null, "\u200b");
+    if (!result.matched) return React.createElement("span", null, text);
+    const baseStyle = () => {
+      const st = { background: "#d5ebff", boxShadow: "inset 0 -2px 0 #9fcfff", borderRadius: 2 };
+      if (s.hoveredGroup === 0) st.background = "rgba(52,100,163,0.25)";
+      return st;
+    };
+    const segs = []; let cursor = 0; let key = 0;
+    const pushPlain = (a, b) => { if (b > a) segs.push(React.createElement("span", { key: key++ }, text.slice(a, b))); };
+    pushPlain(0, result.start); cursor = result.start;
+    const groups = result.groups.filter(g => g.start >= 0 && g.end > g.start)
+      .map(g => ({ index: g.index, start: Math.max(result.start, Math.min(g.start, result.end)), end: Math.max(result.start, Math.min(g.end, result.end)) }))
+      .sort((a, b) => a.start - b.start || b.end - a.end);
+    for (const g of groups) {
+      const gs = Math.max(g.start, cursor), ge = Math.max(gs, g.end);
+      if (ge <= cursor) continue;
+      if (gs > cursor) segs.push(React.createElement("span", { key: key++, style: baseStyle() }, text.slice(cursor, gs)));
+      const pal = this.groupPalette(g.index);
+      const st = { background: pal.fill, boxShadow: "inset 0 -2px 0 " + pal.border, borderRadius: 2 };
+      if (s.hoveredGroup === g.index) st.filter = "brightness(1.12) saturate(1.6)";
+      if (s.selectedGroup === g.index) { st.outline = "2px solid #3464a3"; st.outlineOffset = -1; }
+      segs.push(React.createElement("span", { key: key++, style: st, title: "Group " + g.index }, text.slice(gs, ge)));
+      cursor = ge;
+    }
+    if (cursor < result.end) segs.push(React.createElement("span", { key: key++, style: baseStyle() }, text.slice(cursor, result.end)));
+    pushPlain(result.end, text.length);
+    return segs;
+  }
+
+  // ─── render values ───
+  renderVals() {
+    const s = this.state;
+    const set = (patch) => () => this.setState(patch);
+    const inputSet = (kk) => (e) => this.setState({ [kk]: e.target.value });
+    const stop = (e) => e.stopPropagation();
+    const ghost = { display: "inline-flex", alignItems: "center", border: "1px solid transparent", borderRadius: 6, background: "transparent", color: "#6c6c6c", fontSize: 12, fontWeight: 500, height: 26, padding: "0 10px", cursor: "pointer", fontFamily: "inherit", textTransform: "none", letterSpacing: 0, textDecoration: "none" };
+
+    // Dashboard
+    const q = s.prQuery.trim().toLowerCase();
+    const prsSorted = this.prData().sort((a, b) => (a.failed - b.failed) || (b.approved - a.approved) || (b.num - a.num));
+    const prRows = prsSorted.filter(p => !q || p.title.toLowerCase().includes(q) || p.branch.toLowerCase().includes(q) || ("#" + p.num).includes(q)).map(p => ({
+      num: p.num, title: p.title, branch: p.branch, author: p.author, approved: p.approved, failed: p.failed,
+      hasFailed: p.failed > 0, hasDrafts: p.hasDrafts,
+      url: "https://github.com/zenmoney-mock/sms-formats/pull/" + p.num,
+      rowStyle: { display: "flex", cursor: "pointer", alignItems: "center", gap: 12, borderBottom: "1px solid #e3e3e3", padding: "12px 16px", fontSize: 13 },
+      labels: p.labels.map(l => ({ name: l.name, style: { display: "inline-flex", alignItems: "center", maxWidth: 180, height: 20, padding: "0 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: l.bg, color: l.fg, boxShadow: "inset 0 0 0 1px rgba(15,23,42,0.12)" } })),
+      open: () => this.setState({ screen: "workspace", sourcePr: { num: p.num, branch: p.branch } })
+    }));
+
+    // Workspace files
+    const visibleFiles = s.files.slice();
+    const localChangedNames = visibleFiles.filter(f => this.isLocalChanged(f)).map(f => f.name);
+    const sortFormats = (arr) => arr.slice().sort((a, b) => {
+      const ac = localChangedNames.includes(a.name), bc = localChangedNames.includes(b.name);
+      if (ac !== bc) return ac ? -1 : 1;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    });
+    const fq = s.fileSearch.trim().toLowerCase();
+    const matchSearch = (n) => !fq || n.toLowerCase().includes(fq);
+    let listNames;
+    if (s.formatTab === "recent") {
+      listNames = s.recent.filter(n => (n === "senders.txt" || visibleFiles.some(f => f.name === n)) && matchSearch(n));
+    } else if (s.formatTab === "intersections" && s.interScope) {
+      listNames = s.interScope.filter(n => visibleFiles.some(f => f.name === n && !f.deleted) && matchSearch(n));
+    } else {
+      const fmts = sortFormats(visibleFiles).map(f => f.name).filter(matchSearch);
+      listNames = (matchSearch("senders.txt") ? ["senders.txt"] : []).concat(fmts);
+    }
+    const sendersChanged = s.sendersText !== s.sendersOriginal;
+    const fileRows = listNames.map(name => {
+      const isSenders = name === "senders.txt";
+      const f = isSenders ? null : this.getFile(name);
+      const isSel = s.selected === name;
+      const isDel = f ? f.deleted : false;
+      const localChanged = isSenders ? sendersChanged : (f ? this.isLocalChanged(f) : false);
+      const created = f ? f.created : false;
+      let dot = null;
+      if (created) dot = "success";
+      else if (localChanged) dot = "warning";
+      else if (f && f.sourceChanged) dot = "warning";
+      else if (isSenders && false) dot = null;
+      const stats = (!isSenders && s.interCalculated && s.interStats && !isDel) ? s.interStats[name] : null;
+      const ownOk = stats ? stats.own === stats.total : true;
+      const interOk = stats ? stats.inter === 0 : true;
+      const metricBase = { display: "inline-flex", height: 14, alignItems: "center", justifyContent: "center", borderRadius: 3, padding: "0 3px", lineHeight: 1, border: "none", fontFamily: "inherit", fontSize: 11, fontWeight: 600 };
+      return {
+        name, hasDot: dot != null,
+        dotStyle: Object.assign(this.badgeStyle(dot === "success" ? "success" : "warning"), { height: 16, minWidth: 16, padding: "0 4px", fontSize: 10, justifyContent: "center" }),
+        rowStyle: {
+          display: "flex", cursor: "pointer", alignItems: "center", gap: 8, padding: "8px 12px", fontSize: 13,
+          background: isSel ? "#e9e9e9" : "transparent", color: isSel ? "#3464a3" : "#333333",
+          textDecoration: isDel ? "line-through" : "none", opacity: isDel ? 0.8 : 1
+        },
+        nameStyle: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'JetBrains Mono',monospace", fontSize: 13 },
+        hasMetrics: !!stats,
+        mTotal: stats ? stats.total : 0, mOwn: stats ? stats.own : 0, mInter: stats ? stats.inter : 0,
+        mOwnStyle: { color: ownOk ? "#1e6933" : "#993636", fontWeight: 600 },
+        mInterStyle: Object.assign(metricBase, interOk ? { background: "transparent", color: "#1e6933", cursor: "default" } : { background: "#993636", color: "#ffffff", cursor: "pointer" }),
+        onInterClick: (e) => {
+          e.stopPropagation();
+          if (!stats || stats.inter === 0) return;
+          this.setState({ interScope: [name].concat(stats.paths), formatTab: "intersections" });
+        },
+        url: "https://github.com/zenmoney-mock/sms-formats/blob/main/src/AkvaBank/" + (isSenders ? "senders.txt" : "formats/" + name),
+        select: () => isSenders ? this.selectSenders() : this.selectFile(name)
+      };
+    });
+
+    const fileTabsArr = [
+      { id: "all", label: "Все файлы" }, { id: "recent", label: "Недавние файлы" }
+    ].concat(s.interScope ? [{ id: "intersections", label: "Пересечения" }] : []);
+    const fileTabs = fileTabsArr.map(t => ({ label: t.label, style: this.tabStyle(s.formatTab === t.id), set: set({ formatTab: t.id }) }));
+
+    // Current file + editor
+    const cf = this.currentFile();
+    const showSenders = s.selected === "senders.txt";
+    const readOnly = cf ? cf.deleted : false;
+    const h = cf ? this.ensureHistory(cf.name) : null;
+    const canUndo = h && h.idx > 0 && !readOnly;
+    const canRedo = h && h.idx < h.stack.length - 1 && !readOnly;
+    const isModified = cf ? (!cf.created && !cf.deleted && this.isLocalChanged(cf)) : false;
+
+    // examples / intersections source
+    let interExamples = [];
+    if (cf && s.interCalculated) {
+      for (const o of s.files) {
+        if (o === cf || o.deleted) continue;
+        for (const ex of o.examples) {
+          if (ex.trim() && this.test(cf.regex, ex).matched) interExamples.push({ text: ex, file: o.name });
+        }
+      }
+    }
+    const showingInter = s.exampleSource === "intersections" && interExamples.length > 0;
+    const exTexts = cf ? (showingInter ? interExamples.map(x => x.text) : cf.examples) : [];
+    const activeIdx = showingInter ? Math.min(s.activeInterExample, Math.max(exTexts.length - 1, 0)) : Math.min(s.activeExample, Math.max(exTexts.length - 1, 0));
+    const activeExample = exTexts[activeIdx] || "";
+    const result = cf ? this.test(cf.regex, activeExample) : { matched: false, groups: [], error: null };
+
+    const exampleTabs = exTexts.map((ex, i) => {
+      const r = showingInter ? null : (cf && cf.regex ? this.test(cf.regex, ex) : null);
+      const matched = r ? r.matched : false;
+      return {
+        label: String(i + 1),
+        mark: showingInter || !cf || !cf.regex ? "" : (matched ? "✓" : "✗"),
+        markStyle: { marginLeft: 2, color: matched ? "#1e6933" : "#993636", fontWeight: 600 },
+        style: Object.assign(this.tabStyle(i === activeIdx), { display: "inline-flex", alignItems: "center", gap: 2 }),
+        activate: () => showingInter ? this.setState({ activeInterExample: i }) : this.setState({ activeExample: i, selectedGroup: null }),
+        removable: !showingInter && exTexts.length > 1 && !readOnly,
+        remove: (e) => {
+          e.stopPropagation();
+          if (!cf) return;
+          this.mutateFile(cf.name, nf => { nf.examples = nf.examples.filter((_, k) => k !== i); });
+          this.setState(st => ({ activeExample: Math.min(st.activeExample, exTexts.length - 2) }));
+        },
+        openable: showingInter,
+        openTitle: showingInter && interExamples[i] ? "Открыть в приложении: " + interExamples[i].file : "",
+        openFile: (e) => { e.stopPropagation(); if (interExamples[i]) { this.setState({ exampleSource: "examples", formatTab: "all" }); this.selectFile(interExamples[i].file); } }
+      };
+    });
+
+    // groups table
+    const gc = cf ? this.countGroups(cf.regex) : 0;
+    const matchMap = {};
+    result.groups.forEach(g => { matchMap[g.index] = g; });
+    const groupRows = [];
+    for (let i = 1; i <= gc; i++) {
+      const cur = (cf.columns[i - 1] || "");
+      const base = cur.split("#")[0] || "";
+      const param = cur.includes("#") ? cur.split("#").slice(1).join("#") : "";
+      const colDef = this.allowedColumns().find(c => c.name === base);
+      const mg = matchMap[i];
+      const gi = i;
+      groupRows.push({
+        idx: i,
+        value: mg && mg.value ? mg.value : "—",
+        dotStyle: { display: "inline-block", height: 12, width: 12, borderRadius: 999, background: this.groupPalette(i).border },
+        rowStyle: {
+          background: s.hoveredGroup === i ? "rgba(52,100,163,0.14)" : "transparent",
+          outline: s.selectedGroup === i ? "2px solid #3464a3" : "none", outlineOffset: -1
+        },
+        enter: () => this.setState({ hoveredGroup: gi }),
+        leave: () => this.setState({ hoveredGroup: null }),
+        colBtnLabel: cur || "Выбрать столбец",
+        colBtnStyle: Object.assign({}, this.btn(readOnly), { height: 26, padding: "0 10px", fontSize: 12, maxWidth: "100%" },
+          cur ? {} : { border: "1px solid #993636", background: "rgba(153,54,54,0.1)", color: "#993636" }),
+        openPicker: () => { if (!readOnly) this.setState({ modal: "columns", colPickerGroup: gi, colSearch: "" }); },
+        hasCol: !!cur && !readOnly,
+        clearCol: () => this.setColumn(gi, ""),
+        hasParam: !!(colDef && colDef.param && cur),
+        paramHint: colDef && colDef.hint ? colDef.hint : "Параметр",
+        paramValue: param,
+        onParam: (e) => this.setColumnParam(gi, e.target.value),
+        selTitle: s.highlightMode === "groups" ? "Выделить эту группу в выражении, чтобы заменить её сниппетом" : "Переключитесь в режим «группы», чтобы выделить группу",
+        selStyle: Object.assign({}, ghost, { fontSize: 13, padding: "0 6px", color: s.selectedGroup === gi ? "#3464a3" : "#6c6c6c", opacity: s.highlightMode === "groups" ? 1 : 0.45, cursor: s.highlightMode === "groups" ? "pointer" : "default" }),
+        selectG: () => { if (s.highlightMode === "groups") this.setState(st => ({ selectedGroup: st.selectedGroup === gi ? null : gi })); }
+      });
+    }
+    const missingMappings = gc > 0 && groupRows.some((r, k) => !(cf.columns[k] || ""));
+
+    // explanation
+    const tk = cf ? this.tokenize(cf.regex) : { tokens: [], charGroup: [], spans: {} };
+    const explTokens = tk.tokens.map((t, idx) => {
+      const tone = this.blockTone(t.type);
+      return {
+        raw: t.raw, desc: t.desc,
+        codeStyle: Object.assign({ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, flexShrink: 0 }, this.toneStyle(t.type), { padding: "0 3px" }),
+        blockStyle: {
+          display: "flex", cursor: "pointer", alignItems: "flex-start", gap: 8, borderRadius: 4,
+          border: "1px solid " + tone[0], background: tone[1], color: tone[2], padding: "8px 12px",
+          outline: idx === s.activeToken ? "2px solid #3464a3" : "none", outlineOffset: -1
+        },
+        activate: () => this.setState({ activeToken: idx, selectedGroup: null }),
+        enter: () => { if (s.highlightMode === "parts") this.setState({ activeToken: idx }); },
+        leave: () => {}
+      };
+    });
+
+    // right pane / snippets
+    const rightTabsArr = [{ id: "snippets", label: "СНИППЕТЫ" }, { id: "explanation", label: "ПОЯСНЕНИЕ" }, { id: "quickref", label: "QUICK REF" }];
+    const rightTabs = rightTabsArr.map(t => ({ label: t.label, style: this.tabStyle(s.rightTab === t.id), set: set({ rightTab: t.id }) }));
+    const kindStyle = (k) => Object.assign(this.badgeStyle(k === "default" ? "info" : "neutral"), { fontSize: 10 });
+    const snipGroups = this.snippetGroupLabels().map(([id, label]) => ({ label, style: this.chipStyle(s.snipGroup === id), set: set({ snipGroup: id }) }));
+    const snipCards = this.snippets().filter(sn => s.snipGroup === "all" || sn.group === s.snipGroup).map(sn => ({
+      pattern: sn.pattern, desc: sn.desc, trigger: sn.trigger || "", hasTrigger: !!sn.trigger,
+      kindLabel: sn.kind === "default" ? "дефолт" : "альтернатива", kindStyle: kindStyle(sn.kind),
+      insert: () => this.insertSnippet(sn.pattern)
+    }));
+    const lq = s.libSearch.trim().toLowerCase();
+    const libGroups = this.snippetGroupLabels().map(([id, label]) => ({ label, style: this.chipStyle(s.libGroup === id), set: set({ libGroup: id }) }));
+    const libCardsArr = this.snippets().filter(sn => (s.libGroup === "all" || sn.group === s.libGroup) && (!lq || sn.pattern.toLowerCase().includes(lq) || sn.desc.toLowerCase().includes(lq) || (sn.trigger || "").toLowerCase().includes(lq)));
+    const libCards = libCardsArr.map(sn => ({
+      pattern: sn.pattern, desc: sn.desc, trigger: sn.trigger || "", hasTrigger: !!sn.trigger,
+      gotcha: sn.gotcha || "", hasGotcha: !!sn.gotcha,
+      kindLabel: sn.kind === "default" ? "дефолт" : "альтернатива", kindStyle: kindStyle(sn.kind),
+      insert: () => this.insertSnippet(sn.pattern)
+    }));
+    const qrq = s.qrSearch.trim().toLowerCase();
+    const qrCats = this.quickRef().map(c => ({
+      label: c.label,
+      items: c.items.filter(it => !qrq || it[0].toLowerCase().includes(qrq) || it[1].toLowerCase().includes(qrq)).map(it => ({ token: it[0], desc: it[1] }))
+    })).filter(c => c.items.length > 0);
+
+    // validation
+    const issues = this.computeIssues();
+    const errCount = issues.filter(i => i.level === "error").length;
+    const warnCount = issues.filter(i => i.level === "warning").length;
+
+    // quick check
+    const qc = s.qcResults;
+    const qcBadge = (st) => st === "match" ? { text: "Совпало", style: this.badgeStyle("success") } : st === "invalid" ? { text: "Некорректный regex", style: this.badgeStyle("error") } : { text: "Не совпало", style: this.badgeStyle("neutral") };
+
+    // misc
+    const hasChanges = localChangedNames.length > 0 || sendersChanged || s.files.some(f => f.deleted);
+    const colGroup = s.colPickerGroup;
+    const colQ = s.colSearch.trim().toLowerCase();
+    const usedBases = cf ? cf.columns.filter((_, k) => k !== (colGroup || 0) - 1).map(c => c.split("#")[0]).filter(Boolean) : [];
+    const currentBase = cf && colGroup ? (cf.columns[colGroup - 1] || "").split("#")[0] : "";
+    const colRows = this.allowedColumns().filter(c => !colQ || c.name.includes(colQ) || c.desc.toLowerCase().includes(colQ))
+      .sort((a, b) => a.name.localeCompare(b.name)).map(c => {
+        const used = usedBases.includes(c.name) && c.name !== currentBase;
+        return {
+          name: c.name, desc: c.desc, isParam: !!c.param, isUsed: used,
+          style: {
+            display: "flex", width: "100%", alignItems: "center", gap: 8, borderBottom: "1px solid #e3e3e3",
+            background: c.name === currentBase ? "rgba(52,100,163,0.14)" : "#fdfdfd",
+            padding: "8px 12px", border: "none", borderBottomStyle: "solid", borderBottomWidth: 1, borderBottomColor: "#e3e3e3",
+            cursor: used ? "not-allowed" : "pointer", opacity: used ? 0.55 : 1, fontFamily: "inherit", fontSize: 14, textAlign: "left", color: "#333333"
+          },
+          pick: () => { if (!used && colGroup) this.setColumn(colGroup, c.param ? c.name + "#" + (c.hint || "") : c.name); }
+        };
+      });
+
+    const rawIssues = cf ? this.parseFmt(this.serializeFmt(cf)).issues.map(m => ({ msg: m })) : [];
+
+    return {
+      // header / nav
+      isDashboard: s.screen === "dashboard",
+      isWorkspace: s.screen === "workspace",
+      goHome: set({ screen: "dashboard" }),
+      openSettings: set({ modal: "settings" }),
+      sourcePrNum: s.sourcePr.num,
+      sourceBranch: s.sourcePr.branch,
+      stop,
+      // dashboard
+      prQuery: s.prQuery, onPrQuery: inputSet("prQuery"),
+      prRows, prCount: prsSorted.length, noPrs: prRows.length === 0,
+      // sidebar
+      bankName: "АкваБанк",
+      bankUrl: "https://github.com/zenmoney-mock/sms-formats/tree/main/src/AkvaBank",
+      publishStyle: this.actionBtn(!hasChanges, "primary"),
+      onPublish: () => { if (hasChanges) this.setState({ modal: "update", commitTitle: "", commitDesc: "" }); },
+      publishMsg: s.publishMsg,
+      actionBtnStyle: this.actionBtn(false),
+      onValidation: set({ modal: "validation" }),
+      onTplBySms: () => this.setState({ modal: "quickcheck", qcMode: "template-by-sms", qcResults: null, qcError: null, qcSms: activeExample }),
+      onSmsByTpl: () => this.setState({ modal: "quickcheck", qcMode: "sms-by-template", qcResults: null, qcError: null, qcRegex: cf ? cf.regex : "" }),
+      onIntersections: () => {
+        if (s.interCalculated && !window.confirm("Пересечения уже посчитаны. Выполнить полный пересчёт заново?")) return;
+        this.calcIntersections();
+      },
+      intersectionsLabel: "Посчитать пересечения",
+      resetAllStyle: this.actionBtn(!hasChanges),
+      onResetAll: () => { if (hasChanges) this.resetAll(); },
+      // files panel
+      filesCount: visibleFiles.length + 1,
+      onCreate: set({ modal: "create", createName: "", createError: null }),
+      fileTabs, fileSearch: s.fileSearch, onFileSearch: inputSet("fileSearch"),
+      fileRows, noFiles: fileRows.length === 0,
+      // senders
+      showSenders, sendersModified: sendersChanged,
+      sendersText: s.sendersText, onSendersChange: inputSet("sendersText"),
+      // editor chrome
+      showFormat: !showSenders && !!cf,
+      modeTabs: [{ id: "structured", label: "Редактор" }, { id: "raw", label: "Итоговый файл" }].map(t => ({
+        label: t.label,
+        style: {
+          cursor: "pointer", borderRadius: 5, border: "1px solid " + (s.editorMode === t.id ? "#3464a3" : "#e3e3e3"),
+          background: s.editorMode === t.id ? "#fdfdfd" : "#f0f0f0", color: s.editorMode === t.id ? "#3464a3" : "#6c6c6c",
+          padding: "6px 12px", fontWeight: 500, fontSize: 13, fontFamily: "inherit",
+          boxShadow: s.editorMode === t.id ? "inset 0 -2px 0 #3464a3" : "none"
+        },
+        set: set({ editorMode: t.id })
+      })),
+      fileName: cf ? cf.name : "",
+      fileUrl: "https://github.com/zenmoney-mock/sms-formats/blob/main/src/AkvaBank/formats/" + (cf ? cf.name : ""),
+      renameStyle: Object.assign({}, ghost, { height: 28, opacity: cf && cf.created && !readOnly ? 1 : 0.5, cursor: cf && cf.created && !readOnly ? "pointer" : "default" }),
+      onRename: () => {
+        if (!cf || !cf.created || readOnly) return;
+        const input = window.prompt("Введите новое название файла формата", cf.name);
+        if (input == null) return;
+        const trimmed = input.trim();
+        if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) return;
+        const target = /\.txt$/i.test(trimmed) ? trimmed : trimmed + ".txt";
+        if (s.files.some(f => f.name === target)) return;
+        this.historyMap[target] = this.historyMap[cf.name]; delete this.historyMap[cf.name];
+        this.setState(st => ({
+          files: st.files.map(f => f.name === cf.name ? Object.assign({}, f, { name: target }) : f),
+          selected: target,
+          recent: st.recent.map(r => r === cf.name ? target : r)
+        }));
+      },
+      isModified, isDeleted: readOnly,
+      undoStyle: Object.assign({}, ghost, { height: 28, opacity: canUndo ? 1 : 0.5, cursor: canUndo ? "pointer" : "default", color: "#333333" }),
+      onUndo: () => canUndo && this.undo(),
+      redoStyle: Object.assign({}, ghost, { height: 28, opacity: canRedo ? 1 : 0.5, cursor: canRedo ? "pointer" : "default", color: "#333333" }),
+      onRedo: () => canRedo && this.redo(),
+      delStyle: Object.assign({}, ghost, { height: 28, opacity: cf && !cf.deleted && !cf.created ? 1 : 0.5, cursor: cf && !cf.deleted && !cf.created ? "pointer" : "default", color: "#333333" }),
+      onDelete: () => {
+        if (!cf || cf.deleted || cf.created) return;
+        if (isModified && !window.confirm("Формат уже изменён вами. Перед постановкой на удаление все ваши изменения в этом файле будут откатены. Продолжить?")) return;
+        this.setState(st => ({ files: st.files.map(f => f.name === cf.name ? Object.assign({}, f, { deleted: true, regex: f.original.regex, columns: f.original.columns.slice(), examples: f.original.examples.slice() }) : f) }));
+      },
+      resetFileStyle: Object.assign({}, ghost, { height: 28, opacity: cf && (isModified || cf.deleted || cf.created) ? 1 : 0.5, cursor: cf && (isModified || cf.deleted || cf.created) ? "pointer" : "default", color: "#333333" }),
+      onResetFile: () => {
+        if (!cf) return;
+        if (cf.created) {
+          this.setState(st => {
+            const files = st.files.filter(f => f.name !== cf.name);
+            return { files, selected: files[0] ? files[0].name : "senders.txt" };
+          });
+          return;
+        }
+        delete this.historyMap[cf.name];
+        this.setState(st => ({ files: st.files.map(f => f.name === cf.name ? Object.assign({}, f, { deleted: false, regex: f.original.regex, columns: f.original.columns.slice(), examples: f.original.examples.slice() }) : f), selectedGroup: null, activeToken: null }));
+      },
+      editorReadOnly: readOnly,
+      structuredMode: s.editorMode === "structured",
+      rawMode: s.editorMode === "raw",
+      rawValue: cf ? this.serializeFmt(cf) : "",
+      onRawChange: (e) => {
+        if (!cf || readOnly) return;
+        const parsed = this.parseFmt(e.target.value);
+        this.mutateFile(cf.name, nf => { nf.regex = parsed.regex; nf.columns = parsed.columns; nf.examples = parsed.examples.length ? parsed.examples : [""]; });
+      },
+      rawIssues, hasRawIssues: rawIssues.length > 0,
+      // regex panel
+      hlTabs: [{ id: "groups", label: "Группы", title: "Раскраска по группам захвата" }, { id: "parts", label: "Части", title: "Раскраска по частям паттерна" }].map(t => ({
+        label: t.label, title: t.title, style: this.segStyle(s.highlightMode === t.id),
+        set: () => this.setState({ highlightMode: t.id, rightTab: t.id === "groups" ? "snippets" : "explanation", selectedGroup: null, activeToken: null })
+      })),
+      wsPlus: s.wsPlus,
+      onWsPlus: (e) => this.setState({ wsPlus: e.target.checked }),
+      onOpenSnipLib: set({ modal: "sniplib", libSearch: "", libGroup: "all" }),
+      onOpenCookbook: set({ modal: "cookbook" }),
+      headerGhostStyle: ghost,
+      headerGhostLinkStyle: Object.assign({}, ghost, { display: "inline-flex", alignItems: "center" }),
+      regexOverlay: this.buildRegexOverlay(cf),
+      regexValue: cf ? cf.regex : "",
+      onRegexChange: (e) => this.applyRegex(e.target.value),
+      onRegexSelect: (e) => {
+        if (s.highlightMode !== "parts" || !cf) return;
+        const pos = e.target.selectionStart;
+        const idx = tk.tokens.findIndex(t => pos >= t.start && pos < t.end);
+        this.setState({ activeToken: idx >= 0 ? idx : null });
+      },
+      onRegexMouseUp: (e) => {
+        if (s.highlightMode !== "groups" || !cf) return;
+        const el = e.target;
+        setTimeout(() => {
+          const pos = el.selectionStart;
+          if (el.selectionStart !== el.selectionEnd) return;
+          const g = tk.charGroup[pos] != null ? tk.charGroup[pos] : (pos > 0 ? tk.charGroup[pos - 1] : null);
+          this.setState(st => ({ selectedGroup: g != null ? (st.selectedGroup === g ? null : g) : null }));
+        }, 0);
+      },
+      onRegexKeyDown: (e) => {
+        if (!s.wsPlus || e.key !== " " || !cf || readOnly) return;
+        e.preventDefault();
+        const el = e.target;
+        const a = el.selectionStart, b = el.selectionEnd;
+        const next = cf.regex.slice(0, a) + "\\s+" + cf.regex.slice(b);
+        this.applyRegex(next);
+        setTimeout(() => { if (this.regexEl) { this.regexEl.selectionStart = this.regexEl.selectionEnd = a + 3; } }, 0);
+      },
+      regexRef: (el) => { this.regexEl = el; },
+      // test panel
+      showAddExample: !showingInter,
+      addExampleStyle: { display: "inline-flex", alignItems: "center", justifyContent: "center", height: 24, width: 24, borderRadius: 6, border: "1px solid transparent", background: "transparent", color: "#333333", fontSize: 14, cursor: readOnly ? "default" : "pointer", opacity: readOnly ? 0.5 : 1, fontFamily: "inherit" },
+      onAddExample: () => {
+        if (!cf || readOnly) return;
+        this.mutateFile(cf.name, nf => { nf.examples = nf.examples.concat([""]); });
+        this.setState({ activeExample: cf.examples.length });
+      },
+      hasInterToggle: interExamples.length > 0,
+      interToggleLabel: showingInter ? "Примеры" : "Пересечения",
+      onInterToggle: () => this.setState(st => ({ exampleSource: st.exampleSource === "examples" ? "intersections" : "examples", activeInterExample: 0 })),
+      exampleTabs,
+      regex101Url: "https://regex101.com/?flavor=javascript&regex=" + encodeURIComponent(cf ? cf.regex : "") + "&testString=" + encodeURIComponent(activeExample),
+      testOverlay: this.buildTestOverlay(activeExample, result),
+      testValue: activeExample,
+      onTestChange: (e) => {
+        if (!cf || readOnly || showingInter) return;
+        const i = activeIdx; const v = e.target.value;
+        this.mutateFile(cf.name, nf => { nf.examples = nf.examples.map((x, k) => k === i ? v : x); });
+      },
+      testReadOnly: readOnly || showingInter,
+      // match info
+      matchIssues: result.error ? [{ msg: "Некорректное регулярное выражение" }] : [],
+      hasMatchIssues: !!result.error,
+      showMatchBody: !result.error,
+      matchedFull: result.matched,
+      noMatch: !result.matched,
+      fullMatchText: result.matched ? result.full : "",
+      fullRowStyle: {
+        display: "flex", alignItems: "center", gap: 8, borderRadius: 4, padding: "4px 8px",
+        border: "1px solid transparent", background: s.hoveredGroup === 0 ? "rgba(52,100,163,0.14)" : "transparent"
+      },
+      onFullEnter: () => this.setState({ hoveredGroup: 0 }),
+      onFullLeave: () => this.setState({ hoveredGroup: null }),
+      hasGroups: groupRows.length > 0,
+      missingMappings,
+      groupRows,
+      // right pane
+      rightTabs,
+      showSnippets: s.rightTab === "snippets",
+      showExplanation: s.rightTab === "explanation",
+      showQuickref: s.rightTab === "quickref",
+      hasExplError: !!result.error && tk.tokens.length === 0,
+      explError: result.error || "",
+      hasExplTokens: explTokens.length > 0,
+      explEmpty: explTokens.length === 0,
+      explTokens,
+      qrSearch: s.qrSearch, onQrSearch: inputSet("qrSearch"), qrCats,
+      snipGroups, snipCards,
+      // modals
+      closeModal: set({ modal: null }),
+      showSettings: s.modal === "settings",
+      tokenInput: s.tokenInput, onTokenInput: inputSet("tokenInput"),
+      showCreate: s.modal === "create",
+      createName: s.createName, onCreateName: inputSet("createName"),
+      createError: s.createError,
+      submitCreate: () => {
+        const n = s.createName.trim();
+        if (!n || n.includes("/") || n.includes("\\")) { this.setState({ createError: "Некорректное имя файла. Используйте непустое имя без / и \\." }); return; }
+        const target = /\.txt$/i.test(n) ? n : n + ".txt";
+        if (s.files.some(f => f.name === target)) { this.setState({ createError: "Файл с таким именем уже существует." }); return; }
+        const nf = { name: target, regex: "", columns: [], examples: [""], deleted: false, created: true, sourceChanged: false, original: null };
+        this.setState(st => ({ files: st.files.concat([nf]), modal: null }), () => this.selectFile(target));
+      },
+      showUpdate: s.modal === "update",
+      commitTitle: s.commitTitle, onCommitTitle: inputSet("commitTitle"),
+      commitDesc: s.commitDesc, onCommitDesc: inputSet("commitDesc"),
+      submitUpdate: () => this.publishAll(),
+      submitUpdateDefault: () => this.publishAll(),
+      showValidation: s.modal === "validation",
+      valAllOk: issues.length === 0,
+      valHasErrors: errCount > 0, valErrCount: errCount,
+      valHasWarnings: warnCount > 0, valWarnCount: warnCount,
+      valRows: issues.map(i => ({
+        file: i.file, msg: i.msg,
+        badge: i.level === "error" ? "ошибка" : "warn",
+        badgeStyle: this.badgeStyle(i.level === "error" ? "error" : "warning")
+      })),
+      showQuickCheck: s.modal === "quickcheck",
+      qcTitle: "Поиск по банку: АкваБанк",
+      qcIsSmsMode: s.qcMode === "template-by-sms",
+      qcIsTplMode: s.qcMode === "sms-by-template",
+      qcSms: s.qcSms, onQcSms: inputSet("qcSms"),
+      qcRegex: s.qcRegex, onQcRegex: inputSet("qcRegex"),
+      qcScopeCount: s.files.filter(f => !f.deleted).length,
+      runQc: () => this.runQuickCheck(),
+      qcError: s.qcError,
+      qcHasResults: !!qc,
+      qcSummary: qc ? qc.summary.map(t => ({ text: t })) : [],
+      qcRows: qc ? qc.rows.map(r => {
+        const b = qcBadge(r.status);
+        return {
+          file: r.file, badge: b.text, badgeStyle: b.style, detail: r.detail || "",
+          openInApp: () => { this.setState({ modal: null, formatTab: "all" }); this.selectFile(r.file); }
+        };
+      }) : [],
+      showSnipLib: s.modal === "sniplib",
+      libSearch: s.libSearch, onLibSearch: inputSet("libSearch"),
+      libGroups, libCards, libEmpty: libCards.length === 0,
+      showCookbook: s.modal === "cookbook",
+      showColumns: s.modal === "columns",
+      colTitle: "Плейсхолдер #" + (colGroup || ""),
+      colSearch: s.colSearch, onColSearch: inputSet("colSearch"),
+      colRows
+    };
+  }
+
+  setColumn(groupIndex, value) {
+    const cf = this.currentFile();
+    if (!cf) return;
+    const gc = this.countGroups(cf.regex);
+    this.mutateFile(cf.name, nf => {
+      const cols = [];
+      for (let i = 0; i < Math.max(gc, nf.columns.length); i++) cols.push(nf.columns[i] || "");
+      cols[groupIndex - 1] = value;
+      while (cols.length && !cols[cols.length - 1] && cols.length > gc) cols.pop();
+      nf.columns = cols;
+    });
+    this.setState({ modal: null, colPickerGroup: null });
+  }
+  setColumnParam(groupIndex, param) {
+    const cf = this.currentFile();
+    if (!cf) return;
+    this.mutateFile(cf.name, nf => {
+      const cur = nf.columns[groupIndex - 1] || "";
+      const base = cur.split("#")[0];
+      if (!base) return;
+      nf.columns = nf.columns.map((c, k) => k === groupIndex - 1 ? (param ? base + "#" + param : base) : c);
+    });
+  }
+  selectSenders() {
+    this.setState(st => ({ selected: "senders.txt", recent: ["senders.txt"].concat(st.recent.filter(r => r !== "senders.txt")).slice(0, 10) }));
+  }
+}
+
+</script>
+</body>
+</html>
