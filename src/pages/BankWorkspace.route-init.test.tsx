@@ -244,6 +244,10 @@ vi.mock("@/features/senders-editor/SendersEditor", () => ({
   SendersEditor: () => <div data-testid="senders-editor" />,
 }));
 
+vi.mock("@/features/workspace-header/WorkspaceHeaderBar", () => ({
+  WorkspaceHeaderBar: () => <div data-testid="workspace-header-bar" />,
+}));
+
 vi.mock("@/features/create-entity/CreateFormatModal", () => ({
   CreateFormatModal: () => null,
 }));

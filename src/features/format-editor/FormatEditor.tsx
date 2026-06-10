@@ -1,21 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { config } from "@/config";
 import { parseFormatFile, serializeFormat } from "@/domain/format";
 import { RegexLab } from "@/features/regex-lab/RegexLab";
 import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
-import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
 type EditorMode = "structured" | "raw";
 
 interface Props {
   filePath: string;
-  allFormatFiles: string[];
+  mode: EditorMode;
   intersectionExamples?: Array<{
     text: string;
     filePath: string;
@@ -23,7 +20,6 @@ interface Props {
   }>;
   readOnly?: boolean;
   sourceDeletedBaseSha?: string | null;
-  onRenameFile: (fromPath: string, toPath: string) => boolean;
   onOpenTemplateBySms?: () => void;
   onOpenSmsByTemplate?: () => void;
   onOpenIntersectionFileInApp?: (filePath: string) => void;
@@ -58,22 +54,12 @@ function serializeStructuredDraft(
   return serializeFormat(regex, columns, examples);
 }
 
-const formatEditorModeTabClassName = (isActive: boolean) =>
-  cn(
-    "rounded-[5px] border px-3 py-1.5 font-medium text-[13px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
-    isActive
-      ? "border-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-2px_0_var(--c-accent)]"
-      : "border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
-  );
-
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keeping the existing editor shape avoids a much larger unrelated refactor.
 export function FormatEditor({
   filePath,
-  allFormatFiles,
+  mode,
   intersectionExamples = [],
   readOnly = false,
   sourceDeletedBaseSha = null,
-  onRenameFile,
   onOpenTemplateBySms,
   onOpenSmsByTemplate,
   onOpenIntersectionFileInApp,
@@ -82,7 +68,6 @@ export function FormatEditor({
 }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
-  const repository = useSourceStore((s) => s.repository);
   const draftStore = useDraftStore();
 
   const {
@@ -112,10 +97,8 @@ export function FormatEditor({
   const [examples, setExamples] = useState<string[]>([]);
   const [activeExampleIndex, setActiveExampleIndex] = useState(0);
   const [rawContent, setRawContent] = useState("");
-  const [mode, setMode] = useState<EditorMode>("structured");
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [structuralIssues, setStructuralIssues] = useState<string[]>([]);
-  const [renameError, setRenameError] = useState<string | null>(null);
   const lastAppliedContentRef = useRef<string | null>(null);
   const hasPendingRegexBlurRef = useRef(false);
   const latestRegexRef = useRef("");
@@ -284,64 +267,6 @@ export function FormatEditor({
     });
   }, [activeExampleIndex, examples, filePath, onSearchContextChange, regex]);
 
-  const isModified = draft ? draft.content !== draft.remoteContent : false;
-  const fileName = filePath.split("/").pop() ?? filePath;
-  const fileDirPath = filePath.split("/").slice(0, -1).join("/");
-  const refName =
-    sourceDeletedBaseSha ??
-    sourceRef?.sha ??
-    sourceRef?.name ??
-    config.defaultBranch;
-  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-  const formatRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
-  const canUndo = draftStore.canUndo(filePath);
-  const canRedo = draftStore.canRedo(filePath);
-  const canResetFile = !readOnly && (isModified || isDeleted);
-  const canDeleteFile = !readOnly && remoteBaseline !== "" && !isDeleted;
-  const canRenameFile = !(readOnly || isDeleted);
-
-  const handleRename = () => {
-    if (readOnly) {
-      return;
-    }
-    const currentDraft = draftStore.getDraft(filePath);
-    if (!currentDraft || currentDraft.remoteContent !== "") {
-      setRenameError(t("editor.renameOnlyDraft"));
-      return;
-    }
-
-    const input = window.prompt(t("editor.renamePrompt"), fileName);
-    if (input == null) {
-      return;
-    }
-
-    const trimmed = input.trim();
-    if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
-      setRenameError(t("editor.renameErrorInvalid"));
-      return;
-    }
-
-    const targetFileName = /\.txt$/i.test(trimmed) ? trimmed : `${trimmed}.txt`;
-    const targetPath = `${fileDirPath}/${targetFileName}`;
-    if (targetPath === filePath) {
-      setRenameError(null);
-      return;
-    }
-
-    if (allFormatFiles.includes(targetPath)) {
-      setRenameError(t("editor.renameErrorExists"));
-      return;
-    }
-
-    const renamed = onRenameFile(filePath, targetPath);
-    if (!renamed) {
-      setRenameError(t("editor.renameErrorFailed"));
-      return;
-    }
-
-    setRenameError(null);
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center gap-2">
@@ -356,122 +281,8 @@ export function FormatEditor({
       {remoteContentError && (
         <StatusBadge variant="error">{remoteContentError}</StatusBadge>
       )}
-      {/* Compact header: mode tabs + file name + actions */}
-      <div className="flex min-h-[52px] shrink-0 flex-wrap items-center gap-2">
-        <div className="shrink-0 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-1">
-          <button
-            className={formatEditorModeTabClassName(mode === "structured")}
-            onClick={() => setMode("structured")}
-            type="button"
-          >
-            {t("editor.structured")}
-          </button>
-          <button
-            className={formatEditorModeTabClassName(mode === "raw")}
-            onClick={() => setMode("raw")}
-            type="button"
-          >
-            {t("editor.raw")}
-          </button>
-        </div>
-        <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
-          <span className="font-medium font-mono">{fileName}</span>
-          <Button
-            disabled={!canRenameFile}
-            onClick={handleRename}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            {t("editor.renameFormat")}
-          </Button>
-          <Button
-            aria-label={t("bank.openFormatInRepo")}
-            asChild
-            size="sm"
-            title={t("bank.openFormatInRepo")}
-            variant="ghost"
-          >
-            <a
-              href={formatRepoUrl}
-              onClick={(e) => e.stopPropagation()}
-              rel="noreferrer"
-              target="_blank"
-            >
-              ↗
-            </a>
-          </Button>
-          {isModified && (
-            <StatusBadge variant="modified">{t("editor.modified")}</StatusBadge>
-          )}
-          {isDeleted && (
-            <StatusBadge variant="modified">{t("editor.deleted")}</StatusBadge>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Button
-            aria-label={t("editor.undo")}
-            disabled={readOnly || !canUndo}
-            onClick={() => draftStore.undo(filePath)}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            ↶ {t("editor.undo")}
-          </Button>
-          <Button
-            aria-label={t("editor.redo")}
-            disabled={readOnly || !canRedo}
-            onClick={() => draftStore.redo(filePath)}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            ↷ {t("editor.redo")}
-          </Button>
-          <Button
-            aria-label={t("editor.deleteFormat")}
-            disabled={!canDeleteFile}
-            onClick={() => {
-              if (
-                isModified &&
-                !window.confirm(t("editor.deleteFormatConfirmModified"))
-              ) {
-                return;
-              }
-              draftStore.markDeleted(filePath);
-            }}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            ✕ {t("editor.deleteFormat")}
-          </Button>
-          <Button
-            aria-label={t("editor.resetFileToSource")}
-            disabled={!canResetFile}
-            onClick={() => {
-              if (sourceDeletedBaseSha) {
-                draftStore.setDraft(filePath, remoteContent ?? "", baseSha, "");
-                return;
-              }
-              draftStore.resetFileToRemote(filePath);
-            }}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            ⟲ {t("editor.resetFileToSource")}
-          </Button>
-        </div>
-      </div>
 
       {/* Parse errors */}
-      {renameError && (
-        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-[color:var(--c-warning)] text-xs">
-          {renameError}
-        </div>
-      )}
       {mode === "raw" && parseErrors.length > 0 && (
         <div className="flex flex-col gap-1">
           {parseErrors.map((err, i) => (

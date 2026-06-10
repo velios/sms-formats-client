@@ -111,6 +111,8 @@
     "modified": "Modified",
     "validation": "Validation",
     "renameFormat": "Rename",
+    "delete": "Delete",
+    "reset": "Reset",
     "renamePrompt": "Enter new format file name",
     "renameOnlyDraft": "Rename is available only for new local format files.",
     "renameErrorInvalid": "Invalid file name. Use a non-empty name without / or \\.",

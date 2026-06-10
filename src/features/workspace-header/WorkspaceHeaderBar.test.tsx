@@ -3,11 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   draftStore: {
-    applyUserEdit: vi.fn(),
     canRedo: vi.fn(() => false),
     canUndo: vi.fn(() => false),
-    ensureDraft: vi.fn(),
-    getDraft: vi.fn(() => undefined),
+    getDraft: vi.fn((_filePath?: string) => undefined as unknown),
     markDeleted: vi.fn(),
     redo: vi.fn(),
     resetFileToRemote: vi.fn(),
@@ -42,25 +40,11 @@ vi.mock("@/components/ui/button", () => ({
   },
 }));
 
-vi.mock("@/components/ui/spinner", () => ({
-  Spinner: () => <span>spinner</span>,
-}));
-
 vi.mock("@/components/ui/status-badge", () => ({
   StatusBadge: ({
     children,
     ...props
   }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
-}));
-
-vi.mock("@/components/ui/textarea", () => ({
-  Textarea: (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-    <textarea {...props} />
-  ),
-}));
-
-vi.mock("@/features/regex-lab/RegexLab", () => ({
-  RegexLab: () => <div data-testid="regex-lab" />,
 }));
 
 vi.mock("@/hooks/useWorkspaceFileContent", () => ({
@@ -87,26 +71,35 @@ vi.mock("@/store", () => ({
     }),
 }));
 
-vi.mock("@/domain/format", () => ({
-  parseFormatFile: vi.fn(() => ({
-    regex: ".*",
-    columns: [],
-    examples: ["example"],
-    parseIssues: [],
-  })),
-  serializeFormat: vi.fn(() => ""),
-}));
+import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
 
-import { FormatEditor } from "./FormatEditor";
+function renderHeaderBar(
+  overrides: Partial<Parameters<typeof WorkspaceHeaderBar>[0]> = {}
+) {
+  return render(
+    <WorkspaceHeaderBar
+      allFormatFiles={[]}
+      bankName="TBank"
+      bankRepoUrl="https://github.com/zenmoney/sms-formats/tree/head-sha/src/TBank_123"
+      mode="structured"
+      onModeChange={() => undefined}
+      onRenameFile={() => false}
+      readOnly={false}
+      selectedFile="src/TBank_123/formats/current.txt"
+      sendersPath="src/TBank_123/senders.txt"
+      showSenders={false}
+      sourceDeletedBaseSha={null}
+      {...overrides}
+    />
+  );
+}
 
-describe("FormatEditor", () => {
+describe("WorkspaceHeaderBar", () => {
   beforeEach(() => {
-    mocks.draftStore.applyUserEdit.mockReset();
     mocks.draftStore.canRedo.mockReset();
     mocks.draftStore.canRedo.mockReturnValue(false);
     mocks.draftStore.canUndo.mockReset();
     mocks.draftStore.canUndo.mockReturnValue(false);
-    mocks.draftStore.ensureDraft.mockReset();
     mocks.draftStore.getDraft.mockReset();
     mocks.draftStore.getDraft.mockReturnValue(undefined);
     mocks.draftStore.markDeleted.mockReset();
@@ -123,14 +116,10 @@ describe("FormatEditor", () => {
   });
 
   it("restores a PR-deleted file into a local draft on reset", () => {
-    render(
-      <FormatEditor
-        allFormatFiles={[]}
-        filePath="src/TBank_123/formats/deleted.txt"
-        onRenameFile={() => false}
-        sourceDeletedBaseSha="base-sha"
-      />
-    );
+    renderHeaderBar({
+      selectedFile: "src/TBank_123/formats/deleted.txt",
+      sourceDeletedBaseSha: "base-sha",
+    });
 
     fireEvent.click(
       screen.getByRole("button", { name: "editor.resetFileToSource" })
@@ -142,7 +131,46 @@ describe("FormatEditor", () => {
       "head-sha",
       ""
     );
-    expect(mocks.draftStore.ensureDraft).not.toHaveBeenCalled();
     expect(mocks.draftStore.resetFileToRemote).not.toHaveBeenCalled();
+  });
+
+  it("shows the mode toggle for a format file", () => {
+    renderHeaderBar();
+
+    expect(
+      screen.getByRole("button", { name: "editor.structured" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "editor.raw" })
+    ).toBeInTheDocument();
+  });
+
+  it("hides the mode toggle and format-only actions for senders.txt", () => {
+    mocks.draftStore.getDraft.mockReturnValue({
+      content: "A\nB",
+      remoteContent: "A",
+      baseSha: "head-sha",
+      isDeleted: false,
+    });
+
+    renderHeaderBar({ showSenders: true });
+
+    expect(screen.getByText("senders.txt")).toBeInTheDocument();
+    expect(screen.getByText("editor.modified")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "editor.structured" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "editor.raw" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "editor.renameFormat" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "editor.deleteFormat" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "editor.resetFileToSource" })
+    ).toBeInTheDocument();
   });
 });

@@ -255,6 +255,10 @@ vi.mock("@/features/format-editor/FormatEditor", () => ({
   ),
 }));
 
+vi.mock("@/features/workspace-header/WorkspaceHeaderBar", () => ({
+  WorkspaceHeaderBar: () => <div data-testid="workspace-header-bar" />,
+}));
+
 vi.mock("@/features/create-entity/CreateFormatModal", () => ({
   CreateFormatModal: () => null,
 }));

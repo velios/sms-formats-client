@@ -71,6 +71,10 @@ import {
 } from "@/features/quick-check/QuickCheckPanel";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
+import {
+  type WorkspaceEditorMode,
+  WorkspaceHeaderBar,
+} from "@/features/workspace-header/WorkspaceHeaderBar";
 import { openPrsQueryKey } from "@/hooks/useGitHub";
 import { cn } from "@/lib/utils";
 import {
@@ -698,8 +702,7 @@ function renderWorkspaceContent(params: {
   selectedFile: string | null;
   selectedFileIntersectionExamples: IntersectionExampleItem[];
   selectedFileSourceDeletedBaseSha: string | null;
-  allFormatFiles: string[];
-  handleRenameFile: (fromPath: string, toPath: string) => boolean;
+  editorMode: WorkspaceEditorMode;
   onFormatSearchContextChange: (context: ActiveFormatSearchContext) => void;
   onFormatRegexBlurAfterEdit: (context: {
     filePath: string;
@@ -718,8 +721,7 @@ function renderWorkspaceContent(params: {
     selectedFile,
     selectedFileIntersectionExamples,
     selectedFileSourceDeletedBaseSha,
-    allFormatFiles,
-    handleRenameFile,
+    editorMode,
     onFormatSearchContextChange,
     onFormatRegexBlurAfterEdit,
     onOpenIntersectionFileInApp,
@@ -733,15 +735,14 @@ function renderWorkspaceContent(params: {
   if (selectedFile) {
     return (
       <FormatEditor
-        allFormatFiles={allFormatFiles}
         filePath={selectedFile}
         intersectionExamples={selectedFileIntersectionExamples}
         key={selectedFile}
+        mode={editorMode}
         onOpenIntersectionFileInApp={onOpenIntersectionFileInApp}
         onOpenSmsByTemplate={onOpenSmsByTemplate}
         onOpenTemplateBySms={onOpenTemplateBySms}
         onRegexBlurAfterEdit={onFormatRegexBlurAfterEdit}
-        onRenameFile={handleRenameFile}
         onSearchContextChange={onFormatSearchContextChange}
         readOnly={readOnly}
         sourceDeletedBaseSha={selectedFileSourceDeletedBaseSha}
@@ -2330,6 +2331,8 @@ export function BankWorkspace() {
   const [formatTab, setFormatTab] = useState<
     "all" | "recent" | "intersections"
   >("all");
+  const [editorMode, setEditorMode] =
+    useState<WorkspaceEditorMode>("structured");
   const sendersPath = `${bankPath}/senders.txt`;
   const { prChangedFiles, isPrChangedFilesReady } = usePullRequestChangedFiles({
     repository,
@@ -2820,6 +2823,12 @@ export function BankWorkspace() {
     onSelectFile: navigateToRequestedFile,
   });
 
+  // The raw/structured toggle is per-file UI state; opening another file
+  // starts in the structured editor (same as the old per-editor state).
+  useEffect(() => {
+    setEditorMode("structured");
+  }, [selectedFile]);
+
   useEffect(() => {
     if (showSenders || !selectedFile) {
       setActiveFormatSearchContext(null);
@@ -2909,152 +2918,153 @@ export function BankWorkspace() {
     });
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[320px_1fr] gap-6">
-      {/* ─── Sidebar ─── */}
-      <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
-        <div className="flex items-center gap-2">
-          <h2 className="truncate font-semibold" style={{ fontSize: 16 }}>
-            {displayName}
-          </h2>
-          <a
-            aria-label={t("bank.openBankFolderInRepo")}
-            className={workspaceExternalLinkClassName}
-            href={bankRepoUrl}
-            rel="noreferrer"
-            target="_blank"
-            title={t("bank.openBankFolderInRepo")}
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      {/* ─── Workspace header bar ─── */}
+      <WorkspaceHeaderBar
+        allFormatFiles={inventory.formatFiles}
+        bankName={displayName}
+        bankRepoUrl={bankRepoUrl}
+        mode={editorMode}
+        onModeChange={setEditorMode}
+        onRenameFile={handleRenameFile}
+        readOnly={workspaceReadOnly}
+        selectedFile={selectedFile}
+        sendersPath={sendersPath}
+        showSenders={showSenders}
+        sourceDeletedBaseSha={selectedFileSourceDeletedBaseSha}
+      />
+
+      {staleWorkspaceSession && (
+        <div className="flex shrink-0 items-start justify-between gap-3 rounded-md border border-[color:var(--c-warning)] bg-[color:var(--c-warning-soft)] px-4 py-3 text-[color:var(--c-warning)] text-sm">
+          <span>
+            {t("workspace.cachedStaleNotice", {
+              defaultValue:
+                "PR changed since your last local edits. You're viewing the cached previous version. Discard local changes and refresh the PR to continue.",
+            })}
+          </span>
+          <Button
+            onClick={handleDiscardLocalChangesAndRefresh}
+            type="button"
+            variant="ghost"
           >
-            ↗
-          </a>
+            {t("workspace.discardAndRefresh", {
+              defaultValue: "Discard local changes and refresh PR",
+            })}
+          </Button>
+        </div>
+      )}
+
+      <div className="grid min-h-0 flex-1 grid-cols-[clamp(264px,19vw,340px)_minmax(0,1fr)] gap-4">
+        {/* ─── Sidebar ─── */}
+        <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
+          {/* Action bar */}
+          <BankActionsPanel
+            approvePullRequestError={approvePullRequestError}
+            approvePullRequestLabel={approvePullRequestLabel}
+            calculateIntersectionsError={calculateIntersectionsError}
+            calculateIntersectionsWarning={
+              intersections.loadErrorsCount > 0
+                ? t("quickCheck.summaryLoadErrors", {
+                    count: intersections.loadErrorsCount,
+                  })
+                : null
+            }
+            canResetToSource={canResetToSource}
+            isApprovingPullRequest={isApprovingPullRequest}
+            isCalculatingIntersections={intersections.isCalculating}
+            isCheckingPullRequestApproval={isCheckingPullRequestApproval}
+            isPublishing={isPublishingQuickUpdate}
+            isPullRequestApproved={isPullRequestApproved}
+            onApprovePullRequest={() => {
+              void handleApprovePullRequest();
+            }}
+            onCalculateIntersections={() => {
+              void handleCalculateIntersections();
+            }}
+            onOpenSmsByTemplate={() => {
+              setQuickCheckMode("sms-by-template");
+              setShowQuickCheck(true);
+            }}
+            onOpenTemplateBySms={() => {
+              setQuickCheckMode("template-by-sms");
+              setShowQuickCheck(true);
+            }}
+            onOpenValidation={() => setShowValidation(true)}
+            onPublish={handlePublishAction}
+            onResetToSource={handleResetToSource}
+            publishActionLabel={publishActionLabel}
+            publishDisabled={
+              workspaceReadOnly || changedFilesForPublish.length === 0
+            }
+            publishError={publishError}
+            showApprovePullRequestButton={showApprovePullRequestButton}
+            t={t}
+          />
+
+          <FormatsPanel
+            createFormatDisabled={workspaceReadOnly}
+            fileRecords={inventory.recordsByPath}
+            formatIntersectionStats={intersections.stats}
+            formatSearch={formatSearch}
+            formatTab={formatTab}
+            handleSelectFile={handleSelectFile}
+            handleSelectSenders={handleSelectSenders}
+            intersectionScopeFiles={intersections.scopeFiles}
+            onFocusedFilePathHandled={(filePath) =>
+              setPendingFocusedFilePath((current) =>
+                current === filePath ? null : current
+              )
+            }
+            onScopeIntersections={intersections.scopeTo}
+            pendingFocusedFilePath={pendingFocusedFilePath}
+            recentFiles={recentFiles}
+            refName={refName}
+            repository={repository}
+            searchIndexingLabel={searchIndexingLabel}
+            selectedFile={selectedFile}
+            sendersMissing={sendersMissing}
+            sendersPath={sendersPath}
+            setFormatSearch={setFormatSearch}
+            setFormatTab={setFormatTab}
+            setShowCreateFormat={setShowCreateFormat}
+            showSearchIndexStatus={showSearchIndexStatus}
+            showSenders={showSenders}
+            t={t}
+            totalFilesCount={
+              formatTab === "intersections" && intersections.scopeFiles
+                ? intersections.scopeFiles.length
+                : inventory.recordsByPath.size
+            }
+            tTemplate={t}
+            unsupportedSourceFiles={inventory.unsupportedFiles}
+            visibleFormats={filteredFormatFiles}
+          />
         </div>
 
-        {/* Action bar */}
-        <BankActionsPanel
-          approvePullRequestError={approvePullRequestError}
-          approvePullRequestLabel={approvePullRequestLabel}
-          calculateIntersectionsError={calculateIntersectionsError}
-          calculateIntersectionsWarning={
-            intersections.loadErrorsCount > 0
-              ? t("quickCheck.summaryLoadErrors", {
-                  count: intersections.loadErrorsCount,
-                })
-              : null
-          }
-          canResetToSource={canResetToSource}
-          isApprovingPullRequest={isApprovingPullRequest}
-          isCalculatingIntersections={intersections.isCalculating}
-          isCheckingPullRequestApproval={isCheckingPullRequestApproval}
-          isPublishing={isPublishingQuickUpdate}
-          isPullRequestApproved={isPullRequestApproved}
-          onApprovePullRequest={() => {
-            void handleApprovePullRequest();
-          }}
-          onCalculateIntersections={() => {
-            void handleCalculateIntersections();
-          }}
-          onOpenSmsByTemplate={() => {
-            setQuickCheckMode("sms-by-template");
-            setShowQuickCheck(true);
-          }}
-          onOpenTemplateBySms={() => {
-            setQuickCheckMode("template-by-sms");
-            setShowQuickCheck(true);
-          }}
-          onOpenValidation={() => setShowValidation(true)}
-          onPublish={handlePublishAction}
-          onResetToSource={handleResetToSource}
-          publishActionLabel={publishActionLabel}
-          publishDisabled={
-            workspaceReadOnly || changedFilesForPublish.length === 0
-          }
-          publishError={publishError}
-          showApprovePullRequestButton={showApprovePullRequestButton}
-          t={t}
-        />
-
-        <FormatsPanel
-          createFormatDisabled={workspaceReadOnly}
-          fileRecords={inventory.recordsByPath}
-          formatIntersectionStats={intersections.stats}
-          formatSearch={formatSearch}
-          formatTab={formatTab}
-          handleSelectFile={handleSelectFile}
-          handleSelectSenders={handleSelectSenders}
-          intersectionScopeFiles={intersections.scopeFiles}
-          onFocusedFilePathHandled={(filePath) =>
-            setPendingFocusedFilePath((current) =>
-              current === filePath ? null : current
-            )
-          }
-          onScopeIntersections={intersections.scopeTo}
-          pendingFocusedFilePath={pendingFocusedFilePath}
-          recentFiles={recentFiles}
-          refName={refName}
-          repository={repository}
-          searchIndexingLabel={searchIndexingLabel}
-          selectedFile={selectedFile}
-          sendersMissing={sendersMissing}
-          sendersPath={sendersPath}
-          setFormatSearch={setFormatSearch}
-          setFormatTab={setFormatTab}
-          setShowCreateFormat={setShowCreateFormat}
-          showSearchIndexStatus={showSearchIndexStatus}
-          showSenders={showSenders}
-          t={t}
-          totalFilesCount={
-            formatTab === "intersections" && intersections.scopeFiles
-              ? intersections.scopeFiles.length
-              : inventory.recordsByPath.size
-          }
-          tTemplate={t}
-          unsupportedSourceFiles={inventory.unsupportedFiles}
-          visibleFormats={filteredFormatFiles}
-        />
-      </div>
-
-      {/* ─── Main content ─── */}
-      <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
-        {staleWorkspaceSession && (
-          <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--c-warning)] bg-[color:var(--c-warning-soft)] px-4 py-3 text-[color:var(--c-warning)] text-sm">
-            <span>
-              {t("workspace.cachedStaleNotice", {
-                defaultValue:
-                  "PR changed since your last local edits. You're viewing the cached previous version. Discard local changes and refresh the PR to continue.",
-              })}
-            </span>
-            <Button
-              onClick={handleDiscardLocalChangesAndRefresh}
-              type="button"
-              variant="ghost"
-            >
-              {t("workspace.discardAndRefresh", {
-                defaultValue: "Discard local changes and refresh PR",
-              })}
-            </Button>
-          </div>
-        )}
-        {renderWorkspaceContent({
-          showSenders,
-          bankPath,
-          readOnly: workspaceReadOnly,
-          selectedFile,
-          selectedFileIntersectionExamples,
-          selectedFileSourceDeletedBaseSha,
-          allFormatFiles: inventory.formatFiles,
-          handleRenameFile,
-          onFormatSearchContextChange: setActiveFormatSearchContext,
-          onFormatRegexBlurAfterEdit: intersections.mergeLiveEdit,
-          onOpenIntersectionFileInApp: handleOpenFileInApp,
-          onOpenSmsByTemplate: () => {
-            setQuickCheckMode("sms-by-template");
-            setShowQuickCheck(true);
-          },
-          onOpenTemplateBySms: () => {
-            setQuickCheckMode("template-by-sms");
-            setShowQuickCheck(true);
-          },
-          t,
-        })}
+        {/* ─── Main content ─── */}
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
+          {renderWorkspaceContent({
+            showSenders,
+            bankPath,
+            readOnly: workspaceReadOnly,
+            selectedFile,
+            selectedFileIntersectionExamples,
+            selectedFileSourceDeletedBaseSha,
+            editorMode,
+            onFormatSearchContextChange: setActiveFormatSearchContext,
+            onFormatRegexBlurAfterEdit: intersections.mergeLiveEdit,
+            onOpenIntersectionFileInApp: handleOpenFileInApp,
+            onOpenSmsByTemplate: () => {
+              setQuickCheckMode("sms-by-template");
+              setShowQuickCheck(true);
+            },
+            onOpenTemplateBySms: () => {
+              setQuickCheckMode("template-by-sms");
+              setShowQuickCheck(true);
+            },
+            t,
+          })}
+        </div>
       </div>
 
       {/* Modals */}
