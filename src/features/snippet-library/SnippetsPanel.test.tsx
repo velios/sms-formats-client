@@ -60,6 +60,14 @@ describe("SnippetsPanel", () => {
     expect(after).toBe(2);
   });
 
+  it("shows the gotcha line on cards that define one", () => {
+    render(<SnippetsPanel onInsert={() => undefined} />);
+    const gotchaLabels = screen.getAllByText("snippets.gotcha:", {
+      exact: false,
+    });
+    expect(gotchaLabels.length).toBeGreaterThan(0);
+  });
+
   it("inserts the snippet pattern without any close side effect", () => {
     const onInsert = vi.fn();
     render(<SnippetsPanel onInsert={onInsert} />);

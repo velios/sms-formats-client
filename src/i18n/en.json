@@ -217,7 +217,6 @@
   },
   "snippets": {
     "open": "Snippets",
-    "title": "Snippet library",
     "search": "Search by pattern, description, entity…",
     "allGroups": "All",
     "insert": "Insert",

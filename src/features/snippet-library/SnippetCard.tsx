@@ -16,7 +16,7 @@ export function SnippetCard({
   return (
     <div className="rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] p-3">
       <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 break-all rounded-[3px] bg-[color:var(--c-bg-input)] px-2 py-1 font-mono text-[13px] text-[color:var(--c-text)]">
+        <code className="min-w-0 flex-1 break-all rounded-[3px] bg-[color:var(--c-tone-quantifier-soft-bg)] px-2 py-1 font-mono font-semibold text-[13px] text-[color:var(--c-tone-quantifier-text)]">
           {snippet.pattern}
         </code>
         <StatusBadge
@@ -46,7 +46,10 @@ export function SnippetCard({
         />
       )}
       {snippet.gotcha && (
-        <SnippetField label={t("snippets.gotcha")} value={snippet.gotcha} />
+        <p className="mt-1.5 text-[color:var(--c-warning)] text-xs">
+          <span className="font-semibold">{t("snippets.gotcha")}: </span>
+          {snippet.gotcha}
+        </p>
       )}
     </div>
   );
