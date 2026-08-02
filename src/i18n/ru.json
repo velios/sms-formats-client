@@ -279,9 +279,9 @@
     "en": "English"
   },
   "promptPackage": {
-    "openAction": "Обработать данные банка с помощью AI",
+    "openAction": "AI промпт",
     "tokenRequired": "Нужен GitHub-токен: пакет собирается запросом к GitHub от вашего имени.",
-    "title": "Пакет промта: {{bank}}",
+    "title": "AI промпт: {{bank}}",
     "taskLabel": "Задача",
     "taskPlaceholder": "Что сделать с форматами этого банка",
     "documentsLabel": "Справочные документы",

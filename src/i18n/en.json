@@ -256,9 +256,9 @@
     "en": "English"
   },
   "promptPackage": {
-    "openAction": "Process bank data with AI",
+    "openAction": "AI prompt",
     "tokenRequired": "A GitHub token is required: the package is assembled by a GitHub request on your behalf.",
-    "title": "Prompt package: {{bank}}",
+    "title": "AI prompt: {{bank}}",
     "taskLabel": "Task",
     "taskPlaceholder": "What to do with the formats of this bank",
     "documentsLabel": "Reference documents",
