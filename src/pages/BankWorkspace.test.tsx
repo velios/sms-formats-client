@@ -60,6 +60,8 @@ function renderFormatsPanel(params: {
               ownMatchedExamples: 8,
               intersectingOtherFormats,
               intersectingFormatPaths: [],
+              intersectingExamples: [],
+              ownUnmatchedExamples: [],
             },
           ],
         ])

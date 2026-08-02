@@ -35,6 +35,8 @@ function makeStat(
     ownMatchedExamples: 1,
     intersectingOtherFormats: intersectingFormatPaths.length,
     intersectingFormatPaths,
+    intersectingExamples: [],
+    ownUnmatchedExamples: [],
   };
 }
 

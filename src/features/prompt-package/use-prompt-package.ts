@@ -386,12 +386,13 @@ export function usePromptPackage(
         ? null
         : buildPromptPackage({
             bankName,
+            bankPath,
             layers: materials.layers,
             documents: selectedDocuments,
             task: sticky.task,
             skipped: materials.skipped,
           }),
-    [bankName, materials, selectedDocuments, sticky.task]
+    [bankName, bankPath, materials, selectedDocuments, sticky.task]
   );
 
   return {

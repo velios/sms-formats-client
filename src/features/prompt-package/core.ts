@@ -2,6 +2,13 @@
 // No network, no stores, no localStorage, no React — the module is imported
 // and tested in isolation (ADR-0016).
 
+import {
+  calculateFormatIntersectionStats,
+  type FormatIntersectionStat,
+  isBankFormatFilePath,
+  parseFormatFile,
+} from "@/domain/format";
+
 export type PromptPackageLayer = "main" | "pr" | "draft";
 
 export interface PromptPackageFile {
@@ -27,6 +34,9 @@ export interface PromptPackageDocument {
 
 export interface PromptPackageInput {
   bankName: string;
+  // Needed to tell the bank's format files from `senders.txt`: intersections
+  // are counted over formats only.
+  bankPath: string;
   layers: Record<PromptPackageLayer, PromptPackageFile[]>;
   documents: PromptPackageDocument[];
   task: string;
@@ -60,11 +70,21 @@ export interface PromptPackage {
 // Package language is Russian, fixed in module constants and not switched by
 // the interface language: it is a property of the artifact, not of the UI
 // (ADR-0016).
-const LEGEND_TEMPLATE = `Это пакет данных для работы с форматами банковских SMS банка «{bank}». Структура пакета: этот блок \`legend\`, затем \`docs\` — справочные документы, затем блоки \`files\` — файлы банка в трёх слоях, в конце \`task\` — задача от пользователя.
+const LEGEND_TEMPLATE = `Это пакет данных для работы с форматами банковских SMS банка «{bank}». Структура пакета: этот блок \`legend\`, затем \`docs\` — справочные документы, затем \`intersections\` — пересечения форматов, затем блоки \`files\` — файлы банка в трёх слоях, в конце \`task\` — задача от пользователя.
 
 Слои файлов: \`layer="main"\` — состояние в основной ветке репозитория; \`layer="pr"\` — версии из открытого pull request; \`layer="draft"\` — несохранённые правки из браузерного редактора. Слои независимы: если файла нет в слое \`pr\` или \`draft\`, в этом слое он не менялся, и действует его версия из предыдущего слоя. Слой может отсутствовать целиком — это значит, что в нём нет ни одного файла банка: нет \`layer="pr"\` или \`layer="draft"\` — банк в этом слое не менялся; нет \`layer="main"\` — банка ещё нет в основной ветке, он создаётся в этом pull request. Актуальность: \`draft\` новее \`pr\`, \`pr\` новее \`main\` — свежайшее намерение автора ищи в самом позднем слое, где файл присутствует.
 
-Выполни задачу из блока \`task\`. Если задача требует изменить или создать файлы — верни полное новое тело каждого затронутого файла с указанием его \`path\`, без diff и без сокращений. Файлы, которых задача не касается, не трогай.`;
+Выполни задачу из блока \`task\` и верни ответ той же псевдо-XML, что и запрос: изменённый или новый файл — блоком \`<file path="…">\` с полным новым телом, без diff и без сокращений; удаление — блоком \`<delete path="…">\` с причиной одной строкой внутри; переименование — блоком \`<rename from="…" to="…">\` с причиной одной строкой внутри.
+
+Объём работ: по умолчанию меняй только те файлы, которых задача касается прямо. Массовую переделку остальных форматов банка делай только тогда, когда задача просит об этом явно.`;
+
+const INTERSECTIONS_INTRO =
+  "Пересечения посчитаны при сборке пакета по действующим версиям файлов (draft перекрывает pr, pr перекрывает main). Направление: regex файла слева распознаёт пример файла справа — это cross_match, ошибка уровня банка. Считает движок регулярных выражений браузера, а валидатор апстрима — Python re; на паттернах с (?i) результат может расходиться.";
+
+const OWN_MISSES_HEADER =
+  "Примеры, не распознанные собственным regex (example_no_match):";
+
+const NOTHING = "(нет)";
 
 const LAYER_ORDER: PromptPackageLayer[] = ["main", "pr", "draft"];
 
@@ -100,6 +120,77 @@ function renderLayer(
   return `<files layer="${layer}">\n${files.map(renderFile).join("\n")}\n</files>`;
 }
 
+// The versions that actually apply: a later layer wins over an earlier one, the
+// same reading the legend gives the agent.
+function resolveEffectiveFormats(
+  input: PromptPackageInput
+): Array<{ filePath: string; regex: string; examples: string[] }> {
+  const effective = new Map<string, string>();
+  for (const layer of LAYER_ORDER) {
+    for (const file of input.layers[layer]) {
+      effective.set(file.path, file.content);
+    }
+  }
+  return [...effective]
+    .filter(([path]) => isBankFormatFilePath(path, input.bankPath))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([path, content]) => {
+      const parsed = parseFormatFile(content, path);
+      return {
+        filePath: path,
+        regex: parsed.regex,
+        examples: parsed.examples,
+      };
+    });
+}
+
+function renderCrossMatches(stats: FormatIntersectionStat[]): string {
+  const lines: string[] = [];
+  for (const stat of stats) {
+    for (const otherPath of stat.intersectingFormatPaths) {
+      lines.push(`${stat.filePath} → ${otherPath}`);
+      for (const hit of stat.intersectingExamples) {
+        if (hit.filePath === otherPath) {
+          lines.push(`  «${hit.example}»`);
+        }
+      }
+    }
+  }
+  return lines.length > 0 ? lines.join("\n") : NOTHING;
+}
+
+function renderOwnMisses(stats: FormatIntersectionStat[]): string {
+  const lines: string[] = [];
+  for (const stat of stats) {
+    if (stat.ownUnmatchedExamples.length === 0) {
+      continue;
+    }
+    lines.push(`  ${stat.filePath}`);
+    for (const example of stat.ownUnmatchedExamples) {
+      lines.push(`    «${example}»`);
+    }
+  }
+  return lines.length > 0 ? lines.join("\n") : `  ${NOTHING}`;
+}
+
+// The block is printed even when there is nothing to report: a missing block
+// would be indistinguishable from "no intersections".
+function renderIntersections(input: PromptPackageInput): string {
+  const stats = [
+    ...calculateFormatIntersectionStats(
+      resolveEffectiveFormats(input)
+    ).values(),
+  ];
+  return [
+    INTERSECTIONS_INTRO,
+    "",
+    renderCrossMatches(stats),
+    "",
+    OWN_MISSES_HEADER,
+    renderOwnMisses(stats),
+  ].join("\n");
+}
+
 function utf8Bytes(text: string): number {
   return new TextEncoder().encode(text).length;
 }
@@ -112,6 +203,8 @@ export function buildPromptPackage(input: PromptPackageInput): PromptPackage {
   if (input.documents.length > 0) {
     blocks.push(block("docs", renderDocuments(input.documents)));
   }
+
+  blocks.push(block("intersections", renderIntersections(input)));
 
   for (const layer of LAYER_ORDER) {
     const rendered = renderLayer(layer, input.layers[layer]);

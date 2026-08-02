@@ -3,6 +3,7 @@ export {
   calculateFormatIntersectionStats,
   type FormatIntersectionInput,
   type FormatIntersectionStat,
+  type IntersectingExample,
 } from "./intersections";
 export { FORMAT_TEMPLATE, parseFormatFile, serializeFormat } from "./parser";
 export {

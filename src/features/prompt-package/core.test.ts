@@ -6,15 +6,30 @@ import {
 
 // The legend text as fixed by the PRD ("Состав пакета" → "Легенда"), written
 // out here independently of the module so a silent edit of the constant fails.
-const LEGEND_VERBATIM = `Это пакет данных для работы с форматами банковских SMS банка «Т-Банк». Структура пакета: этот блок \`legend\`, затем \`docs\` — справочные документы, затем блоки \`files\` — файлы банка в трёх слоях, в конце \`task\` — задача от пользователя.
+const LEGEND_VERBATIM = `Это пакет данных для работы с форматами банковских SMS банка «Т-Банк». Структура пакета: этот блок \`legend\`, затем \`docs\` — справочные документы, затем \`intersections\` — пересечения форматов, затем блоки \`files\` — файлы банка в трёх слоях, в конце \`task\` — задача от пользователя.
 
 Слои файлов: \`layer="main"\` — состояние в основной ветке репозитория; \`layer="pr"\` — версии из открытого pull request; \`layer="draft"\` — несохранённые правки из браузерного редактора. Слои независимы: если файла нет в слое \`pr\` или \`draft\`, в этом слое он не менялся, и действует его версия из предыдущего слоя. Слой может отсутствовать целиком — это значит, что в нём нет ни одного файла банка: нет \`layer="pr"\` или \`layer="draft"\` — банк в этом слое не менялся; нет \`layer="main"\` — банка ещё нет в основной ветке, он создаётся в этом pull request. Актуальность: \`draft\` новее \`pr\`, \`pr\` новее \`main\` — свежайшее намерение автора ищи в самом позднем слое, где файл присутствует.
 
-Выполни задачу из блока \`task\`. Если задача требует изменить или создать файлы — верни полное новое тело каждого затронутого файла с указанием его \`path\`, без diff и без сокращений. Файлы, которых задача не касается, не трогай.`;
+Выполни задачу из блока \`task\` и верни ответ той же псевдо-XML, что и запрос: изменённый или новый файл — блоком \`<file path="…">\` с полным новым телом, без diff и без сокращений; удаление — блоком \`<delete path="…">\` с причиной одной строкой внутри; переименование — блоком \`<rename from="…" to="…">\` с причиной одной строкой внутри.
+
+Объём работ: по умолчанию меняй только те файлы, которых задача касается прямо. Массовую переделку остальных форматов банка делай только тогда, когда задача просит об этом явно.`;
+
+const BANK_PATH = "banks/tinkoff";
+
+function formatFile(regex: string, examples: string[]): string {
+  return [
+    regex,
+    "",
+    "-----COLUMNS-----",
+    "comment",
+    ...examples.flatMap((example) => ["", "-----EXAMPLE-----", example]),
+  ].join("\n");
+}
 
 function buildPackage(overrides: Partial<PromptPackageInput> = {}) {
   return buildPromptPackage({
     bankName: "Т-Банк",
+    bankPath: BANK_PATH,
     layers: { main: [], pr: [], draft: [] },
     documents: [],
     task: "Сведи два формата в один",
@@ -24,13 +39,13 @@ function buildPackage(overrides: Partial<PromptPackageInput> = {}) {
 }
 
 function tagsInOrder(text: string): string[] {
-  return Array.from(text.matchAll(/^<(legend|docs|files[^>]*|task)>$/gm)).map(
-    (match) => match[1] ?? ""
-  );
+  return Array.from(
+    text.matchAll(/^<(legend|docs|intersections|files[^>]*|task)>$/gm)
+  ).map((match) => match[1] ?? "");
 }
 
 describe("buildPromptPackage text", () => {
-  it("orders blocks: legend, docs, three layers, task", () => {
+  it("orders blocks: legend, docs, intersections, three layers, task", () => {
     const { text } = buildPackage({
       documents: [{ name: "cookbook.md", content: "# Cookbook" }],
       layers: {
@@ -43,6 +58,7 @@ describe("buildPromptPackage text", () => {
     expect(tagsInOrder(text)).toEqual([
       "legend",
       "docs",
+      "intersections",
       'files layer="main"',
       'files layer="pr"',
       'files layer="draft"',
@@ -61,7 +77,12 @@ describe("buildPromptPackage text", () => {
 
     expect(text).toContain('<files layer="main">');
     expect(text).not.toContain('layer="pr"></files>');
-    expect(tagsInOrder(text)).toEqual(["legend", 'files layer="main"', "task"]);
+    expect(tagsInOrder(text)).toEqual([
+      "legend",
+      "intersections",
+      'files layer="main"',
+      "task",
+    ]);
   });
 
   it('omits layer="main" for a bank created in this pull request', () => {
@@ -73,7 +94,12 @@ describe("buildPromptPackage text", () => {
       },
     });
 
-    expect(tagsInOrder(text)).toEqual(["legend", 'files layer="pr"', "task"]);
+    expect(tagsInOrder(text)).toEqual([
+      "legend",
+      "intersections",
+      'files layer="pr"',
+      "task",
+    ]);
     expect(text).not.toContain('<files layer="main">');
   });
 
@@ -108,6 +134,91 @@ describe("buildPromptPackage text", () => {
     const { text } = buildPackage({ task: "Перепиши по cookbook" });
 
     expect(text).toContain("<task>\nПерепиши по cookbook\n</task>");
+  });
+});
+
+describe("buildPromptPackage intersections", () => {
+  function intersectionsBlock(text: string): string {
+    return text.slice(
+      text.indexOf("<intersections>"),
+      text.indexOf("</intersections>") + "</intersections>".length
+    );
+  }
+
+  it("quotes the recognized foreign example, counting the effective versions", () => {
+    // The `main` version of a.txt is harmless; its `draft` version is the one
+    // that reaches over into b.txt — and the one the block must judge.
+    const { text } = buildPackage({
+      layers: {
+        main: [
+          {
+            path: `${BANK_PATH}/formats/a.txt`,
+            content: formatFile("^PAY (\\d+)$", ["PAY 100"]),
+          },
+          {
+            path: `${BANK_PATH}/formats/b.txt`,
+            content: formatFile("^СБП: Перевод (.+)$", [
+              "СБП: Перевод Ольга В. Списано 10000 р.",
+            ]),
+          },
+          { path: `${BANK_PATH}/senders.txt`, content: "900" },
+        ],
+        pr: [],
+        draft: [
+          {
+            path: `${BANK_PATH}/formats/a.txt`,
+            content: formatFile("^СБП: (.+)$", ["СБП: Списано 100 р."]),
+          },
+        ],
+      },
+    });
+
+    expect(intersectionsBlock(text)).toContain(
+      `${BANK_PATH}/formats/a.txt → ${BANK_PATH}/formats/b.txt\n  «СБП: Перевод Ольга В. Списано 10000 р.»`
+    );
+    // Directed metric: b.txt does not recognize the example of a.txt.
+    expect(intersectionsBlock(text)).not.toContain(
+      `${BANK_PATH}/formats/b.txt → `
+    );
+    expect(intersectionsBlock(text)).toContain(
+      "Примеры, не распознанные собственным regex (example_no_match):\n  (нет)"
+    );
+  });
+
+  it("prints the block with (нет) when there is nothing to report", () => {
+    const { text } = buildPackage({
+      layers: {
+        main: [
+          {
+            path: `${BANK_PATH}/formats/a.txt`,
+            content: formatFile("^PAY (\\d+)$", ["PAY 100"]),
+          },
+        ],
+        pr: [],
+        draft: [],
+      },
+    });
+
+    expect(intersectionsBlock(text)).toContain("\n\n(нет)\n\n");
+  });
+
+  it("lists own examples the format's own regex misses", () => {
+    const { text } = buildPackage({
+      layers: {
+        main: [
+          {
+            path: `${BANK_PATH}/formats/a.txt`,
+            content: formatFile("^PAY (\\d+)$", ["PAY 100", "REFUND 5"]),
+          },
+        ],
+        pr: [],
+        draft: [],
+      },
+    });
+
+    expect(intersectionsBlock(text)).toContain(
+      `example_no_match):\n  ${BANK_PATH}/formats/a.txt\n    «REFUND 5»`
+    );
   });
 });
 

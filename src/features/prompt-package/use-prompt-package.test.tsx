@@ -27,6 +27,16 @@ const FORMAT_B = `${BANK_PATH}/formats/b.txt`;
 const FORMAT_C = `${BANK_PATH}/formats/c.txt`;
 const STICKY_KEY = "sms-formats-prompt-package";
 
+function formatFile(regex: string, examples: string[]): string {
+  return [
+    regex,
+    "",
+    "-----COLUMNS-----",
+    "comment",
+    ...examples.flatMap((example) => ["", "-----EXAMPLE-----", example]),
+  ].join("\n");
+}
+
 function draftChange(
   overrides: Partial<PromptPackageDraftChange> &
     Pick<PromptPackageDraftChange, "filePath">
@@ -150,6 +160,50 @@ describe("usePromptPackage layers", () => {
       "format-rules.md",
       "regex-snippets.toml",
     ]);
+  });
+
+  it("counts intersections over the effective versions of the format files", async () => {
+    // a.txt is harmless in `main` and reaches over into b.txt in `draft`: the
+    // block must judge the version that actually applies.
+    const bodies: Record<string, string> = {
+      [FORMAT_A]: formatFile("^PAY (\\d+)$", ["PAY 100"]),
+      [FORMAT_B]: formatFile("^СБП: Перевод (.+)$", [
+        "СБП: Перевод Ольга В. Списано 10000 р.",
+      ]),
+      [FORMAT_C]: formatFile("^CARD (\\d+)$", ["CARD 1"]),
+      [SENDERS]: "900",
+    };
+    const fetchBlobs = vi.fn(
+      async (_ref: string, paths: string[]): Promise<BlobFetchResult[]> =>
+        paths.map((path) => ({
+          path,
+          status: "loaded" as const,
+          text: bodies[path] ?? "",
+        }))
+    ) as unknown as typeof fetchBlobsByRef;
+    const draftStore = {
+      getChangedFiles: () => [
+        draftChange({
+          filePath: FORMAT_A,
+          content: formatFile("^СБП: (.+)$", ["СБП: Списано 100 р."]),
+          remoteContent: bodies[FORMAT_A] ?? "",
+        }),
+      ],
+    };
+    const { result } = renderHook(() =>
+      usePromptPackage(makeParams({ draftStore, fetchBlobs }))
+    );
+
+    await act(async () => {
+      await result.current.build();
+    });
+
+    const text = result.current.result?.text ?? "";
+    expect(text).toContain(
+      `${FORMAT_A} → ${FORMAT_B}\n  «СБП: Перевод Ольга В. Списано 10000 р.»`
+    );
+    // senders.txt is not a format and never takes part in the count.
+    expect(text).not.toContain(`${SENDERS} → `);
   });
 
   it("keeps binary and truncated bodies out of the text and reports them as skipped", async () => {

@@ -27,6 +27,10 @@ describe("calculateFormatIntersectionStats", () => {
       ownMatchedExamples: 2,
       intersectingOtherFormats: 1,
       intersectingFormatPaths: ["src/Bank/formats/b.txt"],
+      intersectingExamples: [
+        { filePath: "src/Bank/formats/b.txt", example: "PAY 300" },
+      ],
+      ownUnmatchedExamples: ["OTHER"],
     });
     expect(stats.get("src/Bank/formats/b.txt")).toEqual({
       filePath: "src/Bank/formats/b.txt",
@@ -34,6 +38,8 @@ describe("calculateFormatIntersectionStats", () => {
       ownMatchedExamples: 1,
       intersectingOtherFormats: 0,
       intersectingFormatPaths: [],
+      intersectingExamples: [],
+      ownUnmatchedExamples: ["PAY 300"],
     });
     expect(stats.get("src/Bank/formats/c.txt")).toEqual({
       filePath: "src/Bank/formats/c.txt",
@@ -41,6 +47,8 @@ describe("calculateFormatIntersectionStats", () => {
       ownMatchedExamples: 1,
       intersectingOtherFormats: 0,
       intersectingFormatPaths: [],
+      intersectingExamples: [],
+      ownUnmatchedExamples: [],
     });
   });
 
@@ -64,6 +72,8 @@ describe("calculateFormatIntersectionStats", () => {
       ownMatchedExamples: 0,
       intersectingOtherFormats: 0,
       intersectingFormatPaths: [],
+      intersectingExamples: [],
+      ownUnmatchedExamples: ["PAY 100"],
     });
     expect(stats.get("src/Bank/formats/invalid.txt")).toEqual({
       filePath: "src/Bank/formats/invalid.txt",
@@ -71,6 +81,8 @@ describe("calculateFormatIntersectionStats", () => {
       ownMatchedExamples: 0,
       intersectingOtherFormats: 0,
       intersectingFormatPaths: [],
+      intersectingExamples: [],
+      ownUnmatchedExamples: ["PAY 200"],
     });
   });
 });
