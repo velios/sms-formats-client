@@ -308,4 +308,38 @@ describe("usePromptPackage sticky state", () => {
     ]);
     expect(result.current.result?.text).toContain("почини регулярку");
   });
+
+  it("re-assembles the package from the fetched bodies without fetching again", async () => {
+    const fetchBlobs = vi.fn(async (ref: string, paths: string[]) =>
+      loadedBlobs(ref, paths)
+    ) as unknown as typeof fetchBlobsByRef;
+    const { result } = renderHook(() =>
+      usePromptPackage(makeParams({ fetchBlobs }))
+    );
+
+    await act(async () => {
+      await result.current.build();
+    });
+    expect(fetchBlobs).toHaveBeenCalledTimes(2);
+
+    // Typing the task letter by letter and toggling a checkbox: the material is
+    // already home, so this costs strings, not requests.
+    act(() => {
+      for (const task of ["с", "св", "сведи форматы"]) {
+        result.current.setTask(task);
+      }
+      result.current.toggleDocument("cookbook", false);
+    });
+
+    expect(fetchBlobs).toHaveBeenCalledTimes(2);
+    // And the package follows the field: no stale task, no stale documents.
+    expect(result.current.result?.text).toContain(
+      "<task>\nсведи форматы\n</task>"
+    );
+    expect(result.current.result?.summary.documents).toEqual([
+      "format-rules.md",
+      "regex-snippets.toml",
+    ]);
+    expect(result.current.result?.text).toContain(`main body of ${FORMAT_A}`);
+  });
 });

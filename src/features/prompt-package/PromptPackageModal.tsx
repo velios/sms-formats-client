@@ -18,10 +18,6 @@ import {
   usePromptPackage,
 } from "./use-prompt-package";
 
-// The task lands in the package, so every edit invalidates the assembled text;
-// rebuilding is a clean request, so keystrokes are collected first.
-const REBUILD_DEBOUNCE_MS = 400;
-
 const DOCUMENT_KEYS: PromptPackageDocumentKey[] = [
   "cookbook",
   "formatRules",
@@ -138,25 +134,16 @@ export function PromptPackageModal({
     taskRef.current?.focus();
   }, []);
 
-  // The debounce reads the freshest `build` without depending on its identity:
-  // it is recreated on every keystroke, and an identity dependency would loop.
+  // One fetch per opening: the bodies of the layers cannot change while the
+  // modal holds the screen. Editing the task or a checkbox only re-assembles
+  // the string, so nothing here reacts to them.
   const buildRef = useRef(build);
   buildRef.current = build;
   useEffect(() => {
-    if (!hasToken) {
-      return;
-    }
-    const timer = setTimeout(() => {
+    if (hasToken) {
       void buildRef.current();
-    }, REBUILD_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [
-    hasToken,
-    task,
-    documents.cookbook,
-    documents.formatRules,
-    documents.snippets,
-  ]);
+    }
+  }, [hasToken]);
 
   const handleCopy = useCallback(async () => {
     if (!result) {

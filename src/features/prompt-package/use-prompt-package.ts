@@ -32,6 +32,7 @@ import {
   type PromptPackage,
   type PromptPackageDocument,
   type PromptPackageFile,
+  type PromptPackageLayer,
   type PromptPackageSkippedFile,
 } from "./core";
 
@@ -119,6 +120,15 @@ export interface PromptPackageDraftStore {
 
 export type PromptPackageErrorCode = "no-token" | "no-source" | "load-failed";
 
+// What one fetch brought home: the bodies of the three layers plus the files
+// that could not be put into the package. The task and the document checkboxes
+// do not belong here — they change the assembled string, not the material, so
+// changing them must never cost a request.
+interface PromptPackageMaterials {
+  layers: Record<PromptPackageLayer, PromptPackageFile[]>;
+  skipped: PromptPackageSkippedFile[];
+}
+
 export interface UsePromptPackageParams {
   bankName: string;
   bankPath: string;
@@ -146,8 +156,12 @@ export interface UsePromptPackageResult {
   error: PromptPackageErrorCode | null;
   // Message of the failed GraphQL call, for the retry prompt.
   errorDetail: string | null;
-  // Never partial: on any failure this stays null (ADR-0016).
+  // Assembled from the fetched materials on every render: editing the task or
+  // a checkbox re-renders the string, never re-fetches. Never partial — on any
+  // failure this stays null (ADR-0016).
   result: PromptPackage | null;
+  // Fetches the bodies of the layers and keeps them. Called when the subject of
+  // the fetch appears or changes and on an explicit retry — not on typing.
   build: () => Promise<void>;
 }
 
@@ -244,7 +258,9 @@ export function usePromptPackage(
   const [isBuilding, setIsBuilding] = useState(false);
   const [error, setError] = useState<PromptPackageErrorCode | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
-  const [result, setResult] = useState<PromptPackage | null>(null);
+  const [materials, setMaterials] = useState<PromptPackageMaterials | null>(
+    null
+  );
   const buildIdRef = useRef(0);
 
   useEffect(() => {
@@ -282,14 +298,14 @@ export function usePromptPackage(
     buildIdRef.current = buildId;
 
     if (!hasToken) {
-      setResult(null);
+      setMaterials(null);
       setErrorDetail(null);
       setError("no-token");
       setIsBuilding(false);
       return;
     }
     if (!sourceRefName) {
-      setResult(null);
+      setMaterials(null);
       setErrorDetail(null);
       setError("no-source");
       setIsBuilding(false);
@@ -344,15 +360,10 @@ export function usePromptPackage(
           })),
       ].sort((a, b) => a.path.localeCompare(b.path));
 
-      setResult(
-        buildPromptPackage({
-          bankName,
-          layers: { main: mainLayer.files, pr: prFiles, draft: draftFiles },
-          documents: selectedDocuments,
-          task: sticky.task,
-          skipped: [...mainLayer.skipped, ...fetchedPrLayer.skipped],
-        })
-      );
+      setMaterials({
+        layers: { main: mainLayer.files, pr: prFiles, draft: draftFiles },
+        skipped: [...mainLayer.skipped, ...fetchedPrLayer.skipped],
+      });
       setIsBuilding(false);
     } catch (caught) {
       if (buildIdRef.current !== buildId) {
@@ -360,25 +371,40 @@ export function usePromptPackage(
       }
       // Nothing is assembled from a failed load: the caller shows the error and
       // offers a retry.
-      setResult(null);
+      setMaterials(null);
       setError("load-failed");
       setErrorDetail(
         caught instanceof Error ? caught.message : String(caught ?? "")
       );
       setIsBuilding(false);
     }
+    // Deliberately not the task and not the document selection: they are the
+    // subject of the assembly below, not of the fetch.
   }, [
-    bankName,
     bankPath,
     draftStore,
     fetchBlobs,
     hasToken,
     inventory,
     repository,
-    selectedDocuments,
     sourceRefName,
-    sticky.task,
   ]);
+
+  // The assembly is a pure function of already fetched facts (ADR-0016), so it
+  // runs on render: typing in the task field costs a string, not a request.
+  const result = useMemo<PromptPackage | null>(
+    () =>
+      materials === null
+        ? null
+        : buildPromptPackage({
+            bankName,
+            layers: materials.layers,
+            documents: selectedDocuments,
+            task: sticky.task,
+            skipped: materials.skipped,
+          }),
+    [bankName, materials, selectedDocuments, sticky.task]
+  );
 
   return {
     hasToken,
