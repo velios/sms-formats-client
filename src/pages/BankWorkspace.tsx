@@ -1391,6 +1391,7 @@ export function resolveSourceChangeFacts(params: {
       records: sessionChangedFiles.map((file) => ({
         path: file.path,
         kind: file.kind,
+        oldPath: file.oldPath,
       })),
       isSelectionReady: true,
     };
