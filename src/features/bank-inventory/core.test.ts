@@ -375,6 +375,31 @@ describe("buildBankInventory selections", () => {
     expect(inventory.mainLayerPaths).toEqual([]);
   });
 
+  // Consumer of `prLayerPaths`: the prompt package builder, which prints these
+  // files as `<files layer="pr">` (ADR-0016).
+  it("resolves the pr layer for the prompt package: formats and senders added or changed in the source", () => {
+    const inventory = buildInventory({
+      remoteFormatFiles: [
+        "banks/pumb/formats/added.txt",
+        "banks/pumb/formats/changed.txt",
+        "banks/pumb/formats/untouched.txt",
+      ],
+      sourceChanges: [
+        { path: "banks/pumb/formats/added.txt", kind: "add" },
+        { path: "banks/pumb/formats/changed.txt", kind: "modify" },
+        { path: "banks/pumb/formats/removed.txt", kind: "delete" },
+        { path: "banks/pumb/notes.md", kind: "modify" },
+        { path: SENDERS_PATH, kind: "modify" },
+      ],
+    });
+
+    expect(inventory.prLayerPaths).toEqual([
+      "banks/pumb/formats/added.txt",
+      "banks/pumb/formats/changed.txt",
+      SENDERS_PATH,
+    ]);
+  });
+
   it("reports local changes in the bank for reset-to-source", () => {
     expect(buildInventory().hasLocalChangesInBank).toBe(false);
     expect(
