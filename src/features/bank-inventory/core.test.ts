@@ -281,6 +281,68 @@ describe("buildBankInventory selections", () => {
     );
   });
 
+  // Consumer of `mainLayerPaths`: the prompt package builder, which prints
+  // these files as `<files layer="main">` (ADR-0016).
+  it("resolves the main layer for the prompt package: head-ref minus added plus deleted", () => {
+    const inventory = buildInventory({
+      remoteFormatFiles: [
+        "banks/pumb/formats/kept.txt",
+        "banks/pumb/formats/added.txt",
+      ],
+      draftPaths: ["banks/pumb/formats/draft-only.txt"],
+      localChanges: [
+        localChange({
+          filePath: "banks/pumb/formats/draft-only.txt",
+          remoteContent: "",
+        }),
+      ],
+      sourceChanges: [
+        { path: "banks/pumb/formats/added.txt", kind: "add" },
+        { path: "banks/pumb/formats/removed.txt", kind: "delete" },
+        { path: "banks/pumb/formats/kept.txt", kind: "modify" },
+        { path: "banks/pumb/notes.md", kind: "delete" },
+      ],
+    });
+
+    expect(inventory.mainLayerPaths).toEqual([
+      "banks/pumb/formats/kept.txt",
+      "banks/pumb/formats/removed.txt",
+      SENDERS_PATH,
+    ]);
+  });
+
+  it("keeps senders.txt in the main layer and drops it when the PR adds it", () => {
+    expect(buildInventory().mainLayerPaths).toEqual([SENDERS_PATH]);
+    expect(
+      buildInventory({ sourceChanges: [{ path: SENDERS_PATH, kind: "add" }] })
+        .mainLayerPaths
+    ).toEqual([]);
+  });
+
+  it("counts a source change of unknown kind as present in the main layer", () => {
+    const inventory = buildInventory({
+      remoteFormatFiles: ["banks/pumb/formats/kept.txt"],
+      sourceChanges: [{ path: "banks/pumb/formats/kept.txt" }],
+    });
+
+    expect(inventory.mainLayerPaths).toEqual([
+      "banks/pumb/formats/kept.txt",
+      SENDERS_PATH,
+    ]);
+  });
+
+  it("leaves the main layer empty for a bank created in this pull request", () => {
+    const inventory = buildInventory({
+      remoteFormatFiles: ["banks/pumb/formats/new.txt"],
+      sourceChanges: [
+        { path: "banks/pumb/formats/new.txt", kind: "add" },
+        { path: SENDERS_PATH, kind: "add" },
+      ],
+    });
+
+    expect(inventory.mainLayerPaths).toEqual([]);
+  });
+
   it("reports local changes in the bank for reset-to-source", () => {
     expect(buildInventory().hasLocalChangesInBank).toBe(false);
     expect(

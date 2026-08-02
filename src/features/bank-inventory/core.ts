@@ -73,6 +73,11 @@ export interface BankInventory {
   // Living format files with local content for bank-level publish validation:
   // by construction without deleted, senders and unsupported files.
   formatContentsForValidation: Map<string, string>;
+  // Bank files as they exist in the `main` layer (head-ref − `add` + `delete`),
+  // derived offline. Consumer: the prompt package builder, which prints them as
+  // `<files layer="main">` (ADR-0016). Only format files and senders.txt —
+  // unsupported files are not bank content upstream.
+  mainLayerPaths: string[];
   // Enables reset-to-source.
   hasLocalChangesInBank: boolean;
 }
@@ -261,6 +266,27 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
       .map((change) => [change.filePath, change.content])
   );
 
+  // head-ref composition − files added in the source ref + files deleted there.
+  // A change of unknown kind (fallback providers) counts as present in both
+  // layers, matching the "changed" degradation of the source dimension.
+  const mainLayerPaths = sortFilePathsByDisplayName(
+    Array.from(
+      new Set([
+        ...[sendersPath, ...remoteFormatFiles].filter(
+          (path) => sourceChangeByPath.get(path)?.kind !== "add"
+        ),
+        ...sourceChangesInBank
+          .filter(
+            (change) =>
+              change.kind === "delete" &&
+              (change.path === sendersPath ||
+                isBankFormatFilePath(change.path, bankPath))
+          )
+          .map((change) => change.path),
+      ])
+    )
+  );
+
   return {
     recordsByPath,
     formatFiles,
@@ -272,6 +298,7 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
     changedFormatFiles,
     changedFormatPaths: Array.from(changedFormatFiles),
     formatContentsForValidation,
+    mainLayerPaths,
     hasLocalChangesInBank: localChangesInBank.length > 0,
   };
 }
