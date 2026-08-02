@@ -41,14 +41,15 @@ Use snippet from:
 
 `docs/caddy/sms-formats-client.caddy`
 
-Recommended multi-project setup on one VPS:
+Current production setup: the site block lives directly in `/etc/caddy/Caddyfile`
+(there is no `/etc/caddy/conf.d/`), served from the domain root — see below.
+
+If you ever split the config across projects, the usual layout is:
 - keep `/etc/caddy/Caddyfile` as a small root config;
 - add `import /etc/caddy/conf.d/*.caddy`;
 - store each app in its own file under `/etc/caddy/conf.d/`.
 
-This avoids cross-project config overwrite.
-
-Add it to your existing Caddy setup manually, then reload Caddy:
+Add the snippet to your existing Caddy setup manually, then reload Caddy:
 
 ```bash
 sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
