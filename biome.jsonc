@@ -2,7 +2,11 @@
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["ultracite/biome/core"],
   "files": {
-    "includes": ["!src/content/*.generated.ts", "!.claude/worktrees"]
+    "includes": [
+      "!src/content/*.generated.ts",
+      "!.claude/worktrees",
+      "!.scratch"
+    ]
   },
   "javascript": {
     "formatter": {
