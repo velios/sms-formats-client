@@ -242,6 +242,10 @@
       "glue": "Glue & anchors"
     }
   },
+  "formatRules": {
+    "open": "Format Rules",
+    "title": "Format Rules"
+  },
   "cookbook": {
     "open": "Cookbook",
     "title": "Regex Cookbook",
