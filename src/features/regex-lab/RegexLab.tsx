@@ -31,6 +31,7 @@ import {
 import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { QuickReference } from "@/features/quick-reference/QuickReference";
 import { CookbookModal } from "@/features/snippet-library/CookbookModal";
+import { FormatRulesModal } from "@/features/snippet-library/FormatRulesModal";
 import { SnippetsPanel } from "@/features/snippet-library/SnippetsPanel";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store";
@@ -261,6 +262,7 @@ export function RegexLab({
   >(null);
   const columnPickerTitleId = useId();
   const [isCookbookOpen, setIsCookbookOpen] = useState(false);
+  const [isFormatRulesOpen, setIsFormatRulesOpen] = useState(false);
   const regexEditorRef = useRef<UnifiedRegexEditorHandle>(null);
 
   const matchResult = useMemo(
@@ -668,6 +670,15 @@ export function RegexLab({
                 </Button>
                 <Button
                   className={regexLabHeaderButtonClassName}
+                  onClick={() => setIsFormatRulesOpen(true)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  {t("formatRules.open")}
+                </Button>
+                <Button
+                  className={regexLabHeaderButtonClassName}
                   onClick={onOpenSmsByTemplate}
                   size="sm"
                   type="button"
@@ -906,6 +917,10 @@ export function RegexLab({
 
       {isCookbookOpen && (
         <CookbookModal onClose={() => setIsCookbookOpen(false)} />
+      )}
+
+      {isFormatRulesOpen && (
+        <FormatRulesModal onClose={() => setIsFormatRulesOpen(false)} />
       )}
     </div>
   );

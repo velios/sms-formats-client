@@ -265,6 +265,10 @@
       "glue": "Склейка и якоря"
     }
   },
+  "formatRules": {
+    "open": "Правила формата",
+    "title": "Правила формата"
+  },
   "cookbook": {
     "open": "Cookbook",
     "title": "Regex Cookbook",
