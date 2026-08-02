@@ -1,4 +1,5 @@
 export type {
+  BlobFetchResult,
   PullRequestChangedFile,
   PullRequestWorkspaceResolution,
 } from "./client";
@@ -9,7 +10,9 @@ export {
   createCommit,
   createOrUpdateBranch,
   createPullRequest,
+  describeGraphqlBlobError,
   ensureFork,
+  fetchBlobsByRef,
   fetchBranches,
   fetchBranchSha,
   fetchFileContent,

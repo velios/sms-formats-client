@@ -15,9 +15,14 @@ const octokitMocks = vi.hoisted(() => {
     >
   >(() => Promise.resolve([]));
 
+  const graphql = vi.fn<
+    (query: string, variables: Record<string, unknown>) => Promise<unknown>
+  >(() => Promise.resolve({ repository: {} }));
+
   return {
     createReview,
     getAuthenticated,
+    graphql,
     paginate,
     Octokit: class MockOctokit {
       pulls = {
@@ -30,6 +35,8 @@ const octokitMocks = vi.hoisted(() => {
       };
 
       paginate = paginate;
+
+      graphql = graphql;
     },
   };
 });
@@ -41,6 +48,8 @@ vi.mock("@octokit/rest", () => ({
 import {
   approvePullRequest,
   classifyPullRequestResolverError,
+  describeGraphqlBlobError,
+  fetchBlobsByRef,
   fetchPullRequestApprovalByCurrentUser,
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
@@ -331,5 +340,120 @@ describe("classifyPullRequestResolverError", () => {
       status: "transient-error",
       reason: "unknown",
     });
+  });
+});
+
+describe("fetchBlobsByRef", () => {
+  const repo: RepoRef = { owner: "zenmoney", repo: "sms-formats" };
+
+  beforeEach(() => {
+    octokitMocks.graphql.mockReset();
+  });
+
+  it("keeps missing, binary and truncated blobs as distinct signals", async () => {
+    octokitMocks.graphql.mockResolvedValue({
+      repository: {
+        f0: { text: "regex\n", isTruncated: false },
+        f1: null,
+        f2: { text: null, isTruncated: false },
+        f3: { text: "cut off", isTruncated: true },
+      },
+    });
+
+    await expect(
+      fetchBlobsByRef(
+        "main",
+        ["a.txt", "gone.txt", "logo.png", "huge.txt"],
+        repo
+      )
+    ).resolves.toEqual([
+      { path: "a.txt", status: "loaded", text: "regex\n" },
+      { path: "gone.txt", status: "missing" },
+      { path: "logo.png", status: "binary" },
+      { path: "huge.txt", status: "truncated" },
+    ]);
+  });
+
+  it("addresses blobs as <ref>:<path> in the requested repository", async () => {
+    octokitMocks.graphql.mockResolvedValue({
+      repository: { f0: { text: "x", isTruncated: false } },
+    });
+
+    await fetchBlobsByRef("abc123", ["src/Bank_1/senders.txt"], repo);
+
+    const [query, variables] = octokitMocks.graphql.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(query).toContain("f0: object(expression: $e0)");
+    expect(query).toContain("isTruncated");
+    expect(variables).toMatchObject({
+      owner: "zenmoney",
+      name: "sms-formats",
+      e0: "abc123:src/Bank_1/senders.txt",
+    });
+  });
+
+  it("splits paths into batches of 50 and preserves input order", async () => {
+    const paths = Array.from({ length: 120 }, (_, index) => `f${index}.txt`);
+    octokitMocks.graphql.mockImplementation((_query, variables) => {
+      const repository: Record<string, { text: string; isTruncated: boolean }> =
+        {};
+      for (const [key, value] of Object.entries(variables)) {
+        if (key.startsWith("e")) {
+          repository[`f${key.slice(1)}`] = {
+            text: String(value),
+            isTruncated: false,
+          };
+        }
+      }
+      return Promise.resolve({ repository });
+    });
+
+    const results = await fetchBlobsByRef("main", paths, repo);
+
+    expect(octokitMocks.graphql).toHaveBeenCalledTimes(3);
+    const batchSizes = octokitMocks.graphql.mock.calls.map(
+      ([, variables]) =>
+        Object.keys(variables).filter((key) => key.startsWith("e")).length
+    );
+    expect(batchSizes).toEqual([50, 50, 20]);
+    expect(results).toHaveLength(120);
+    expect(results[0]).toEqual({
+      path: "f0.txt",
+      status: "loaded",
+      text: "main:f0.txt",
+    });
+    expect(results[119]).toEqual({
+      path: "f119.txt",
+      status: "loaded",
+      text: "main:f119.txt",
+    });
+  });
+
+  it("fails instead of returning a partial layer when the repository is unreachable", async () => {
+    octokitMocks.graphql.mockResolvedValue({ repository: null });
+
+    await expect(fetchBlobsByRef("main", ["a.txt"], repo)).rejects.toThrow(
+      "zenmoney/sms-formats"
+    );
+  });
+});
+
+describe("describeGraphqlBlobError", () => {
+  it("reads messages out of a GraphQL response error", () => {
+    expect(
+      describeGraphqlBlobError({
+        message: "Request failed",
+        errors: [{ message: "Could not resolve to a Repository" }],
+      })
+    ).toBe("Could not resolve to a Repository");
+  });
+
+  it("falls back to the plain error message", () => {
+    expect(describeGraphqlBlobError(new Error("network down"))).toBe(
+      "network down"
+    );
+    expect(describeGraphqlBlobError(null)).toBe("Unknown GraphQL error");
   });
 });
