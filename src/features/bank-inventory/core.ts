@@ -81,6 +81,11 @@ export interface BankInventory {
   // `<files layer="main">` (ADR-0016). Only format files and senders.txt —
   // unsupported files are not bank content upstream.
   mainLayerPaths: string[];
+  // Bank files touched by the source ref (added or changed there). Consumer:
+  // the prompt package builder, which prints them as `<files layer="pr">`
+  // (ADR-0016). Only format files and senders.txt — unsupported files are not
+  // bank content upstream.
+  prLayerPaths: string[];
   // Enables reset-to-source.
   hasLocalChangesInBank: boolean;
 }
@@ -305,6 +310,15 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
     )
   );
 
+  const prLayerPaths = Array.from(recordsByPath.values())
+    .filter(
+      (record) =>
+        record.fileClass !== "unsupported" &&
+        (record.source === "added" || record.source === "changed")
+    )
+    .map((record) => record.path)
+    .sort();
+
   return {
     recordsByPath,
     formatFiles,
@@ -317,6 +331,7 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
     changedFormatPaths: Array.from(changedFormatFiles),
     formatContentsForValidation,
     mainLayerPaths,
+    prLayerPaths,
     hasLocalChangesInBank: localChangesInBank.length > 0,
   };
 }

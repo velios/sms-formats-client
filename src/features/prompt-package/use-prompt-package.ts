@@ -135,9 +135,12 @@ export interface UsePromptPackageParams {
   repository: RepoRef;
   // head-ref of the source (sha or branch name) — the ref of the `pr` layer.
   sourceRefName: string | undefined;
-  // Bank composition: `mainLayerPaths` for the `main` layer, `recordsByPath`
-  // for what changed in the source ref and in the browser.
-  inventory: Pick<BankInventory, "mainLayerPaths" | "recordsByPath">;
+  // Bank composition: `mainLayerPaths` and `prLayerPaths` for the two fetched
+  // layers, `recordsByPath` for what changed in the browser.
+  inventory: Pick<
+    BankInventory,
+    "mainLayerPaths" | "prLayerPaths" | "recordsByPath"
+  >;
   draftStore: PromptPackageDraftStore;
   // Seam for tests; production always goes to GitHub GraphQL.
   fetchBlobs?: typeof fetchBlobsByRef;
@@ -168,21 +171,6 @@ export interface UsePromptPackageResult {
 function isPackagedFile(record: BankFileRecord): boolean {
   // Bank content upstream: format files and senders.txt, no unsupported files.
   return record.fileClass === "format" || record.fileClass === "senders";
-}
-
-function resolvePrLayerPaths(
-  inventory: UsePromptPackageParams["inventory"]
-): string[] {
-  const paths: string[] = [];
-  for (const record of inventory.recordsByPath.values()) {
-    if (
-      isPackagedFile(record) &&
-      (record.source === "added" || record.source === "changed")
-    ) {
-      paths.push(record.path);
-    }
-  }
-  return paths.sort();
 }
 
 function resolveDraftLayerFiles(params: {
@@ -317,7 +305,7 @@ export function usePromptPackage(
     setErrorDetail(null);
 
     const mainPaths = inventory.mainLayerPaths;
-    const prPaths = resolvePrLayerPaths(inventory);
+    const prPaths = inventory.prLayerPaths;
     const draftFiles = resolveDraftLayerFiles({
       bankPath,
       inventory,

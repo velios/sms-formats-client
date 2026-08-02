@@ -30,7 +30,10 @@ interface Props {
   repository: RepoRef;
   sourceRefName: string | undefined;
   prNumber: number | null;
-  inventory: Pick<BankInventory, "mainLayerPaths" | "recordsByPath">;
+  inventory: Pick<
+    BankInventory,
+    "mainLayerPaths" | "prLayerPaths" | "recordsByPath"
+  >;
   draftStore: PromptPackageDraftStore;
   onClose: () => void;
 }
