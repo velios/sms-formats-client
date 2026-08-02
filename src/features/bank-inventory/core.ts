@@ -313,7 +313,7 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
   const prLayerPaths = Array.from(recordsByPath.values())
     .filter(
       (record) =>
-        record.fileClass !== "unsupported" &&
+        (record.fileClass === "format" || record.fileClass === "senders") &&
         (record.source === "added" || record.source === "changed")
     )
     .map((record) => record.path)
