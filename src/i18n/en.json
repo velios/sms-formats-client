@@ -231,14 +231,14 @@
       "alt": "alternative"
     },
     "groups": {
-      "amount": "Operation amounts",
-      "balance": "Balance",
-      "currency": "Currency",
-      "syncid": "Account / card",
-      "date": "Operation date",
-      "payee": "Payee",
-      "comment": "Comment",
-      "mcc": "MCC",
+      "amount": "income / outcome",
+      "balance": "balance / av_balance",
+      "currency": "instrument",
+      "syncid": "syncid",
+      "date": "date",
+      "payee": "payee",
+      "comment": "comment",
+      "mcc": "mcc",
       "glue": "Glue & anchors"
     }
   },

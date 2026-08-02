@@ -254,14 +254,14 @@
       "alt": "альтернатива"
     },
     "groups": {
-      "amount": "Суммы операции",
-      "balance": "Баланс",
-      "currency": "Валюта",
-      "syncid": "Счёт / карта",
-      "date": "Дата операции",
-      "payee": "Получатель",
-      "comment": "Комментарий",
-      "mcc": "MCC",
+      "amount": "income / outcome",
+      "balance": "balance / av_balance",
+      "currency": "instrument",
+      "syncid": "syncid",
+      "date": "date",
+      "payee": "payee",
+      "comment": "comment",
+      "mcc": "mcc",
       "glue": "Склейка и якоря"
     }
   },
