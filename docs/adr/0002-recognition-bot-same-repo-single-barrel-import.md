@@ -1,3 +1,7 @@
+---
+status: accepted
+---
+
 # Recognition Bot живёт в том же репозитории и импортирует только `@/domain/format`
 
 ## Контекст

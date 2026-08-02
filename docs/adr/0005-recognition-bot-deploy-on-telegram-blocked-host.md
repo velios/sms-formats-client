@@ -1,3 +1,7 @@
+---
+status: accepted
+---
+
 # Деплой Recognition Bot на хосте, где Telegram заблокирован в обе стороны
 
 ## Контекст
