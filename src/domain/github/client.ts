@@ -304,6 +304,24 @@ export function classifyPullRequestResolverError(
   };
 }
 
+export function describeGraphqlBlobError(error: unknown): string {
+  const candidate =
+    error && typeof error === "object"
+      ? (error as {
+          errors?: Array<{ message?: string | null } | null> | null;
+          message?: string;
+        })
+      : {};
+
+  const graphqlMessages = (candidate.errors ?? [])
+    .map((entry) => entry?.message?.trim())
+    .filter((message): message is string => !!message);
+  if (graphqlMessages.length > 0) {
+    return graphqlMessages.join("; ");
+  }
+  return candidate.message?.trim() || "Unknown GraphQL error";
+}
+
 export function resolveCommitAuthorLabel(commit: {
   author?: CommitAuthorIdentity | null;
   committer?: CommitAuthorIdentity | null;
@@ -1436,6 +1454,107 @@ export async function fetchFileContent(
     return decodeBase64Utf8(data.content.replace(/\n/g, ""));
   }
   throw new Error(`Unexpected content format for ${path}`);
+}
+
+// ─── Blob loading by ref (GraphQL) ───
+
+// Three distinct outcomes, never collapsed into one "no file":
+// - missing: no object at `<ref>:<path>` — the file is absent in this layer;
+// - binary: the object is a Blob without text;
+// - truncated: GitHub returned a cut-off body.
+export type BlobFetchResult =
+  | { path: string; status: "loaded"; text: string }
+  | { path: string; status: "missing" }
+  | { path: string; status: "binary" }
+  | { path: string; status: "truncated" };
+
+// GitHub has an undocumented cap on the number of aliases and a 10s timeout:
+// one oversized request loses the whole package, so batches stay separate.
+const BLOB_BATCH_SIZE = 50;
+
+interface BlobNode {
+  text?: string | null;
+  isTruncated?: boolean | null;
+}
+
+interface BlobBatchResponse {
+  repository: Record<string, BlobNode | null> | null;
+}
+
+function buildBlobBatchQuery(
+  ref: string,
+  paths: string[]
+): { query: string; variables: Record<string, string> } {
+  const declarations = paths
+    .map((_, index) => `$e${index}: String!`)
+    .join(", ");
+  const selections = paths
+    .map(
+      (_, index) =>
+        `f${index}: object(expression: $e${index}) { ... on Blob { text isTruncated } }`
+    )
+    .join("\n      ");
+  const variables: Record<string, string> = {};
+  for (const [index, path] of paths.entries()) {
+    variables[`e${index}`] = `${ref}:${path}`;
+  }
+  return {
+    query: `query($owner: String!, $name: String!, ${declarations}) {
+  repository(owner: $owner, name: $name) {
+      ${selections}
+  }
+}`,
+    variables,
+  };
+}
+
+function readBlobNode(path: string, node: BlobNode | null): BlobFetchResult {
+  if (!node) {
+    return { path, status: "missing" };
+  }
+  if (node.isTruncated) {
+    return { path, status: "truncated" };
+  }
+  if (typeof node.text !== "string") {
+    return { path, status: "binary" };
+  }
+  return { path, status: "loaded", text: node.text };
+}
+
+async function fetchBlobBatch(
+  repo: RepoRef,
+  ref: string,
+  paths: string[]
+): Promise<BlobFetchResult[]> {
+  const { query, variables } = buildBlobBatchQuery(ref, paths);
+  const response = await publicOctokit.graphql<BlobBatchResponse>(query, {
+    owner: repo.owner,
+    name: repo.repo,
+    ...variables,
+  });
+  const repository = response.repository;
+  if (!repository) {
+    throw new Error(`Repository ${repo.owner}/${repo.repo} is not accessible`);
+  }
+  return paths.map((path, index) =>
+    readBlobNode(path, repository[`f${index}`] ?? null)
+  );
+}
+
+export async function fetchBlobsByRef(
+  ref: string,
+  paths: string[],
+  repoRef?: RepoRef
+): Promise<BlobFetchResult[]> {
+  const repo = resolveRepo(repoRef);
+  const batches: string[][] = [];
+  for (let start = 0; start < paths.length; start += BLOB_BATCH_SIZE) {
+    batches.push(paths.slice(start, start + BLOB_BATCH_SIZE));
+  }
+  const results = await Promise.all(
+    batches.map((batch) => fetchBlobBatch(repo, ref, batch))
+  );
+  return results.flat();
 }
 
 // ─── Bank indexing ───
