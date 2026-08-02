@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SnippetsPanel } from "./SnippetsPanel";
@@ -81,7 +81,10 @@ describe("SnippetsPanel", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "snippets.groups.currency" })
     );
-    fireEvent.click(getInsertButtons()[0]!);
+    const card = screen.getByText("([A-Z]{3})").closest("div")!;
+    fireEvent.click(
+      within(card).getByRole("button", { name: "snippets.insert" })
+    );
 
     expect(onInsert).toHaveBeenCalledWith("([A-Z]{3})");
   });
