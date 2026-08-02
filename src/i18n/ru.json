@@ -277,5 +277,41 @@
   "locale": {
     "ru": "Русский",
     "en": "English"
+  },
+  "promptPackage": {
+    "openAction": "Обработать данные банка с помощью AI",
+    "tokenRequired": "Нужен GitHub-токен: пакет собирается запросом к GitHub от вашего имени.",
+    "title": "Пакет промта: {{bank}}",
+    "taskLabel": "Задача",
+    "taskPlaceholder": "Что сделать с форматами этого банка",
+    "documentsLabel": "Справочные документы",
+    "document": {
+      "cookbook": "Cookbook",
+      "formatRules": "Правила формата",
+      "snippets": "Каталог сниппетов"
+    },
+    "previewTitle": "Состав пакета",
+    "layer": {
+      "main": "Основная ветка",
+      "pr": "Pull request",
+      "draft": "Черновики"
+    },
+    "documentsIncluded": "Документы",
+    "documentsNone": "нет",
+    "totals": "Файлов: {{files}} · {{kilobytes}} КБ · {{tokens}}",
+    "tokens": "≈{{count}} токенов",
+    "tokensThousands": "≈{{count}} тыс. токенов",
+    "skipped": "Не вошли: {{count}}",
+    "building": "Собираем пакет…",
+    "retry": "Повторить",
+    "error": {
+      "no-token": "Нужен GitHub-токен: пакет собирается запросом к GitHub от вашего имени.",
+      "no-source": "Нет источника: откройте банк из pull request.",
+      "load-failed": "Не удалось загрузить файлы банка. Пакет не собран."
+    },
+    "copy": "Копировать",
+    "copied": "Скопировано",
+    "download": "Скачать файл",
+    "clear": "Очистить"
   }
 }

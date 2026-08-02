@@ -59,6 +59,7 @@ import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { normalizeIntersectionExample } from "@/features/intersections/core";
 import { useIntersections } from "@/features/intersections/use-intersections";
+import { PromptPackageModal } from "@/features/prompt-package/PromptPackageModal";
 import { resolvePublishPreflightState } from "@/features/publish-panel/PublishPanel";
 import {
   type CommitMessageInput,
@@ -762,6 +763,8 @@ function renderWorkspaceContent(params: {
 function BankActionsPanel(params: {
   onApprovePullRequest: () => void;
   onCalculateIntersections: () => void;
+  onOpenPromptPackage: () => void;
+  hasGitHubUserToken: boolean;
   onOpenValidation: () => void;
   onPublish: () => void;
   onResetToSource: () => void;
@@ -786,6 +789,8 @@ function BankActionsPanel(params: {
   const {
     onApprovePullRequest,
     onCalculateIntersections,
+    onOpenPromptPackage,
+    hasGitHubUserToken,
     onOpenValidation,
     onPublish,
     onResetToSource,
@@ -888,6 +893,26 @@ function BankActionsPanel(params: {
           {calculateIntersectionsWarning}
         </StatusBadge>
       )}
+      {/* Without a token the button stays visible but inert, and the hover
+          hint explains why: hiding it would hide the feature (PRD #20). The
+          span carries the title because a disabled button gets no pointer
+          events. */}
+      <span
+        className="w-full"
+        title={
+          hasGitHubUserToken ? undefined : t("promptPackage.tokenRequired")
+        }
+      >
+        <Button
+          className={workspaceActionButtonClassName}
+          disabled={!hasGitHubUserToken}
+          onClick={onOpenPromptPackage}
+          type="button"
+          variant="ghost"
+        >
+          {t("promptPackage.openAction")}
+        </Button>
+      </span>
       <div className={workspaceActionsDividerClassName} />
       <Button
         className={cn(
@@ -2328,6 +2353,7 @@ export function BankWorkspace() {
   const [showCreateFormat, setShowCreateFormat] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [showQuickCheck, setShowQuickCheck] = useState(false);
+  const [showPromptPackage, setShowPromptPackage] = useState(false);
   const [quickCheckMode, setQuickCheckMode] =
     useState<QuickCheckMode>("template-by-sms");
   const [activeFormatSearchContext, setActiveFormatSearchContext] =
@@ -2399,6 +2425,14 @@ export function BankWorkspace() {
   });
   const sourceHeadSha = sourceRef?.sha ?? null;
   const sourceRefNameForContent = sourceRef?.sha ?? sourceRef?.name;
+  // The prompt package is the first feature locked behind a user token: the
+  // button stays visible without one, so re-render on auth changes (PRD #20).
+  useSyncExternalStore(
+    subscribeGitHubAuthChange,
+    getGitHubAuthChangeVersion,
+    getGitHubAuthChangeVersion
+  );
+  const hasGitHubUserToken = Boolean(getGitHubUserToken()?.trim());
 
   // The intersections tool owns its snapshot, badges and scope; the tab stays
   // here, mapped from the scope signal in this one visible line (ADR-0013).
@@ -2978,6 +3012,7 @@ export function BankWorkspace() {
                 : null
             }
             canResetToSource={canResetToSource}
+            hasGitHubUserToken={hasGitHubUserToken}
             isApprovingPullRequest={isApprovingPullRequest}
             isCalculatingIntersections={intersections.isCalculating}
             isCheckingPullRequestApproval={isCheckingPullRequestApproval}
@@ -2989,6 +3024,7 @@ export function BankWorkspace() {
             onCalculateIntersections={() => {
               void handleCalculateIntersections();
             }}
+            onOpenPromptPackage={() => setShowPromptPackage(true)}
             onOpenSmsByTemplate={() => {
               setQuickCheckMode("sms-by-template");
               setShowQuickCheck(true);
@@ -3101,6 +3137,20 @@ export function BankWorkspace() {
           bankPath={bankPath}
           changedFormatPaths={inventory.changedFormatPaths}
           onClose={() => setShowValidation(false)}
+        />
+      )}
+      {showPromptPackage && (
+        <PromptPackageModal
+          bankName={displayName}
+          bankPath={bankPath}
+          draftStore={draftStore}
+          inventory={inventory}
+          onClose={() => setShowPromptPackage(false)}
+          prNumber={
+            sourceRef?.type === "pr" ? (sourceRef.prNumber ?? null) : null
+          }
+          repository={repository}
+          sourceRefName={sourceRefNameForContent}
         />
       )}
       {showQuickCheck && (

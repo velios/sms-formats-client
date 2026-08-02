@@ -254,5 +254,41 @@
   "locale": {
     "ru": "Русский",
     "en": "English"
+  },
+  "promptPackage": {
+    "openAction": "Process bank data with AI",
+    "tokenRequired": "A GitHub token is required: the package is assembled by a GitHub request on your behalf.",
+    "title": "Prompt package: {{bank}}",
+    "taskLabel": "Task",
+    "taskPlaceholder": "What to do with the formats of this bank",
+    "documentsLabel": "Reference documents",
+    "document": {
+      "cookbook": "Cookbook",
+      "formatRules": "Format rules",
+      "snippets": "Snippet catalog"
+    },
+    "previewTitle": "Package composition",
+    "layer": {
+      "main": "Main branch",
+      "pr": "Pull request",
+      "draft": "Drafts"
+    },
+    "documentsIncluded": "Documents",
+    "documentsNone": "none",
+    "totals": "Files: {{files}} · {{kilobytes}} KB · {{tokens}}",
+    "tokens": "≈{{count}} tokens",
+    "tokensThousands": "≈{{count}}k tokens",
+    "skipped": "Not included: {{count}}",
+    "building": "Building the package…",
+    "retry": "Retry",
+    "error": {
+      "no-token": "A GitHub token is required: the package is assembled by a GitHub request on your behalf.",
+      "no-source": "No source: open the bank from a pull request.",
+      "load-failed": "Could not load the bank files. The package was not assembled."
+    },
+    "copy": "Copy",
+    "copied": "Copied",
+    "download": "Download file",
+    "clear": "Clear"
   }
 }
