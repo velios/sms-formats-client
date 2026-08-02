@@ -8,6 +8,9 @@ import type { PullRequestChangedFile } from "@/domain/github";
 export interface SourceChangeRecord {
   path: string;
   kind?: PullRequestChangedFile["kind"];
+  // The path a renamed file had in the `main` layer; unknown for fallback
+  // providers, which do not know `kind` either.
+  oldPath?: string;
 }
 
 // A local draft change (head-ref ↔ browser), as reported by the draft store.
@@ -267,13 +270,21 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
   );
 
   // head-ref composition − files added in the source ref + files deleted there.
-  // A change of unknown kind (fallback providers) counts as present in both
-  // layers, matching the "changed" degradation of the source dimension.
+  // A rename swaps the pair: the new path is absent in `main`, the old one is
+  // present. A change of unknown kind (fallback providers) counts as present in
+  // both layers, matching the "changed" degradation of the source dimension; a
+  // rename with unknown `oldPath` degrades the same way.
+  const renamedInSource = sourceChangesInBank.filter(
+    (change) => change.kind === "rename" && change.oldPath !== undefined
+  );
+  const renamedNewPaths = new Set(renamedInSource.map((change) => change.path));
   const mainLayerPaths = sortFilePathsByDisplayName(
     Array.from(
       new Set([
         ...[sendersPath, ...remoteFormatFiles].filter(
-          (path) => sourceChangeByPath.get(path)?.kind !== "add"
+          (path) =>
+            sourceChangeByPath.get(path)?.kind !== "add" &&
+            !renamedNewPaths.has(path)
         ),
         ...sourceChangesInBank
           .filter(
@@ -283,6 +294,13 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
                 isBankFormatFilePath(change.path, bankPath))
           )
           .map((change) => change.path),
+        ...renamedInSource.flatMap((change) =>
+          change.oldPath !== undefined &&
+          (change.oldPath === sendersPath ||
+            isBankFormatFilePath(change.oldPath, bankPath))
+            ? [change.oldPath]
+            : []
+        ),
       ])
     )
   );

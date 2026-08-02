@@ -319,6 +319,38 @@ describe("buildBankInventory selections", () => {
     ).toEqual([]);
   });
 
+  it("puts a renamed file into the main layer under its old path", () => {
+    const inventory = buildInventory({
+      remoteFormatFiles: ["banks/pumb/formats/new-name.txt"],
+      sourceChanges: [
+        {
+          path: "banks/pumb/formats/new-name.txt",
+          kind: "rename",
+          oldPath: "banks/pumb/formats/old-name.txt",
+        },
+      ],
+    });
+
+    expect(inventory.mainLayerPaths).toEqual([
+      "banks/pumb/formats/old-name.txt",
+      SENDERS_PATH,
+    ]);
+  });
+
+  it("keeps a rename with an unknown old path in the main layer as is", () => {
+    const inventory = buildInventory({
+      remoteFormatFiles: ["banks/pumb/formats/new-name.txt"],
+      sourceChanges: [
+        { path: "banks/pumb/formats/new-name.txt", kind: "rename" },
+      ],
+    });
+
+    expect(inventory.mainLayerPaths).toEqual([
+      "banks/pumb/formats/new-name.txt",
+      SENDERS_PATH,
+    ]);
+  });
+
   it("counts a source change of unknown kind as present in the main layer", () => {
     const inventory = buildInventory({
       remoteFormatFiles: ["banks/pumb/formats/kept.txt"],
