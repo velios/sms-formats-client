@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppHeader } from "./components/AppHeader";
+// ПРОТОТИП (#27) — маршрут живёт только на ветке prototype/import-screen.
+import { ImportPrototypeRoute } from "./features/import-answer/prototype/ImportPrototypeRoute";
 import { BankWorkspace } from "./pages/BankWorkspace";
 import { Dashboard } from "./pages/Dashboard";
 import { PullRequestShortcut } from "./pages/PullRequestShortcut";
@@ -24,6 +26,10 @@ export function App() {
               path="/repo/:owner/:repo/pr/:prNumber/*"
             />
             <Route element={<PullRequestShortcut />} path="/pr/:prNumber" />
+            <Route
+              element={<ImportPrototypeRoute />}
+              path="/prototype/import-screen"
+            />
             <Route element={<Navigate replace to="/" />} path="*" />
           </Routes>
         </main>
