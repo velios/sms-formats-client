@@ -283,7 +283,12 @@
     "tokenRequired": "Нужен GitHub-токен: пакет собирается запросом к GitHub от вашего имени.",
     "title": "AI промпт: {{bank}}",
     "taskLabel": "Задача",
-    "taskPlaceholder": "Что сделать с форматами этого банка",
+    "taskPlaceholder": "Какие файлы и что с ними сделать; можно ли удалять и объединять форматы",
+    "presetsLabel": "Заготовки",
+    "preset": {
+      "fixChanged": "Починить изменённые файлы",
+      "tidyBank": "Привести банк в порядок"
+    },
     "documentsLabel": "Справочные документы",
     "document": {
       "cookbook": "Cookbook",

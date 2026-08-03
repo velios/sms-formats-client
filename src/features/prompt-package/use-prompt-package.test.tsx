@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlobFetchResult, fetchBlobsByRef } from "@/domain/github";
 import { buildBankInventory } from "@/features/bank-inventory/core";
+import { PROMPT_PRESETS } from "./core";
 import {
   type PromptPackageDraftChange,
   type UsePromptPackageParams,
@@ -361,6 +362,29 @@ describe("usePromptPackage sticky state", () => {
       "regex-snippets.toml",
     ]);
     expect(result.current.result?.text).toContain("почини регулярку");
+  });
+
+  it("takes a preset into the task and lets it be edited afterwards", async () => {
+    const preset = PROMPT_PRESETS.find((item) => item.key === "tidyBank");
+    const { result } = renderHook(() => usePromptPackage(makeParams()));
+
+    act(() => {
+      result.current.setTask("старый текст");
+      // The preset overwrites the field: it is a default wording, not a merge.
+      result.current.setTask(preset?.task ?? "");
+    });
+    await act(async () => {
+      await result.current.build();
+    });
+    expect(result.current.task).toBe(preset?.task);
+    expect(result.current.result?.text).toContain(preset?.task);
+    expect(result.current.result?.text).not.toContain("старый текст");
+
+    // The field stays an ordinary field after the substitution.
+    act(() => {
+      result.current.setTask(`${preset?.task}\n\n7. И почини senders.txt.`);
+    });
+    expect(result.current.result?.text).toContain("7. И почини senders.txt.");
   });
 
   it("re-assembles the package from the fetched bodies without fetching again", async () => {

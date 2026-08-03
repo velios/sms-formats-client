@@ -11,7 +11,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import type { RepoRef } from "@/domain/types";
 import type { BankInventory } from "@/features/bank-inventory/core";
-import type { PromptPackageSummary } from "./core";
+import { PROMPT_PRESETS, type PromptPackageSummary } from "./core";
+
 import {
   type PromptPackageDocumentKey,
   type PromptPackageDraftStore,
@@ -177,6 +178,25 @@ export function PromptPackageModal({
           >
             {t("promptPackage.taskLabel")}
           </label>
+          {/* Default wordings, not a separate action: the chip drops its text
+              into the field, overwriting what is there, and the field stays
+              editable — the preset is a starting point, not a mode. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[12px] text-[color:var(--c-text-dim)]">
+              {t("promptPackage.presetsLabel")}
+            </span>
+            {PROMPT_PRESETS.map((preset) => (
+              <Button
+                key={preset.key}
+                onClick={() => promptPackage.setTask(preset.task)}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                {t(`promptPackage.preset.${preset.key}`)}
+              </Button>
+            ))}
+          </div>
           <Textarea
             className="min-h-24"
             id={taskId}
