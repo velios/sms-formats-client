@@ -139,8 +139,10 @@ describe("useImportAnswer: bodies in force", () => {
     act(() => {
       rendered.result.current.retry();
     });
-    await waitFor(() => expect(rendered.result.current.loadError).toBeNull());
-    expect(rendered.result.current.canImport).toBe(true);
+    // Not on `loadError`: it is cleared the moment the retry starts, so the
+    // wait would pass mid-flight.
+    await waitFor(() => expect(rendered.result.current.canImport).toBe(true));
+    expect(rendered.result.current.loadError).toBeNull();
   });
 
   it("marks a row that overwrites a manual edit, and only that row", async () => {

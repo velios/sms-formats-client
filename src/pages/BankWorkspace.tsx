@@ -57,6 +57,7 @@ import type {
 import { useBankInventory } from "@/features/bank-inventory/use-bank-inventory";
 import { CreateFormatModal } from "@/features/create-entity/CreateFormatModal";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
+import { ImportAnswerModal } from "@/features/import-answer/ImportAnswerModal";
 import { normalizeIntersectionExample } from "@/features/intersections/core";
 import { useIntersections } from "@/features/intersections/use-intersections";
 import { PromptPackageModal } from "@/features/prompt-package/PromptPackageModal";
@@ -764,6 +765,8 @@ function BankActionsPanel(params: {
   onApprovePullRequest: () => void;
   onCalculateIntersections: () => void;
   onOpenPromptPackage: () => void;
+  onOpenImportAnswer: () => void;
+  canImportAnswer: boolean;
   hasGitHubUserToken: boolean;
   onOpenValidation: () => void;
   onPublish: () => void;
@@ -790,6 +793,8 @@ function BankActionsPanel(params: {
     onApprovePullRequest,
     onCalculateIntersections,
     onOpenPromptPackage,
+    onOpenImportAnswer,
+    canImportAnswer,
     hasGitHubUserToken,
     onOpenValidation,
     onPublish,
@@ -911,6 +916,23 @@ function BankActionsPanel(params: {
           variant="ghost"
         >
           {t("promptPackage.openAction")}
+        </Button>
+      </span>
+      {/* Gated by the right to edit, not by the token: parsing and writing are
+          local. The neighbour above is gated the other way round — it reads
+          GraphQL and writes nothing (PRD #30). */}
+      <span
+        className="w-full"
+        title={canImportAnswer ? undefined : t("importAnswer.readOnly")}
+      >
+        <Button
+          className={workspaceActionButtonClassName}
+          disabled={!canImportAnswer}
+          onClick={onOpenImportAnswer}
+          type="button"
+          variant="ghost"
+        >
+          {t("importAnswer.openAction")}
         </Button>
       </span>
       <div className={workspaceActionsDividerClassName} />
@@ -2355,6 +2377,22 @@ export function BankWorkspace() {
   const [showValidation, setShowValidation] = useState(false);
   const [showQuickCheck, setShowQuickCheck] = useState(false);
   const [showPromptPackage, setShowPromptPackage] = useState(false);
+  const [showImportAnswer, setShowImportAnswer] = useState(false);
+  // Bank files that exist at the head ref. Everything else an answer names is
+  // a file it creates, and asking GitHub for that one would answer 404 and be
+  // mistaken for a failed load.
+  const bankPathsAtHeadRef = useMemo(
+    () =>
+      new Set(
+        tree
+          .filter(
+            (entry) =>
+              entry.type === "blob" && entry.path.startsWith(`${bankPath}/`)
+          )
+          .map((entry) => entry.path)
+      ),
+    [bankPath, tree]
+  );
   const [quickCheckMode, setQuickCheckMode] =
     useState<QuickCheckMode>("template-by-sms");
   const [activeFormatSearchContext, setActiveFormatSearchContext] =
@@ -3012,6 +3050,7 @@ export function BankWorkspace() {
                   })
                 : null
             }
+            canImportAnswer={!workspaceReadOnly}
             canResetToSource={canResetToSource}
             hasGitHubUserToken={hasGitHubUserToken}
             isApprovingPullRequest={isApprovingPullRequest}
@@ -3025,6 +3064,7 @@ export function BankWorkspace() {
             onCalculateIntersections={() => {
               void handleCalculateIntersections();
             }}
+            onOpenImportAnswer={() => setShowImportAnswer(true)}
             onOpenPromptPackage={() => setShowPromptPackage(true)}
             onOpenSmsByTemplate={() => {
               setQuickCheckMode("sms-by-template");
@@ -3138,6 +3178,22 @@ export function BankWorkspace() {
           bankPath={bankPath}
           changedFormatPaths={inventory.changedFormatPaths}
           onClose={() => setShowValidation(false)}
+        />
+      )}
+      {showImportAnswer && (
+        <ImportAnswerModal
+          bankName={displayName}
+          bankPath={bankPath}
+          calculateIntersections={intersections.calculate}
+          draftStore={draftStore}
+          existingPaths={bankPathsAtHeadRef}
+          headSha={sourceRef?.sha}
+          onClose={() => setShowImportAnswer(false)}
+          prNumber={
+            sourceRef?.type === "pr" ? (sourceRef.prNumber ?? null) : null
+          }
+          repository={repository}
+          sourceRefName={sourceRefNameForContent}
         />
       )}
       {showPromptPackage && (

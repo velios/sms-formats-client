@@ -290,5 +290,119 @@
     "copied": "Copied",
     "download": "Download file",
     "clear": "Clear"
+  },
+  "importAnswer": {
+    "openAction": "Import answer",
+    "readOnly": "View only — no right to edit",
+    "title": "Import answer: {{bank}}",
+    "answerLabel": "Agent answer",
+    "answerPlaceholder": "Paste the agent's answer or choose a file",
+    "chooseFile": "Choose file",
+    "showChanges": "Show changes",
+    "showText": "Show text",
+    "cancel": "Cancel",
+    "status": {
+      "broken": "Answer not parsed",
+      "outOfBounds": "Parsed, but it reaches outside the bank",
+      "noFiles": "Answer parsed — it holds no files"
+    },
+    "kind": {
+      "changed": "changed",
+      "created": "new",
+      "deleted": "deleted",
+      "identical": "unchanged"
+    },
+    "kindCount": {
+      "changed_one": "{{count}} changed",
+      "changed_other": "{{count}} changed",
+      "created_one": "{{count}} new",
+      "created_other": "{{count}} new",
+      "deleted_one": "{{count}} deleted",
+      "deleted_other": "{{count}} deleted",
+      "identical_one": "{{count}} unchanged",
+      "identical_other": "{{count}} unchanged"
+    },
+    "overwriteWarning_one": "{{count}} file overwrites your edit",
+    "overwriteWarning_other": "{{count}} files overwrite your edits",
+    "line": "line {{line}}",
+    "problem": {
+      "unclosed": "a block was opened and never closed — the answer broke off",
+      "orphan-close": "a closing tag with nothing open",
+      "malformed-open": "the tag looks like a block but did not parse",
+      "empty-path": "the block has an empty path — nowhere to write it",
+      "duplicate-path": "the path shows up twice, the last one applies",
+      "conflicting-path": "the same path is both written and deleted",
+      "unsupported-rename": "renaming is not supported, the block is skipped"
+    },
+    "violation": {
+      "other-bank": "another bank",
+      "bank-root": "only senders.txt may live in the bank root",
+      "outside": "the path leads outside",
+      "invalid-path": "not a valid path"
+    },
+    "refusal": {
+      "brokenTitle": "The answer broke off — there is nothing to import",
+      "boundsTitle": "The answer touches files outside the bank",
+      "brokenHint": "Ask the agent to finish the answer and paste it whole.",
+      "boundsHint": "Remove these files from the answer and paste it again.",
+      "pasteAgain": "Paste again"
+    },
+    "loss": {
+      "title": "Part of the answer did not make it"
+    },
+    "manifestLabel": "What will change",
+    "prose": "Agent's comment",
+    "proseEmpty": "empty",
+    "prosePanelTitle": "Answer text outside the blocks",
+    "proseNone": "The agent wrote nothing beyond the changes themselves.",
+    "rejected": "out of bounds",
+    "superseded": "superseded below",
+    "overwriteMark": "The import overwrites your manual edit",
+    "emptyBroken": "No files: the answer broke off before the first block closed.",
+    "emptyParsed": "The answer holds no files — the agent only wrote a comment.",
+    "pickRow": "Pick a row on the left.",
+    "provenance": {
+      "senders": "The bank's sender list — it has no number and never will",
+      "published": "Published upstream — No. {{id}}",
+      "idWithoutFile": "The name carries No. {{id}}, but the bank has no such file",
+      "createdInPr": "Created in this PR — upstream assigns the number on publication",
+      "absent": "The bank has no such file — the agent creates it"
+    },
+    "supersededNote": "This block will not apply: the same path appears below, and the last one wins.",
+    "overwriteNote": "Your edit lives here — the import overwrites it.",
+    "violationNote": "File outside the bank: {{reason}}.",
+    "violationHint": "While it is in the answer nothing can be imported — neither it nor the rest.",
+    "diff": {
+      "deleting": "The file is deleted. Reason from the agent:",
+      "noReason": "— none given —",
+      "currentBody": "Body in force",
+      "senders": "Senders",
+      "unchanged": "Unchanged",
+      "regex": "Regex",
+      "columns": "Columns",
+      "columnsUnchanged": "Columns · unchanged",
+      "examples": "Examples",
+      "before": "was",
+      "after": "now",
+      "new": "new",
+      "newPlural": "new",
+      "examplesUnchanged": "The same {{count}} — unchanged"
+    },
+    "loading": "Loading the bodies in force…",
+    "retry": "Retry",
+    "error": {
+      "no-source": "No source: open the bank from a pull request.",
+      "load-failed": "Could not load the bodies in force. Import is unavailable."
+    },
+    "writeAction": "Write to drafts",
+    "recalculate": "Recalculate intersections",
+    "nothingToWrite": "Nothing to write.",
+    "toDrafts": "To drafts",
+    "result": {
+      "title": "Written to drafts",
+      "recalculated": "Intersections recalculated.",
+      "notRecalculated": "Intersections were not recalculated.",
+      "hint": "The drafts are visible in the bank file list. Until they are published you can edit and roll them back."
+    }
   }
 }

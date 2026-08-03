@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@codemirror/commands": "^6",
+    "@codemirror/merge": "^6.12.2",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.39.14",
     "@fontsource-variable/geist": "^5.2.8",
