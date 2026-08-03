@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { buildView, type Scenario, SCENARIOS } from "./scenarios";
+import { buildView, SCENARIOS, type Scenario } from "./scenarios";
 import { NAME as NAME_A, VariantA } from "./VariantA";
 import { NAME as NAME_B, VariantB } from "./VariantB";
 import { NAME as NAME_C, VariantC } from "./VariantC";
@@ -48,7 +48,9 @@ export function ImportPrototypeRoute() {
   const cycle = useCallback(
     (step: number) => {
       const index = Math.max(0, VARIANTS.indexOf(variant as "A"));
-      const next = VARIANTS[(index + step + VARIANTS.length) % VARIANTS.length] as string;
+      const next = VARIANTS[
+        (index + step + VARIANTS.length) % VARIANTS.length
+      ] as string;
       setParam("variant", next);
     },
     [setParam, variant]

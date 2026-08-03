@@ -29,10 +29,13 @@ export const KIND_LABEL: Record<ChangeRow["kind"], string> = {
   identical: "без изменений",
 };
 
+// Цвета — из токенов приложения, а не из тёмной темы GitHub: «изменён» синим
+// и «новый» зелёным совпадают с тем, чем список файлов банка метит локально
+// изменённый и локально созданный файл (`BankWorkspace.tsx`).
 export const KIND_COLOR: Record<ChangeRow["kind"], string> = {
-  changed: "text-[color:#d29922]",
-  created: "text-[color:#3fb950]",
-  deleted: "text-[color:#f85149]",
+  changed: "text-[color:var(--c-accent)]",
+  created: "text-[color:var(--c-success)]",
+  deleted: "text-[color:var(--c-error)]",
   identical: "text-[color:var(--c-text-dim)]",
 };
 

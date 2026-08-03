@@ -114,7 +114,11 @@ export function parseAnswer(text: string): ParsedAnswer {
     if (!(file || remove || rename)) {
       const close = CLOSE.exec(line);
       if (close) {
-        problems.push({ kind: "orphan-close", line: lineNumber, excerpt: line });
+        problems.push({
+          kind: "orphan-close",
+          line: lineNumber,
+          excerpt: line,
+        });
       } else if (LOOKS_LIKE_OPEN.test(line)) {
         problems.push({
           kind: "malformed-open",
@@ -178,7 +182,10 @@ function readBody(
   for (let index = start; index < lines.length; index += 1) {
     const close = CLOSE.exec(lines[index]);
     if (close && close[1] === tag) {
-      return { text: lines.slice(start, index).join("\n"), nextIndex: index + 1 };
+      return {
+        text: lines.slice(start, index).join("\n"),
+        nextIndex: index + 1,
+      };
     }
   }
   return null;

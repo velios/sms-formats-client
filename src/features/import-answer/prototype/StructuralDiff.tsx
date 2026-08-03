@@ -10,7 +10,7 @@ import { parseFormatFile } from "@/domain/format";
 import type { ChangeRow } from "./scenarios";
 
 /** Грубая пословная разметка различий — вместо presentableDiff (#24, украшение). */
-function markWords(before: string, after: string): Array<[string, boolean]> {
+function markWords(before: string, after: string): [string, boolean][] {
   const beforeWords = new Set(before.split(/(\s+)/));
   return after
     .split(/(\s+)/)
@@ -20,7 +20,7 @@ function markWords(before: string, after: string): Array<[string, boolean]> {
 function RegexLine(props: {
   label: string;
   text: string;
-  marks?: Array<[string, boolean]>;
+  marks?: [string, boolean][];
   tone: "before" | "after";
 }) {
   const { label, text, marks, tone } = props;
@@ -39,12 +39,11 @@ function RegexLine(props: {
         {marks
           ? marks.map(([word, changed], index) => (
               <span
+                // Без скруглений и отступов: соседние помеченные куски должны
+                // сливаться в одну полосу, а не рассыпаться в лесенку.
                 className={
-                  changed
-                    ? "rounded-[3px] bg-[color:var(--c-accent-soft,#2f6feb33)] px-[1px]"
-                    : undefined
+                  changed ? "bg-[color:var(--c-accent-soft)]" : undefined
                 }
-                // biome-ignore lint/suspicious/noArrayIndexKey: прототип
                 key={index}
               >
                 {word}
@@ -91,7 +90,7 @@ export function StructuralDiff({ row }: { row: ChangeRow }) {
         <div className="text-[color:var(--c-text-muted)]">Отправители</div>
         {added.map((line) => (
           <div
-            className="font-mono text-[12px] text-[color:#3fb950]"
+            className="font-mono text-[12px] text-[color:var(--c-success)]"
             key={line}
           >
             + {line}
@@ -99,7 +98,7 @@ export function StructuralDiff({ row }: { row: ChangeRow }) {
         ))}
         {removed.map((line) => (
           <div
-            className="font-mono text-[12px] text-[color:#f85149]"
+            className="font-mono text-[12px] text-[color:var(--c-error)]"
             key={line}
           >
             − {line}
@@ -171,7 +170,7 @@ export function StructuralDiff({ row }: { row: ChangeRow }) {
         </div>
         {addedExamples.map((example) => (
           <div
-            className="font-mono text-[11px] text-[color:#3fb950] leading-[1.5]"
+            className="font-mono text-[11px] text-[color:var(--c-success)] leading-[1.5]"
             key={example}
           >
             + {example}
@@ -179,7 +178,7 @@ export function StructuralDiff({ row }: { row: ChangeRow }) {
         ))}
         {removedExamples.map((example) => (
           <div
-            className="font-mono text-[11px] text-[color:#f85149] leading-[1.5]"
+            className="font-mono text-[11px] text-[color:var(--c-error)] leading-[1.5]"
             key={example}
           >
             − {example}
