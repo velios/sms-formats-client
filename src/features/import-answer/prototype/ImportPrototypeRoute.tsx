@@ -13,10 +13,16 @@ import { buildView, type Scenario, SCENARIOS } from "./scenarios";
 import { NAME as NAME_A, VariantA } from "./VariantA";
 import { NAME as NAME_B, VariantB } from "./VariantB";
 import { NAME as NAME_C, VariantC } from "./VariantC";
+import { NAME as NAME_D, VariantD } from "./VariantD";
 
-const VARIANTS = ["A", "B", "C"] as const;
+const VARIANTS = ["A", "B", "C", "D"] as const;
 const FIRST = SCENARIOS[0] as Scenario;
-const NAMES: Record<string, string> = { A: NAME_A, B: NAME_B, C: NAME_C };
+const NAMES: Record<string, string> = {
+  A: NAME_A,
+  B: NAME_B,
+  C: NAME_C,
+  D: NAME_D,
+};
 
 export function ImportPrototypeRoute() {
   const [params, setParams] = useSearchParams();
@@ -109,6 +115,9 @@ export function ImportPrototypeRoute() {
       )}
       {!closed && variant === "B" && (
         <VariantB onClose={close} scenario={scenario} view={view} />
+      )}
+      {!closed && variant === "D" && (
+        <VariantD onClose={close} scenario={scenario} view={view} />
       )}
       {!closed && variant === "C" && (
         <VariantC
