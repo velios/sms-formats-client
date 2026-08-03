@@ -101,4 +101,22 @@ describe("generated catalog", () => {
       expect(() => new RegExp(snippet.pattern)).not.toThrow();
     }
   });
+
+  // Cookbook §3: the default per entity is exactly one — an alternative needs its
+  // trigger. Only the auxiliary glue group carries a default per role.
+  it("has exactly one default snippet per entity group", () => {
+    const defaultsByGroup = new Map<string, number>();
+    for (const snippet of REGEX_SNIPPETS) {
+      if (snippet.group === "glue" || snippet.kind !== "default") {
+        continue;
+      }
+      defaultsByGroup.set(
+        snippet.group,
+        (defaultsByGroup.get(snippet.group) ?? 0) + 1
+      );
+    }
+    for (const [group, count] of defaultsByGroup) {
+      expect(count, `group "${group}" must have exactly one default`).toBe(1);
+    }
+  });
 });
