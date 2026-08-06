@@ -297,9 +297,9 @@
     "clear": "Clear"
   },
   "importAnswer": {
-    "openAction": "Import answer",
+    "openAction": "Import AI answer",
     "readOnly": "View only — no right to edit",
-    "title": "Import answer: {{bank}}",
+    "title": "Import AI answer: {{bank}}",
     "answerLabel": "Agent answer",
     "answerPlaceholder": "Paste the agent's answer or choose a file",
     "chooseFile": "Choose file",
