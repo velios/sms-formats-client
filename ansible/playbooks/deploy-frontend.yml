@@ -1,7 +1,0 @@
----
-- name: Deploy sms-formats-client frontend
-  hosts: production
-  become: yes
-
-  roles:
-    - role: sms-formats-frontend
