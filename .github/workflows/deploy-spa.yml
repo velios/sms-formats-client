@@ -1,0 +1,66 @@
+name: Deploy SPA to dokku
+
+on:
+  push:
+    branches: [main]
+    # Only files that affect the image (zen-hub ADR 0022): docs/bot churn
+    # must not rebuild and restart the SPA.
+    paths:
+      - src/**
+      - public/**
+      - index.html
+      - package.json
+      - bun.lock
+      - vite.config.ts
+      - tsconfig.json
+      - scripts/build-content.ts
+      - components.json
+      - Dockerfile
+      - nginx.conf
+      - .dockerignore
+      - .github/workflows/deploy-spa.yml
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/velios/sms-formats-spa
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push image
+        run: |
+          docker build -t "$IMAGE:$GITHUB_SHA" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy via dokku
+        env:
+          SSH_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_PORT: ${{ secrets.DOKKU_SSH_PORT }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          dokku() { ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" -- "$@"; }
+          # ps:stop: the '-p 127.0.0.1:8109' docker-option breaks rolling deploy
+          # until edge-enable (zen-hub ADR 0004); '|| true' covers the first deploy
+          dokku ps:stop sms-formats-spa || true
+          dokku git:from-image sms-formats-spa "$IMAGE:$GITHUB_SHA"
+
+      # 500 MB private-package storage is account-wide: keep only recent versions
+      - uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: sms-formats-spa
+          exclude-tags: latest
+          keep-n-tagged: 3
+          delete-untagged: true

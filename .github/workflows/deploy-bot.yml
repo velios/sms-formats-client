@@ -1,0 +1,57 @@
+name: Deploy bot to dokku
+
+on:
+  push:
+    branches: [main]
+    # Only files that affect the bot image (zen-hub ADR 0022)
+    paths:
+      - bot/**
+      - package.json
+      - bun.lock
+      - .dockerignore
+      - .github/workflows/deploy-bot.yml
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/velios/sms-formats-bot
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push image
+        run: |
+          docker build -f bot/Dockerfile -t "$IMAGE:$GITHUB_SHA" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy via dokku
+        env:
+          SSH_KEY: ${{ secrets.DOKKU_SSH_PRIVATE_KEY }}
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_PORT: ${{ secrets.DOKKU_SSH_PORT }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          dokku() { ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "$DOKKU_PORT" "dokku@$DOKKU_HOST" -- "$@"; }
+          # ps:stop: the '-p 127.0.0.1:8108' docker-option breaks rolling deploy
+          # until edge-enable (zen-hub ADR 0004); '|| true' covers the first deploy
+          dokku ps:stop sms-formats-bot || true
+          dokku git:from-image sms-formats-bot "$IMAGE:$GITHUB_SHA"
+
+      # 500 MB private-package storage is account-wide: keep only recent versions
+      - uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: sms-formats-bot
+          exclude-tags: latest
+          keep-n-tagged: 3
+          delete-untagged: true
