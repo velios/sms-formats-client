@@ -1,5 +1,8 @@
 import { z } from "zod/v4";
 
+const DEFAULT_SOURCE_REPO = "zenmoney/sms-formats";
+const DEFAULT_BRANCH = "main";
+
 const repoSlugSchema = z
   .string()
   .min(3)
@@ -30,9 +33,10 @@ function splitRepoSlug(slug: string): { owner: string; repo: string } {
 }
 
 const parsedEnv = envSchema.parse({
-  sourceRepo: import.meta.env.VITE_GITHUB_SOURCE_REPO,
-  defaultSourceRepo: import.meta.env.VITE_GITHUB_DEFAULT_SOURCE_REPO,
-  defaultBranch: import.meta.env.VITE_DEFAULT_BRANCH,
+  sourceRepo: import.meta.env.VITE_GITHUB_SOURCE_REPO || DEFAULT_SOURCE_REPO,
+  defaultSourceRepo:
+    import.meta.env.VITE_GITHUB_DEFAULT_SOURCE_REPO || DEFAULT_SOURCE_REPO,
+  defaultBranch: import.meta.env.VITE_DEFAULT_BRANCH || DEFAULT_BRANCH,
   issueToken: import.meta.env.VITE_GITHUB_ISSUE_TOKEN,
 });
 
