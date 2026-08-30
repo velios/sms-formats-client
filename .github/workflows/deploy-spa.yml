@@ -55,7 +55,16 @@ jobs:
           # ps:stop: the '-p 127.0.0.1:8109' docker-option breaks rolling deploy
           # until edge-enable (zen-hub ADR 0004); '|| true' covers the first deploy
           dokku ps:stop sms-formats-spa || true
-          dokku git:from-image sms-formats-spa "$IMAGE:$GITHUB_SHA"
+          if deploy_output=$(dokku git:from-image sms-formats-spa "$IMAGE:$GITHUB_SHA" 2>&1); then
+            printf '%s\n' "$deploy_output"
+          elif [[ "$deploy_output" == *"No changes detected"* ]]; then
+            printf '%s\n' "$deploy_output"
+            dokku ps:start sms-formats-spa
+          else
+            printf '%s\n' "$deploy_output" >&2
+            dokku ps:start sms-formats-spa || true
+            exit 1
+          fi
 
       # 500 MB private-package storage is account-wide: keep only recent versions
       - uses: dataaxiom/ghcr-cleanup-action@v1
