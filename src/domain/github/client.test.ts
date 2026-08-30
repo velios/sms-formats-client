@@ -3,6 +3,7 @@ import type { RepoRef } from "../types";
 
 const octokitMocks = vi.hoisted(() => {
   const createReview = vi.fn(() => Promise.resolve({}));
+  const getPullRequest = vi.fn();
   const getAuthenticated = vi.fn(() =>
     Promise.resolve({ data: { login: "current-user" } })
   );
@@ -22,11 +23,13 @@ const octokitMocks = vi.hoisted(() => {
   return {
     createReview,
     getAuthenticated,
+    getPullRequest,
     graphql,
     paginate,
     Octokit: class MockOctokit {
       pulls = {
         createReview,
+        get: getPullRequest,
         listReviews: vi.fn(),
       };
 
@@ -59,6 +62,7 @@ import {
   setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
   subscribeGitHubAuthChange,
+  updatePullRequestHead,
 } from "./client";
 
 describe("indexBanksFromTree", () => {
@@ -201,6 +205,103 @@ describe("pull request approvals", () => {
     await expect(
       fetchPullRequestApprovalByCurrentUser(123, repo)
     ).resolves.toBe(true);
+  });
+});
+
+describe("updatePullRequestHead", () => {
+  const repository: RepoRef = { owner: "zenmoney", repo: "sms-formats" };
+
+  beforeEach(() => {
+    octokitMocks.getPullRequest.mockReset();
+    octokitMocks.getPullRequest.mockResolvedValue({
+      data: {
+        head: {
+          repo: {
+            owner: { login: "contributor" },
+            name: "sms-formats",
+          },
+          ref: "fix-bank-format",
+          sha: "old-head-sha",
+        },
+        title: "Fix bank format",
+        html_url: "https://github.com/zenmoney/sms-formats/pull/123",
+      },
+    });
+    octokitMocks.graphql.mockReset();
+    octokitMocks.graphql.mockResolvedValue({
+      createCommitOnBranch: {
+        commit: { oid: "new-head-sha" },
+      },
+    });
+  });
+
+  it("commits additions and deletions atomically to an external PR head", async () => {
+    await expect(
+      updatePullRequestHead(
+        "ghp_test",
+        123,
+        [
+          {
+            path: "src/TestBank_1/formats/updated.txt",
+            content: "updated\n",
+          },
+          {
+            path: "src/TestBank_1/formats/deleted.txt",
+            delete: true,
+          },
+        ],
+        repository,
+        "Fix available balance\n\nUse av_balance for the captured value."
+      )
+    ).resolves.toEqual({
+      url: "https://github.com/zenmoney/sms-formats/pull/123",
+      title: "Fix bank format",
+      headSha: "new-head-sha",
+    });
+
+    expect(octokitMocks.graphql).toHaveBeenCalledWith(
+      expect.stringContaining("createCommitOnBranch"),
+      {
+        input: {
+          branch: {
+            repositoryNameWithOwner: "contributor/sms-formats",
+            branchName: "fix-bank-format",
+          },
+          expectedHeadOid: "old-head-sha",
+          message: {
+            headline: "Fix available balance",
+            body: "Use av_balance for the captured value.",
+          },
+          fileChanges: {
+            additions: [
+              {
+                path: "src/TestBank_1/formats/updated.txt",
+                contents: "dXBkYXRlZAo=",
+              },
+            ],
+            deletions: [{ path: "src/TestBank_1/formats/deleted.txt" }],
+          },
+        },
+      }
+    );
+  });
+
+  it("uses the PR title when no custom commit message is provided", async () => {
+    await updatePullRequestHead(
+      "ghp_test",
+      123,
+      [{ path: "src/TestBank_1/senders.txt", content: "TEST\n" }],
+      repository
+    );
+
+    expect(octokitMocks.graphql).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        input: expect.objectContaining({
+          message: { headline: "Fix bank format" },
+        }),
+      })
+    );
   });
 });
 

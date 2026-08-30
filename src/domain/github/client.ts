@@ -1751,6 +1751,62 @@ export async function createCommit(
   return commit.data.sha;
 }
 
+interface CreateCommitOnBranchResponse {
+  createCommitOnBranch: {
+    commit: {
+      oid: string;
+    };
+  } | null;
+}
+
+const CREATE_COMMIT_ON_BRANCH_MUTATION = `
+  mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
+    createCommitOnBranch(input: $input) {
+      commit {
+        oid
+      }
+    }
+  }
+`;
+
+function buildCommitMessageInput(message: string): {
+  headline: string;
+  body?: string;
+} {
+  const [headline = "", ...bodyLines] = message.trim().split("\n");
+  const body = bodyLines.join("\n").trim();
+  return body ? { headline, body } : { headline };
+}
+
+function buildCommitFileChanges(
+  files: Array<{ path: string; content?: string; delete?: boolean }>
+): {
+  additions?: Array<{ path: string; contents: string }>;
+  deletions?: Array<{ path: string }>;
+} {
+  const additions: Array<{ path: string; contents: string }> = [];
+  const deletions: Array<{ path: string }> = [];
+
+  for (const file of files) {
+    if (file.delete) {
+      deletions.push({ path: file.path });
+      continue;
+    }
+    if (typeof file.content !== "string") {
+      throw new Error(`Missing content for file: ${file.path}`);
+    }
+    additions.push({
+      path: file.path,
+      contents: encodeBase64Utf8(file.content),
+    });
+  }
+
+  return {
+    ...(additions.length > 0 ? { additions } : {}),
+    ...(deletions.length > 0 ? { deletions } : {}),
+  };
+}
+
 export async function updatePullRequestHead(
   token: string,
   prNumber: number,
@@ -1772,19 +1828,27 @@ export async function updatePullRequestHead(
   const headSha = pr.data.head.sha;
   const title = pr.data.title;
   const message = commitMessage?.trim() ? commitMessage : title;
-
-  const newHeadSha = await createCommit(
-    octokit,
-    headOwner,
-    headRef,
-    headSha,
-    files,
-    message,
+  // Git Data and Contents REST endpoints see maintainers as read-only on a
+  // contributor's fork. This branch-aware mutation honors the PR author's
+  // "Allow edits from maintainers" grant and keeps all file changes atomic.
+  const result = await octokit.graphql<CreateCommitOnBranchResponse>(
+    CREATE_COMMIT_ON_BRANCH_MUTATION,
     {
-      owner: headOwner,
-      repo: headRepo,
+      input: {
+        branch: {
+          repositoryNameWithOwner: `${headOwner}/${headRepo}`,
+          branchName: headRef,
+        },
+        expectedHeadOid: headSha,
+        message: buildCommitMessageInput(message),
+        fileChanges: buildCommitFileChanges(files),
+      },
     }
   );
+  const newHeadSha = result.createCommitOnBranch?.commit.oid;
+  if (!newHeadSha) {
+    throw new Error("GitHub did not return the updated pull request head.");
+  }
 
   return {
     url: pr.data.html_url,
