@@ -1,11 +1,10 @@
-// Throwaway prototype: opt-in resizing of the existing workspace columns.
 import { Columns3 } from "lucide-react";
 import { Children, type ReactNode, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { create } from "zustand";
 import { Button } from "@/components/ui/button";
 
-const useLayoutPrototype = create<{
+const usePanelResizeStore = create<{
   enabled: boolean;
   toggle: () => void;
 }>((set) => ({
@@ -13,8 +12,8 @@ const useLayoutPrototype = create<{
   toggle: () => set((state) => ({ enabled: !state.enabled })),
 }));
 
-export function LayoutPrototypeToggle() {
-  const { enabled, toggle } = useLayoutPrototype();
+export function PanelResizeToggle() {
+  const { enabled, toggle } = usePanelResizeStore();
   const location = useLocation();
   if (!location.pathname.startsWith("/repo/")) {
     return null;
@@ -34,14 +33,14 @@ export function LayoutPrototypeToggle() {
   );
 }
 
-export function ResizablePanelsPrototype({
+export function ResizablePanels({
   children,
   side,
 }: {
   children: ReactNode;
   side: "left" | "right";
 }) {
-  const enabled = useLayoutPrototype((state) => state.enabled);
+  const enabled = usePanelResizeStore((state) => state.enabled);
   const [width, setWidth] = useState<number | null>(null);
   const expandedWidth = useRef(320);
   const container = useRef<HTMLDivElement>(null);
