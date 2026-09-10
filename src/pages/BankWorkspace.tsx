@@ -60,6 +60,7 @@ import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { ImportAnswerModal } from "@/features/import-answer/ImportAnswerModal";
 import { normalizeIntersectionExample } from "@/features/intersections/core";
 import { useIntersections } from "@/features/intersections/use-intersections";
+import { ResizablePanelsPrototype } from "@/features/layout-prototype/ResizablePanelsPrototype";
 import { PromptPackageModal } from "@/features/prompt-package/PromptPackageModal";
 import { resolvePublishPreflightState } from "@/features/publish-panel/PublishPanel";
 import {
@@ -3035,7 +3036,7 @@ export function BankWorkspace() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[clamp(264px,19vw,340px)_minmax(0,1fr)] gap-4">
+      <ResizablePanelsPrototype side="left">
         {/* ─── Sidebar ─── */}
         <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
           {/* Action bar */}
@@ -3150,7 +3151,7 @@ export function BankWorkspace() {
             t,
           })}
         </div>
-      </div>
+      </ResizablePanelsPrototype>
 
       {/* Modals */}
       {isUpdateDialogOpen && (
