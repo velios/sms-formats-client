@@ -106,23 +106,6 @@ export function ResizablePanelsPrototype({
             aria-label={`Ширина: ${label}`}
             className="absolute inset-0 flex touch-none select-none items-center justify-center text-[color:var(--c-accent)] hover:bg-[color:var(--c-accent-soft)] focus-visible:outline-2"
             onDoubleClick={() => resize(collapsed ? expandedWidth.current : 32)}
-            onKeyDown={(event) => {
-              if (event.key === "Home") {
-                resize(32);
-              } else if (event.key === "Enter") {
-                resize(collapsed ? expandedWidth.current : 32);
-              } else if (
-                event.key === "ArrowLeft" ||
-                event.key === "ArrowRight"
-              ) {
-                event.preventDefault();
-                const delta = event.key === "ArrowRight" ? 24 : -24;
-                resize(
-                  (width ?? expandedWidth.current) +
-                    (side === "left" ? delta : -delta)
-                );
-              }
-            }}
             onLostPointerCapture={() => {
               drag.current = null;
             }}
