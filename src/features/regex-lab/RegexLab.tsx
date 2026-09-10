@@ -30,6 +30,7 @@ import {
 } from "@/domain/format";
 import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
 import { QuickReference } from "@/features/quick-reference/QuickReference";
+import { ResizablePanels } from "@/features/resizable-panels/ResizablePanels";
 import { CookbookModal } from "@/features/snippet-library/CookbookModal";
 import { FormatRulesModal } from "@/features/snippet-library/FormatRulesModal";
 import { SnippetsPanel } from "@/features/snippet-library/SnippetsPanel";
@@ -615,7 +616,7 @@ export function RegexLab({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Work column (regex → test string → match info) + the persistent
           reference column on the right. */}
-      <div className="grid min-h-0 flex-1 gap-4 [grid-template-columns:minmax(0,1fr)_clamp(320px,24vw,430px)]">
+      <ResizablePanels side="right">
         <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
           {/* REGULAR EXPRESSION — unified regex editor */}
           <div className={cn(regexLabPanelClassName, "shrink-0")}>
@@ -900,7 +901,7 @@ export function RegexLab({
           onPatternTokenHover={setHoveredPatternTokenIndex}
           readOnly={readOnly}
         />
-      </div>
+      </ResizablePanels>
 
       {columnPickerGroupIndex !== null && (
         <ColumnPickerModal

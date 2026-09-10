@@ -15,6 +15,7 @@ import {
   subscribeGitHubAuthChange,
   validateToken,
 } from "@/domain/github";
+import { PanelResizeToggle } from "@/features/resizable-panels/ResizablePanels";
 import { SourceSelector } from "@/features/source-selector/SourceSelector";
 import { useSourceStore, useUIStore } from "@/store";
 import { hardResetAppState } from "@/store/hard-reset";
@@ -159,6 +160,7 @@ export function AppHeader() {
         <Button onClick={toggleLocale} size="sm" variant="ghost">
           {locale === "ru" ? "EN" : "RU"}
         </Button>
+        <PanelResizeToggle />
         <Button
           aria-label={t("githubAuth.openSettings")}
           className="size-9 rounded-full"

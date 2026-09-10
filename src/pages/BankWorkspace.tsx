@@ -71,6 +71,7 @@ import {
   type QuickCheckMode,
   QuickCheckPanel,
 } from "@/features/quick-check/QuickCheckPanel";
+import { ResizablePanels } from "@/features/resizable-panels/ResizablePanels";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
 import { ValidationPanel } from "@/features/validation/ValidationPanel";
 import {
@@ -3035,7 +3036,7 @@ export function BankWorkspace() {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[clamp(264px,19vw,340px)_minmax(0,1fr)] gap-4">
+      <ResizablePanels side="left">
         {/* ─── Sidebar ─── */}
         <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
           {/* Action bar */}
@@ -3150,7 +3151,7 @@ export function BankWorkspace() {
             t,
           })}
         </div>
-      </div>
+      </ResizablePanels>
 
       {/* Modals */}
       {isUpdateDialogOpen && (
