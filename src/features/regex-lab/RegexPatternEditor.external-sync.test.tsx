@@ -2,9 +2,9 @@ import { render } from "@testing-library/react";
 import { createRef } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  UnifiedRegexEditor,
-  type UnifiedRegexEditorHandle,
-} from "./UnifiedRegexEditor";
+  RegexPatternEditor,
+  type RegexPatternEditorHandle,
+} from "./RegexPatternEditor";
 
 function editor(
   regex: string,
@@ -12,13 +12,13 @@ function editor(
   whitespacePlusMode: boolean
 ) {
   return (
-    <UnifiedRegexEditor
+    <RegexPatternEditor
       activeTokenIndex={null}
       canHighlight={false}
       highlightMode="groups"
       highlightPlan={{ lit: [], colorGroups: [] }}
       onRegexChange={onRegexChange}
-      ref={createRef<UnifiedRegexEditorHandle>()}
+      ref={createRef<RegexPatternEditorHandle>()}
       regex={regex}
       tokens={[]}
       whitespacePlusMode={whitespacePlusMode}

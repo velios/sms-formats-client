@@ -1,11 +1,7 @@
-// Fetching and writing boundary of the answer import: the pure verdict comes
-// from `core`, this hook adds the bodies in force and the drafts (ADR-0017).
-// The draft store gets no new methods — writing is a loop over the same calls
-// a manual edit makes.
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isBankFormatFilePath } from "@/domain/format";
 import type { RepoRef } from "@/domain/types";
-import { useFileContentStore } from "@/store/file-content-store";
+import { loadFileContents } from "@/infrastructure/file-content";
 import {
   type AnswerChange,
   classifyPathViolation,
@@ -15,12 +11,10 @@ import {
   parseAnswer,
 } from "./core";
 
-// Only what the draft store already holds. Structurally satisfied by
-// `useDraftStore()`, so production passes the store itself.
 export interface ImportAnswerDraftEntry {
   content: string;
-  baseSha: string;
-  remoteContent: string;
+  baselineHeadSha: string;
+  headContent: string | null;
   isDeleted: boolean;
 }
 
@@ -30,29 +24,24 @@ export interface ImportAnswerDraftStore {
     filePath: string,
     content: string,
     baseSha: string,
-    remoteContent: string
+    headContent: string | null
   ) => void;
   applyUserEdit: (
     filePath: string,
     content: string,
     baseSha: string,
-    remoteContent: string
+    headContent: string | null
   ) => void;
   markDeleted: (filePath: string) => void;
 }
 
 export interface ImportAnswerRow {
   change: AnswerChange;
-  /** The body in force: the draft if there is one, otherwise the head ref. */
   currentContent: string;
-  /** The head-ref body; empty when the answer creates the file. */
-  remoteContent: string;
+  headContent: string | null;
   existsAtHead: boolean;
-  /** A draft here already differs from the head ref — the import overwrites it. */
   overwritesManualEdit: boolean;
-  /** A later block in the answer writes the same path and wins. */
   supersededBelow: boolean;
-  /** Out of bounds; one violated row refuses the whole import. */
   violation: PathViolation | null;
 }
 
@@ -72,66 +61,32 @@ interface LoadBodiesParams {
   headSha: string;
 }
 
-// Bodies of the affected paths through the existing lazy cache. Rejects if any
-// one of them fails: a half "before" lies exactly the way a half package does.
 async function loadBodiesFromCache(
   params: LoadBodiesParams
 ): Promise<Map<string, string>> {
-  const { paths, repository, prNumber, refName, headSha } = params;
-  const store = useFileContentStore.getState();
-  const bodies = await Promise.all(
-    paths.map((filePath) =>
-      store.primeFileContent({
-        repository,
-        prNumber,
-        filePath,
-        refName,
-        headSha,
-        loadedFrom: "editor",
-      })
-    )
-  );
-  const result = new Map<string, string>();
-  for (const [index, path] of paths.entries()) {
-    const body = bodies[index];
-    if (typeof body !== "string") {
-      throw new Error(`failed to load ${path}`);
-    }
-    result.set(path, body);
-  }
-  return result;
+  const { paths, repository, refName } = params;
+  return (await loadFileContents({ repository, refName, filePaths: paths }))
+    .contents;
 }
 
 export interface UseImportAnswerParams {
   bankPath: string;
   repository: RepoRef;
   prNumber: number | null;
-  // head-ref of the source (sha or branch name) and its sha — the ref the
-  // bodies in force are read from.
   sourceRefName: string | undefined;
   headSha: string | undefined;
-  /**
-   * Bank paths present at the head ref. Anything else the answer names is a
-   * file it creates — asking GitHub for it would answer 404 and be mistaken
-   * for a failed load.
-   */
   existingPaths: ReadonlySet<string>;
   draftStore: ImportAnswerDraftStore;
-  /** The existing full recount; the checkbox only decides whether to run it. */
-  calculateIntersections: () => Promise<void>;
-  // Seam for tests; production goes to the file content cache.
+  calculateIntersections: (filePaths?: string[]) => Promise<boolean>;
   loadBodies?: typeof loadBodiesFromCache;
 }
 
 export interface UseImportAnswerResult {
   text: string;
   setText: (text: string) => void;
-  /** null while the field is empty — there is nothing to judge yet. */
   parsed: ParsedAnswer | null;
   rows: ImportAnswerRow[];
-  /** Rows out of bounds; a non-empty list refuses the import whole. */
   violatedRows: ImportAnswerRow[];
-  /** How many rows overwrite a manual edit — the counter in the header. */
   overwriteCount: number;
   isLoadingBodies: boolean;
   loadError: ImportAnswerLoadError | null;
@@ -140,15 +95,33 @@ export interface UseImportAnswerResult {
   recalculateIntersections: boolean;
   setRecalculateIntersections: (enabled: boolean) => void;
   isWriting: boolean;
-  /** Filled once the drafts are written; the right pane becomes the summary. */
   summary: ImportAnswerSummary | null;
   write: () => Promise<void>;
 }
 
 const NO_CHANGES: AnswerChange[] = [];
-// One instance, so "nothing to show" never counts as a state change and the
-// load effect cannot re-trigger itself.
 const NO_BODIES: ReadonlyMap<string, string> = new Map();
+
+function collectImportBaselines(
+  paths: string[],
+  draftStore: ImportAnswerDraftStore,
+  existingPaths: ReadonlySet<string>
+) {
+  const known = new Map<string, string>();
+  const toFetch: string[] = [];
+  for (const path of paths) {
+    const draft = draftStore.getDraft(path);
+    if (draft) {
+      if (draft.headContent !== null) {
+        known.set(path, draft.headContent);
+      }
+    } else if (existingPaths.has(path)) {
+      toFetch.push(path);
+    }
+  }
+
+  return { known, toFetch };
+}
 
 export function useImportAnswer(
   params: UseImportAnswerParams
@@ -166,8 +139,6 @@ export function useImportAnswer(
   } = params;
 
   const [text, setTextState] = useState("");
-  // Not sticky by design: this is a setting of one run, and a silent "off
-  // forever" is exactly what stickiness would buy (ADR-0017).
   const [recalculateIntersections, setRecalculateIntersections] =
     useState(true);
   const [remoteBodies, setRemoteBodies] =
@@ -181,9 +152,6 @@ export function useImportAnswer(
   const [retryTick, setRetryTick] = useState(0);
   const loadIdRef = useRef(0);
 
-  // Read inside the load effect only: their identity changes on every draft
-  // edit, and re-fetching the same bodies on every keystroke elsewhere in the
-  // app is not what "the draft is free" means.
   const draftStoreRef = useRef(draftStore);
   draftStoreRef.current = draftStore;
   const existingPathsRef = useRef(existingPaths);
@@ -221,8 +189,6 @@ export function useImportAnswer(
     () => [...new Set(changes.map((change) => change.path))],
     [changes]
   );
-  // Stable dependency for the load effect: the same set of paths must not
-  // restart a load just because the answer was re-parsed.
   const affectedPathsKey = affectedPaths.join("\n");
 
   const setText = useCallback((next: string) => {
@@ -246,19 +212,11 @@ export function useImportAnswer(
       return;
     }
 
-    const known = new Map<string, string>();
-    const toFetch: string[] = [];
-    for (const path of paths) {
-      const draft = draftStoreRef.current.getDraft(path);
-      if (draft) {
-        // The draft carries the head-ref body it was based on — free.
-        known.set(path, draft.remoteContent);
-      } else if (existingPathsRef.current.has(path)) {
-        toFetch.push(path);
-      } else {
-        known.set(path, "");
-      }
-    }
+    const { known, toFetch } = collectImportBaselines(
+      paths,
+      draftStoreRef.current,
+      existingPathsRef.current
+    );
 
     if (toFetch.length === 0) {
       setRemoteBodies(known);
@@ -293,7 +251,6 @@ export function useImportAnswer(
         if (loadIdRef.current !== loadId) {
           return;
         }
-        // Nothing is shown from a failed load: the caller offers a retry.
         setRemoteBodies(NO_BODIES);
         setLoadError("load-failed");
         setIsLoadingBodies(false);
@@ -313,18 +270,16 @@ export function useImportAnswer(
     changes.forEach((change, index) => lastIndexByPath.set(change.path, index));
     return changes.map((change, index) => {
       const draft = draftStore.getDraft(change.path);
-      const remoteContent =
-        draft?.remoteContent ?? remoteBodies.get(change.path) ?? "";
+      const headContent = draft
+        ? draft.headContent
+        : (remoteBodies.get(change.path) ?? null);
       return {
         change,
-        currentContent: draft?.content ?? remoteContent,
-        remoteContent,
+        currentContent: draft?.content ?? headContent ?? "",
+        headContent,
         existsAtHead: existingPaths.has(change.path),
-        // A draft that only mirrors the head ref is not a manual edit: opening
-        // a file in the editor creates one, and warning about it would cry
-        // wolf on every file the human merely looked at.
         overwritesManualEdit: Boolean(
-          draft && (draft.content !== draft.remoteContent || draft.isDeleted)
+          draft && (draft.content !== draft.headContent || draft.isDeleted)
         ),
         supersededBelow: lastIndexByPath.get(change.path) !== index,
         violation: violationByPath.get(change.path) ?? null,
@@ -360,30 +315,24 @@ export function useImportAnswer(
     }
     setIsWriting(true);
 
-    // Answer order is apply order, so the last block on a path wins by simply
-    // being written last.
     const finalKind = new Map<string, AnswerChange["kind"]>();
     for (const row of rows) {
-      const { change, remoteContent } = row;
+      const { change, headContent } = row;
       const baseSha =
-        draftStore.getDraft(change.path)?.baseSha ?? headSha ?? "";
+        draftStore.getDraft(change.path)?.baselineHeadSha ?? headSha ?? "";
       if (change.kind === "write") {
-        // The same call a manual edit makes, so per-path history exists and
-        // undo steps back to what stood here before the import.
         draftStore.applyUserEdit(
           change.path,
           change.content,
           baseSha,
-          remoteContent
+          headContent
         );
       } else {
-        // `markDeleted` is a no-op without a draft, and the editor creates one
-        // by opening the file; here the import has to create it itself.
         draftStore.ensureDraft(
           change.path,
-          remoteContent,
+          headContent ?? "",
           baseSha,
-          remoteContent
+          headContent
         );
         draftStore.markDeleted(change.path);
       }
@@ -392,12 +341,15 @@ export function useImportAnswer(
 
     let intersectionsRecalculated = false;
     if (recalculateIntersections) {
-      // ponytail: `useIntersections` drops a run started before React commits
-      // the draft change (its reset effect bumps the run id), so let that
-      // commit flush first. Upgrade path — a run id the caller can pin.
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      await calculateIntersections();
-      intersectionsRecalculated = true;
+      intersectionsRecalculated = await calculateIntersections(
+        [
+          ...new Set([...existingPaths, ...rows.map((row) => row.change.path)]),
+        ].filter(
+          (path) =>
+            isBankFormatFilePath(path, bankPath) &&
+            !draftStore.getDraft(path)?.isDeleted
+        )
+      );
     }
 
     const kinds = [...finalKind.values()];
@@ -409,6 +361,8 @@ export function useImportAnswer(
     setIsWriting(false);
   }, [
     calculateIntersections,
+    existingPaths,
+    bankPath,
     canImport,
     draftStore,
     headSha,

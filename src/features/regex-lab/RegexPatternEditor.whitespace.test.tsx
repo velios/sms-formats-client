@@ -5,21 +5,21 @@ import { createRef } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { PatternHighlightPlan } from "@/domain/format";
 import {
+  analyzeRegexPattern,
   buildPatternHighlightPlan,
   buildTokenToCaptureGroupMap,
-  explainRegex,
   recognitionProgress,
   testRegex,
 } from "@/domain/format";
 import {
-  UnifiedRegexEditor,
-  type UnifiedRegexEditorHandle,
-} from "./UnifiedRegexEditor";
+  RegexPatternEditor,
+  type RegexPatternEditorHandle,
+} from "./RegexPatternEditor";
 
 // Real highlight plan (lit + colorGroups) for the given pattern against an SMS,
 // mirroring src/domain/format/pattern-highlight.test.ts.
 function planFor(pattern: string, sms: string): PatternHighlightPlan {
-  const tokens = explainRegex(pattern, "en").patternTokens;
+  const tokens = analyzeRegexPattern(pattern, "en").patternTokens;
   const map = buildTokenToCaptureGroupMap(tokens);
   const matchResult = testRegex(pattern, sms);
   const progress = matchResult.matched
@@ -34,10 +34,12 @@ function setup(
   withTokens = false,
   plan: PatternHighlightPlan = { lit: [], colorGroups: [] }
 ) {
-  const ref = createRef<UnifiedRegexEditorHandle>();
-  const tokens = withTokens ? explainRegex(regex, "ru").patternTokens : [];
+  const ref = createRef<RegexPatternEditorHandle>();
+  const tokens = withTokens
+    ? analyzeRegexPattern(regex, "ru").patternTokens
+    : [];
   const { container } = render(
-    <UnifiedRegexEditor
+    <RegexPatternEditor
       activeTokenIndex={null}
       canHighlight={withTokens}
       highlightMode="groups"

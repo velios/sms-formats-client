@@ -34,6 +34,7 @@ RECOGNITION_BOT_WEBHOOK_SECRET="$SECRET" \
 RECOGNITION_BOT_WEBHOOK_PATH="$WEBHOOK_PATH" \
 RECOGNITION_BOT_PORT="$PORT" \
 RECOGNITION_BOT_DRY_RUN=1 \
+RECOGNITION_BOT_OFFLINE=1 \
 RECOGNITION_BOT_SOURCE_REPO="zenmoney/sms-formats" \
 RECOGNITION_BOT_CHECKOUT_DIR="$CHECKOUT" \
   bun bot/server.ts >"$LOG" 2>&1 &
@@ -56,8 +57,8 @@ reply_update() {
   cat <<JSON
 {"update_id":1,"guest_message":{"message_id":10,"date":1700000000,
 "chat":{"id":1,"type":"private"},"from":{"id":2,"is_bot":false,"first_name":"Tester"},
-"guest_query_id":"q1","text":"@zenmoneysms_bot",
-"entities":[{"type":"mention","offset":0,"length":16}],
+"guest_query_id":"q1","text":"/sms @zenmoneysms_bot",
+"entities":[{"type":"mention","offset":5,"length":16}],
 "reply_to_message":{"message_id":9,"date":1699999999,
 "chat":{"id":1,"type":"private"},"from":{"id":3,"is_bot":false,"first_name":"Bank"},
 "text":"Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB"}}}
@@ -68,8 +69,8 @@ empty_update() {
   cat <<JSON
 {"update_id":2,"guest_message":{"message_id":11,"date":1700000001,
 "chat":{"id":1,"type":"private"},"from":{"id":2,"is_bot":false,"first_name":"Tester"},
-"guest_query_id":"q2","text":"@zenmoneysms_bot",
-"entities":[{"type":"mention","offset":0,"length":16}]}}
+"guest_query_id":"q2","text":"/sms @zenmoneysms_bot",
+"entities":[{"type":"mention","offset":5,"length":16}]}}
 JSON
 }
 
@@ -126,10 +127,10 @@ grep -q 'href="https://github.com/zenmoney/sms-formats/blob/[0-9a-f]\{7,\}/src/s
 echo "ok -> rendered reply:"
 sed -n '/^main:$/,/sberbank\/12/p' "$LOG" | sed 's/^/    /'
 
-echo "== 4. Empty call (mention only) -> usage hint =="
+echo "== 4. Empty /sms call -> usage hint =="
 empty_update | post "$SECRET" "$URL" >/dev/null
 sleep 0.2
-grep -q "Пришлите SMS" "$LOG" || fail "missing usage hint"
+grep -q "Чтобы распознать SMS" "$LOG" || fail "missing guest usage hint"
 echo "ok -> usage hint printed"
 
 echo "== 5. Direct private message -> recognition with file link =="

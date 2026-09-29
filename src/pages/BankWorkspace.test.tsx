@@ -7,12 +7,9 @@ vi.mock("@/store", () => ({
 }));
 
 import type { BankFileRecord } from "@/features/bank-inventory/core";
-import {
-  FormatsPanel,
-  resolveAutoSelectFile,
-  resolveSourceChangeFacts,
-  resolveWorkspaceEntryMode,
-} from "@/pages/BankWorkspace";
+import { resolveAutoSelectFile } from "@/features/workspace/auto-select";
+import { resolveWorkspaceEntryMode } from "@/features/workspace/use-workspace-session";
+import { FormatsPanel } from "@/features/workspace/WorkspacePanels";
 
 function fileRecord(
   path: string,
@@ -231,78 +228,11 @@ describe("FormatsPanel intersections", () => {
     ).toBe("warning");
   });
 
-  it("prefers session records with kind over store and fetched paths", () => {
-    expect(
-      resolveSourceChangeFacts({
-        sourceRefType: "pr",
-        sessionChangedFiles: [
-          { kind: "delete", path: "banks/pumb/formats/gone.txt" },
-        ],
-        storeChangedFilePaths: ["banks/pumb/formats/from-store.txt"],
-        fetchedPrChangedFilePaths: ["banks/pumb/formats/from-fetch.txt"],
-        isPrChangedFilesReady: false,
-      })
-    ).toEqual({
-      records: [{ kind: "delete", path: "banks/pumb/formats/gone.txt" }],
-      isSelectionReady: true,
-    });
-  });
-
-  it("degrades fallback providers to kind-less records", () => {
-    expect(
-      resolveSourceChangeFacts({
-        sourceRefType: "pr",
-        sessionChangedFiles: [],
-        storeChangedFilePaths: ["banks/pumb/formats/from-store.txt"],
-        fetchedPrChangedFilePaths: [],
-        isPrChangedFilesReady: false,
-      })
-    ).toEqual({
-      records: [{ path: "banks/pumb/formats/from-store.txt" }],
-      isSelectionReady: true,
-    });
-
-    expect(
-      resolveSourceChangeFacts({
-        sourceRefType: "pr",
-        sessionChangedFiles: [],
-        storeChangedFilePaths: [],
-        fetchedPrChangedFilePaths: ["banks/pumb/formats/from-fetch.txt"],
-        isPrChangedFilesReady: true,
-      })
-    ).toEqual({
-      records: [{ path: "banks/pumb/formats/from-fetch.txt" }],
-      isSelectionReady: true,
-    });
-  });
-
-  it("holds selection readiness until the PR file fetch settles", () => {
-    expect(
-      resolveSourceChangeFacts({
-        sourceRefType: "pr",
-        sessionChangedFiles: [],
-        storeChangedFilePaths: [],
-        fetchedPrChangedFilePaths: [],
-        isPrChangedFilesReady: false,
-      }).isSelectionReady
-    ).toBe(false);
-
-    expect(
-      resolveSourceChangeFacts({
-        sourceRefType: "branch",
-        sessionChangedFiles: [],
-        storeChangedFilePaths: [],
-        fetchedPrChangedFilePaths: [],
-        isPrChangedFilesReady: false,
-      }).isSelectionReady
-    ).toBe(true);
-  });
-
   it("prioritizes stale drafts over read-only when opening a PR workspace", () => {
     expect(
       resolveWorkspaceEntryMode({
         headSha: "new-head",
-        persistedDrafts: [{ baseHeadSha: "old-head" }],
+        persistedDrafts: [{ baselineHeadSha: "old-head" }],
         writable: false,
       })
     ).toBe("stale");
@@ -312,7 +242,7 @@ describe("FormatsPanel intersections", () => {
     expect(
       resolveWorkspaceEntryMode({
         headSha: "same-head",
-        persistedDrafts: [{ baseHeadSha: "same-head" }],
+        persistedDrafts: [{ baselineHeadSha: "same-head" }],
         writable: false,
       })
     ).toBe("read-only");

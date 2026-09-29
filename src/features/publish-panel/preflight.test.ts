@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/store", () => ({}));
 
-import { resolvePublishPreflightState } from "./PublishPanel";
+import { resolvePublishPreflightState } from "./preflight";
 
 describe("resolvePublishPreflightState", () => {
   beforeEach(() => {

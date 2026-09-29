@@ -48,8 +48,8 @@ vi.mock("@/features/quick-reference/QuickReference", () => ({
   QuickReference: () => <div>quick-reference</div>,
 }));
 
-vi.mock("@/features/regex-lab/UnifiedRegexEditor", () => ({
-  UnifiedRegexEditor: ({
+vi.mock("@/features/regex-lab/RegexPatternEditor", () => ({
+  RegexPatternEditor: ({
     regex,
     onBlur,
     onRegexChange,

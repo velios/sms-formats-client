@@ -11,6 +11,11 @@ on:
       - index.html
       - package.json
       - bun.lock
+      - .bun-version
+      - vitest.config.ts
+      - biome.jsonc
+      - scripts/check-secrets.sh
+      - scripts/bot-roundtrip-local.sh
       - vite.config.ts
       - tsconfig.json
       - scripts/build-content.ts
@@ -32,6 +37,14 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - run: bun install --frozen-lockfile
+      - run: bun run verify
+      - run: bun run bot:roundtrip
 
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin

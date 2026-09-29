@@ -1,29 +1,15 @@
-/**
- * Server-side bot configuration. Secrets live in `bot/.env` (gitignored, see
- * `bot/.env.example`) and are loaded by Bun / the systemd unit — never hardcoded
- * and never exposed to the frontend bundle.
- */
-
 export interface BotEnv {
   token: string;
   webhookSecret: string;
   webhookPath: string;
   port: number;
   dryRun: boolean;
-  /**
-   * Optional HTTP proxy for outbound Telegram API calls. Needed where direct
-   * egress to api.telegram.org is blocked and a local bridge must be used.
-   */
+  offline: boolean;
   proxyUrl?: string;
-  /** Source repo (`owner/repo`) whose main the corpus is built from. */
   sourceRepo: string;
-  /** Branch cloned as the `main` corpus. */
   sourceBranch: string;
-  /** Local checkout directory; reused across restarts, never re-cloned. */
   checkoutDir: string;
-  /** Read-only token for cloning; empty clones the public repo anonymously. */
   githubToken?: string;
-  /** Freshness window in ms: at most one check per this interval (ADR-0004). */
   freshnessTtlMs: number;
 }
 
@@ -46,6 +32,7 @@ export function loadBotEnv(): BotEnv {
     webhookPath: normalizePath(required("RECOGNITION_BOT_WEBHOOK_PATH")),
     port: Number(process.env.RECOGNITION_BOT_PORT ?? "8080"),
     dryRun: process.env.RECOGNITION_BOT_DRY_RUN === "1",
+    offline: process.env.RECOGNITION_BOT_OFFLINE === "1",
     proxyUrl: process.env.RECOGNITION_BOT_PROXY_URL || undefined,
     sourceRepo:
       process.env.RECOGNITION_BOT_SOURCE_REPO || "zenmoney/sms-formats",

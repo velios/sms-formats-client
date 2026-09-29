@@ -1,5 +1,6 @@
 import { Columns3 } from "lucide-react";
 import { Children, type ReactNode, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { create } from "zustand";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ const usePanelResizeStore = create<{
 }));
 
 export function PanelResizeToggle() {
+  const { t } = useTranslation();
   const { enabled, toggle } = usePanelResizeStore();
   const location = useLocation();
   if (!location.pathname.startsWith("/repo/")) {
@@ -20,12 +22,12 @@ export function PanelResizeToggle() {
   }
   return (
     <Button
-      aria-label="Изменить ширину панелей"
+      aria-label={t("panels.resize")}
       aria-pressed={enabled}
       className="size-9 rounded-full"
       onClick={toggle}
       size="icon"
-      title={enabled ? "Завершить настройку ширины" : "Изменить ширину панелей"}
+      title={enabled ? t("panels.finishResize") : t("panels.resize")}
       variant={enabled ? "primary" : "ghost"}
     >
       <Columns3 className="size-4" />
@@ -46,7 +48,8 @@ export function ResizablePanels({
   const container = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const collapsed = width === 32;
-  const label = side === "left" ? "Файлы и действия" : "Справка";
+  const { t } = useTranslation();
+  const label = t(side === "left" ? "panels.left" : "panels.right");
   const parts = Children.toArray(children);
   const initial =
     side === "left" ? "clamp(264px,19vw,340px)" : "clamp(320px,24vw,430px)";
@@ -73,10 +76,10 @@ export function ResizablePanels({
       </div>
       {collapsed && (
         <button
-          aria-label={`Развернуть: ${label}`}
+          aria-label={t("panels.expand", { panel: label })}
           className="flex flex-col items-center gap-4 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] py-3 text-[color:var(--c-accent)]"
           onClick={() => resize(expandedWidth.current)}
-          title={`Развернуть: ${label}`}
+          title={t("panels.expand", { panel: label })}
           type="button"
         >
           <span>{side === "left" ? "›" : "‹"}</span>
@@ -102,7 +105,7 @@ export function ResizablePanels({
       <div className="relative flex items-center justify-center">
         {enabled && (
           <button
-            aria-label={`Ширина: ${label}`}
+            aria-label={t("panels.width", { panel: label })}
             className="absolute inset-0 flex touch-none select-none items-center justify-center text-[color:var(--c-accent)] hover:bg-[color:var(--c-accent-soft)] focus-visible:outline-2"
             onDoubleClick={() => resize(collapsed ? expandedWidth.current : 32)}
             onLostPointerCapture={() => {
@@ -131,7 +134,7 @@ export function ResizablePanels({
               drag.current = null;
             }}
             style={{ cursor: "col-resize" }}
-            title={`${label}: тяните границу; двойной щелчок сворачивает панель`}
+            title={t("panels.resizeHint", { panel: label })}
             type="button"
           >
             <span className="h-12 w-1 rounded bg-current" />

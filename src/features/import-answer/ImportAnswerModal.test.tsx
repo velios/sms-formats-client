@@ -39,14 +39,14 @@ function fakeDraftStore(params: {
   const deleted: string[] = [];
   const store: ImportAnswerDraftStore = {
     getDraft: (filePath) => {
-      const remoteContent = bodies.get(filePath);
-      if (remoteContent === undefined) {
+      const headContent = bodies.get(filePath);
+      if (headContent === undefined) {
         return;
       }
       return {
-        content: editedPaths.has(filePath) ? "моя правка" : remoteContent,
-        baseSha: "base-sha",
-        remoteContent,
+        content: editedPaths.has(filePath) ? "моя правка" : headContent,
+        baselineHeadSha: "base-sha",
+        headContent,
         isDeleted: false,
       };
     },
@@ -63,7 +63,7 @@ function renderModal(
 ) {
   const bodies = bodiesOf(answer);
   const draft = fakeDraftStore({ bodies, editedPaths: options.editedPaths });
-  const calculateIntersections = vi.fn(() => Promise.resolve());
+  const calculateIntersections = vi.fn(() => Promise.resolve(true));
   render(
     <ImportAnswerModal
       bankName="СберБанк"

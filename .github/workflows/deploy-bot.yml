@@ -6,8 +6,16 @@ on:
     # Only files that affect the bot image (zen-hub ADR 0022)
     paths:
       - bot/**
+      - src/domain/format/**
+      - src/domain/types.ts
+      - tsconfig.json
       - package.json
       - bun.lock
+      - .bun-version
+      - vitest.config.ts
+      - biome.jsonc
+      - scripts/check-secrets.sh
+      - scripts/bot-roundtrip-local.sh
       - .dockerignore
       - .github/workflows/deploy-bot.yml
   workflow_dispatch:
@@ -23,6 +31,14 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - run: bun install --frozen-lockfile
+      - run: bun run verify
+      - run: bun run bot:roundtrip
 
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin

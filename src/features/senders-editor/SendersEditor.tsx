@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -14,47 +14,40 @@ interface Props {
 export function SendersEditor({ bankPath, readOnly = false }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
-  const draftStore = useDraftStore();
   const filePath = `${bankPath}/senders.txt`;
 
+  const draft = useDraftStore((state) => state.drafts.get(filePath));
+  const existsAtHead = useSourceStore((state) =>
+    state.tree.some((entry) => entry.path === filePath && entry.type === "blob")
+  );
+
   const {
-    data: remoteContent,
+    data: headContent,
     isLoading,
-    error: remoteContentError,
+    error: headContentError,
   } = useWorkspaceFileContent({
     filePath,
-    loadedFrom: "editor",
+    enabled: existsAtHead,
   });
 
-  const draft = draftStore.getDraft(filePath);
-  const currentContent = draft?.content ?? remoteContent ?? "";
-  const baseSha = draft?.baseSha ?? sourceRef?.sha ?? "";
-  const remoteBaseline = remoteContent ?? draft?.remoteContent ?? "";
-
-  const [value, setValue] = useState(currentContent);
-  const lastAppliedValueRef = useRef<string | null>(null);
+  const currentContent = draft?.content ?? headContent ?? "";
+  const baseSha = draft?.baselineHeadSha ?? sourceRef?.sha ?? "";
+  const remoteBaseline = draft ? draft.headContent : (headContent ?? null);
 
   useEffect(() => {
-    if (lastAppliedValueRef.current === currentContent) {
-      return;
+    if (!readOnly && headContent !== undefined) {
+      useDraftStore
+        .getState()
+        .ensureDraft(filePath, headContent, baseSha, headContent);
     }
-    lastAppliedValueRef.current = currentContent;
-    setValue(currentContent);
-  }, [currentContent]);
-
-  useEffect(() => {
-    if (!readOnly && remoteContent !== undefined) {
-      draftStore.ensureDraft(filePath, remoteContent, baseSha, remoteContent);
-    }
-  }, [baseSha, draftStore, filePath, readOnly, remoteContent]);
+  }, [baseSha, filePath, readOnly, headContent]);
 
   const handleChange = (newValue: string) => {
-    if (readOnly) {
-      return;
+    if (!readOnly) {
+      useDraftStore
+        .getState()
+        .applyUserEdit(filePath, newValue, baseSha, remoteBaseline);
     }
-    lastAppliedValueRef.current = newValue;
-    setValue(newValue);
-    draftStore.applyUserEdit(filePath, newValue, baseSha, remoteBaseline);
   };
 
   if (isLoading) {
@@ -68,8 +61,8 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
-      {remoteContentError && (
-        <StatusBadge variant="error">{remoteContentError}</StatusBadge>
+      {headContentError && (
+        <StatusBadge variant="error">{headContentError}</StatusBadge>
       )}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
         <div className="flex min-h-10 shrink-0 items-center border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-elevated)] px-4 py-1 font-semibold text-[12px] text-[color:var(--c-text-muted)] uppercase tracking-[0.5px]">
@@ -82,10 +75,23 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
           <Textarea
             className="min-h-[15rem] flex-1 resize-none font-mono"
             onChange={(e) => handleChange(e.target.value)}
+            onKeyDown={(event) => {
+              if (
+                (event.metaKey || event.ctrlKey) &&
+                event.key.toLowerCase() === "z"
+              ) {
+                event.preventDefault();
+                if (event.shiftKey) {
+                  useDraftStore.getState().redo(filePath);
+                } else {
+                  useDraftStore.getState().undo(filePath);
+                }
+              }
+            }}
             readOnly={readOnly}
             rows={15}
             spellCheck={false}
-            value={value}
+            value={currentContent}
           />
         </div>
       </div>

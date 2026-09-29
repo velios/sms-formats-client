@@ -5,10 +5,10 @@ import {
 } from "@/domain/format";
 import type { RepoRef } from "@/domain/types";
 import {
-  type CachedFormatEntry,
   type DraftStoreLike,
-  prepareFormatEntries,
-} from "@/features/quick-check/format-entries";
+  type LoadedFormat,
+  loadBankSnapshot,
+} from "@/features/workspace/bank-snapshot";
 import {
   buildIntersectionScope,
   type IntersectionScope,
@@ -25,34 +25,28 @@ export interface IntersectionsDraftStore extends DraftStoreLike {
 }
 
 export interface UseIntersectionsParams {
-  // Identity of the workspace: when any part changes the whole tool resets,
-  // including the scope (ADR-0013 — reset is the module's invariant).
   bankPath: string;
   repository: RepoRef;
   sourceRefName: string | undefined;
   prNumber: number | null;
-  // Live format files: paths to snapshot on calculate, and the filters that
-  // keep deleted files out of badges and scope.
   formatPaths: string[];
   draftStore: IntersectionsDraftStore;
   allFormatFiles: string[];
   deletedFormatFiles: Set<string>;
-  loadEntries?: typeof prepareFormatEntries;
-  // "raised" — scope was lifted under an anchor, "cleared" — scope dropped;
-  // the caller maps the signal onto its own tab state (ADR-0013).
+  loadEntries?: typeof loadBankSnapshot;
   onScopeSignal?: (signal: IntersectionsScopeSignal) => void;
 }
 
 export interface UseIntersectionsResult {
-  entries: Map<string, CachedFormatEntry>;
-  visibleEntries: CachedFormatEntry[];
+  entries: Map<string, LoadedFormat>;
+  visibleEntries: LoadedFormat[];
   stats: Map<string, FormatIntersectionStat>;
   scopeFiles: string[] | null;
   hasCalculated: boolean;
   isCalculating: boolean;
   error: IntersectionsErrorCode | null;
   loadErrorsCount: number;
-  calculate: () => Promise<void>;
+  calculate: (filePaths?: string[]) => Promise<boolean>;
   scopeTo: (filePath: string) => void;
   mergeLiveEdit: (context: {
     filePath: string;
@@ -73,19 +67,19 @@ export function useIntersections(
     draftStore,
     allFormatFiles,
     deletedFormatFiles,
-    loadEntries = prepareFormatEntries,
+    loadEntries = loadBankSnapshot,
     onScopeSignal,
   } = params;
 
-  const [entries, setEntries] = useState<Map<string, CachedFormatEntry>>(
-    new Map()
-  );
+  const [entries, setEntries] = useState<Map<string, LoadedFormat>>(new Map());
   const [hasCalculated, setHasCalculated] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<IntersectionsErrorCode | null>(null);
   const [loadErrorsCount, setLoadErrorsCount] = useState(0);
   const [scope, setScope] = useState<IntersectionScope | null>(null);
   const runIdRef = useRef(0);
+  const contextRef = useRef({ drafts: draftStore.drafts, formatPaths });
+  contextRef.current = { drafts: draftStore.drafts, formatPaths };
 
   const onScopeSignalRef = useRef(onScopeSignal);
   useEffect(() => {
@@ -103,10 +97,7 @@ export function useIntersections(
     onScopeSignalRef.current?.("cleared");
   }, [bankPath, repository.owner, repository.repo, sourceRefName]);
 
-  // A draft edit or a change of the live file list mid-flight silently
-  // cancels the calculation — preserved as-is per ADR-0013.
   useEffect(() => {
-    runIdRef.current += 1;
     setIsCalculating(false);
   }, [draftStore.drafts, formatPaths]);
 
@@ -132,66 +123,76 @@ export function useIntersections(
     [allFormatFiles, deletedFormatFiles, scope]
   );
 
-  const calculate = useCallback(async () => {
-    setScope(null);
-    onScopeSignalRef.current?.("cleared");
+  const calculate = useCallback(
+    async (filePathsOverride?: string[]) => {
+      setScope(null);
+      onScopeSignalRef.current?.("cleared");
 
-    const runId = runIdRef.current + 1;
-    runIdRef.current = runId;
-
-    if (!sourceRefName) {
-      setError("no-source");
-      setLoadErrorsCount(0);
-      setIsCalculating(false);
-      return;
-    }
-    if (!prNumber) {
-      setError("missing-pr-number");
-      setLoadErrorsCount(0);
-      setIsCalculating(false);
-      return;
-    }
-
-    setIsCalculating(true);
-    setError(null);
-    setLoadErrorsCount(0);
-
-    try {
-      const prepared = await loadEntries({
-        filePaths: formatPaths,
-        draftStore,
-        prNumber,
-        sourceRefName,
-        repository,
-      });
-      if (!shouldAcceptRunResult({ currentRunId: runIdRef.current, runId })) {
-        return;
-      }
-
-      setEntries(
-        new Map(prepared.entries.map((entry) => [entry.filePath, entry]))
+      const context = contextRef.current;
+      const paths = filePathsOverride ?? formatPaths;
+      const draftsAtStart = new Map(
+        paths.map((path) => [path, draftStore.getDraft(path)])
       );
-      setHasCalculated(true);
-      setLoadErrorsCount(prepared.loadErrorsCount);
-    } catch {
-      if (!shouldAcceptRunResult({ currentRunId: runIdRef.current, runId })) {
-        return;
-      }
-      setLoadErrorsCount(0);
-      setError("load-failed");
-    } finally {
-      if (shouldAcceptRunResult({ currentRunId: runIdRef.current, runId })) {
+      const isCurrent = () =>
+        runIdRef.current === runId &&
+        [...draftsAtStart].every(
+          ([path, draft]) => draftStore.getDraft(path) === draft
+        ) &&
+        (filePathsOverride !== undefined ||
+          (context.drafts === contextRef.current.drafts &&
+            context.formatPaths === contextRef.current.formatPaths));
+      const runId = runIdRef.current + 1;
+      runIdRef.current = runId;
+
+      if (!sourceRefName) {
+        setError("no-source");
+        setLoadErrorsCount(0);
         setIsCalculating(false);
+        return false;
       }
-    }
-  }, [
-    draftStore,
-    formatPaths,
-    loadEntries,
-    prNumber,
-    repository,
-    sourceRefName,
-  ]);
+      if (!prNumber) {
+        setError("missing-pr-number");
+        setLoadErrorsCount(0);
+        setIsCalculating(false);
+        return false;
+      }
+
+      setIsCalculating(true);
+      setError(null);
+      setLoadErrorsCount(0);
+
+      try {
+        const prepared = await loadEntries({
+          filePaths: paths,
+          draftStore,
+          sourceRefName,
+          repository,
+        });
+        if (!isCurrent()) {
+          return false;
+        }
+
+        setEntries(
+          new Map(prepared.entries.map((entry) => [entry.filePath, entry]))
+        );
+        setHasCalculated(true);
+        setLoadErrorsCount(prepared.loadErrorsCount);
+        return prepared.loadErrorsCount === 0;
+      } catch {
+        if (!isCurrent()) {
+          return false;
+        }
+        setLoadErrorsCount(0);
+        setError("load-failed");
+        return false;
+      } finally {
+        if (shouldAcceptRunResult({ currentRunId: runIdRef.current, runId })) {
+          setIsCalculating(false);
+        }
+      }
+    },
+    [draftStore, formatPaths, loadEntries, prNumber, repository, sourceRefName]
+  );
 
   const scopeTo = useCallback(
     (filePath: string) => {

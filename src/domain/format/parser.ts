@@ -24,7 +24,6 @@ function collectRegex(
       code: "MISSING_COLUMNS",
       level: "error",
       filePath,
-      message: "Missing -----COLUMNS----- marker",
     });
     return lines[0]?.trim() ?? "";
   }
@@ -91,7 +90,6 @@ function collectExamples(
       code: "MISSING_EXAMPLE",
       level: "error",
       filePath,
-      message: "No -----EXAMPLE----- section found",
     });
     return [];
   }
@@ -101,16 +99,11 @@ function collectExamples(
     const start = (exampleIndices[index] ?? -1) + 1;
     const nextStart = exampleIndices[index + 1] ?? lines.length;
     const exampleText = collectExamplesBetween(lines, start, nextStart);
-    if (exampleText) {
-      examples.push(exampleText);
-    }
+    examples.push(exampleText);
   }
   return examples;
 }
 
-/**
- * Parse a raw format file text into structured model.
- */
 export function parseFormatFile(raw: string, filePath = ""): ParsedFormat {
   const issues: ValidationIssue[] = [];
   const lines = raw.split("\n");
@@ -123,7 +116,6 @@ export function parseFormatFile(raw: string, filePath = ""): ParsedFormat {
       code: "MISSING_REGEX",
       level: "error",
       filePath,
-      message: "Missing regex (first line)",
     });
   }
 
@@ -133,9 +125,6 @@ export function parseFormatFile(raw: string, filePath = ""): ParsedFormat {
   return { regex, columns, examples, raw, parseIssues: issues };
 }
 
-/**
- * Serialize a structured format into canonical raw text.
- */
 export function serializeFormat(
   regex: string,
   columns: string[],
@@ -156,9 +145,6 @@ export function serializeFormat(
   return `${parts.join("\n")}\n`;
 }
 
-/**
- * Default template for new format files.
- */
 export const FORMAT_TEMPLATE = serializeFormat(
   "^(.*)$",
   ["comment"],

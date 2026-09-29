@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -38,20 +38,11 @@ interface Props {
 
 function isRegexValid(value: string): boolean {
   try {
-    // eslint-disable-next-line no-new
     new RegExp(value);
     return true;
   } catch {
     return false;
   }
-}
-
-function serializeStructuredDraft(
-  regex: string,
-  columns: string[],
-  examples: string[]
-): string {
-  return serializeFormat(regex, columns, examples);
 }
 
 export function FormatEditor({
@@ -68,203 +59,122 @@ export function FormatEditor({
 }: Props) {
   const { t } = useTranslation();
   const sourceRef = useSourceStore((s) => s.sourceRef);
-  const draftStore = useDraftStore();
-
+  const draft = useDraftStore((state) => state.drafts.get(filePath));
   const {
-    data: remoteContent,
+    data: headContent,
     isLoading,
-    error: remoteContentError,
+    error: headContentError,
   } = useWorkspaceFileContent({
     filePath,
-    loadedFrom: "editor",
     contentRefName: sourceDeletedBaseSha ?? undefined,
+    enabled: draft?.headContent !== null || Boolean(sourceDeletedBaseSha),
   });
-
-  const draft = draftStore.getDraft(filePath);
-  const hasSourceDeletedPreview = Boolean(sourceDeletedBaseSha);
-  const currentContent = draft?.content ?? remoteContent ?? "";
-  const baseSha = draft?.baseSha ?? sourceRef?.sha ?? "";
-  const remoteBaseline =
-    draft?.remoteContent ??
-    (hasSourceDeletedPreview ? "" : (remoteContent ?? ""));
+  const currentContent = draft?.content ?? headContent ?? "";
+  const baseSha = draft?.baselineHeadSha ?? sourceRef?.sha ?? "";
+  const remoteBaseline = draft
+    ? draft.headContent
+    : sourceDeletedBaseSha
+      ? null
+      : (headContent ?? null);
   const isDeleted = draft?.isDeleted ?? Boolean(sourceDeletedBaseSha);
   const isMutationBlocked = readOnly || isDeleted;
-  const hasLoadedInitial = draft != null || remoteContent !== undefined;
-
-  // Structured state
-  const [regex, setRegex] = useState("");
-  const [columns, setColumns] = useState<string[]>([]);
-  const [examples, setExamples] = useState<string[]>([]);
+  const parsed = useMemo(
+    () => parseFormatFile(currentContent, filePath),
+    [currentContent, filePath]
+  );
+  const { regex, columns } = parsed;
+  const examples = useMemo(
+    () => (parsed.examples.length ? parsed.examples : [""]),
+    [parsed.examples]
+  );
+  const structuralIssues = parsed.parseIssues.map((issue) =>
+    t(`validation.issue.${issue.code}`, issue.params)
+  );
+  const parseErrors = [
+    ...structuralIssues,
+    ...(regex && !isRegexValid(regex) ? [t("editor.invalidRegex")] : []),
+  ];
+  const canEditStructured = !parsed.parseIssues.some(
+    (issue) =>
+      issue.code === "MISSING_COLUMNS" || issue.code === "MISSING_EXAMPLE"
+  );
   const [activeExampleIndex, setActiveExampleIndex] = useState(0);
-  const [rawContent, setRawContent] = useState("");
-  const [parseErrors, setParseErrors] = useState<string[]>([]);
-  const [structuralIssues, setStructuralIssues] = useState<string[]>([]);
-  const lastAppliedContentRef = useRef<string | null>(null);
   const hasPendingRegexBlurRef = useRef(false);
-  const latestRegexRef = useRef("");
-  const latestExamplesRef = useRef<string[]>([]);
-
-  const parseRawToStructured = useCallback(
-    (raw: string, preserveActiveIndex: boolean) => {
-      const parsed = parseFormatFile(raw, filePath);
-      const structural = parsed.parseIssues.map((issue) => issue.message);
-      const issues = [...structural];
-      if (parsed.regex && !isRegexValid(parsed.regex)) {
-        issues.push(t("editor.invalidRegex"));
-      }
-      setParseErrors(issues);
-      setStructuralIssues(structural);
-
-      const canSync = !!parsed.regex && parsed.examples.length > 0;
-
-      if (!canSync) {
-        return false;
-      }
-
-      const nextExamples = parsed.examples.length > 0 ? parsed.examples : [""];
-      latestRegexRef.current = parsed.regex;
-      latestExamplesRef.current = nextExamples;
-      setRegex(parsed.regex);
-      setColumns(parsed.columns);
-      setExamples(nextExamples);
-      setActiveExampleIndex((prev) =>
-        preserveActiveIndex
-          ? Math.min(prev, Math.max(nextExamples.length - 1, 0))
-          : 0
-      );
-      return true;
-    },
-    [filePath, t]
-  );
-
-  const syncStructuredDraft = useCallback(
-    (nextRegex: string, nextColumns: string[], nextExamples: string[]) => {
-      if (isMutationBlocked) {
-        return;
-      }
-      const syncedRaw = serializeStructuredDraft(
-        nextRegex,
-        nextColumns,
-        nextExamples
-      );
-      setRawContent(syncedRaw);
-      setParseErrors(
-        nextRegex.trim() && !isRegexValid(nextRegex)
-          ? [t("editor.invalidRegex")]
-          : []
-      );
-      // A serialized structured draft is always well-formed, so any prior
-      // structural parse issue (missing section/marker) is gone after a sync.
-      setStructuralIssues([]);
-      lastAppliedContentRef.current = syncedRaw;
-      draftStore.applyUserEdit(filePath, syncedRaw, baseSha, remoteBaseline);
-    },
-    [baseSha, draftStore, filePath, isMutationBlocked, remoteBaseline, t]
-  );
 
   useEffect(() => {
-    if (!hasLoadedInitial) {
-      return;
-    }
-    if (lastAppliedContentRef.current === currentContent) {
-      return;
-    }
-    lastAppliedContentRef.current = currentContent;
+    setActiveExampleIndex(0);
     hasPendingRegexBlurRef.current = false;
-    setRawContent(currentContent);
-    parseRawToStructured(currentContent, false);
-  }, [currentContent, hasLoadedInitial, parseRawToStructured]);
-
+  }, [filePath]);
   useEffect(() => {
-    if (!readOnly && remoteContent !== undefined && !hasSourceDeletedPreview) {
-      draftStore.ensureDraft(filePath, remoteContent, baseSha, remoteContent);
+    setActiveExampleIndex((index) => Math.min(index, examples.length - 1));
+  }, [examples.length]);
+  useEffect(() => {
+    if (!readOnly && headContent !== undefined && !sourceDeletedBaseSha) {
+      useDraftStore
+        .getState()
+        .ensureDraft(filePath, headContent, baseSha, headContent);
     }
-  }, [
-    baseSha,
-    draftStore,
-    filePath,
-    hasSourceDeletedPreview,
-    readOnly,
-    remoteContent,
-  ]);
+  }, [baseSha, filePath, readOnly, headContent, sourceDeletedBaseSha]);
 
-  const handleRawChange = (value: string) => {
+  const writeDocument = (content: string) => {
     if (isMutationBlocked) {
       return;
     }
-    setRawContent(value);
-    parseRawToStructured(value, true);
-    lastAppliedContentRef.current = value;
-    draftStore.applyUserEdit(filePath, value, baseSha, remoteBaseline);
+    useDraftStore
+      .getState()
+      .applyUserEdit(filePath, content, baseSha, remoteBaseline);
   };
-
+  const syncStructuredDraft = (
+    nextRegex: string,
+    nextColumns: string[],
+    nextExamples: string[]
+  ) => writeDocument(serializeFormat(nextRegex, nextColumns, nextExamples));
+  const handleRawChange = (value: string) => writeDocument(value);
   const handleRegexChange = (value: string) => {
     hasPendingRegexBlurRef.current = true;
-    latestRegexRef.current = value;
-    setRegex(value);
     syncStructuredDraft(value, columns, examples);
   };
-
   const handleRegexBlur = () => {
     if (!hasPendingRegexBlurRef.current) {
       return;
     }
-
     hasPendingRegexBlurRef.current = false;
+    const latest = parseFormatFile(
+      useDraftStore.getState().getDraft(filePath)?.content ?? currentContent,
+      filePath
+    );
     onRegexBlurAfterEdit?.({
       filePath,
-      regex: latestRegexRef.current,
-      examples: latestExamplesRef.current,
+      regex: latest.regex,
+      examples: latest.examples,
     });
   };
-
-  const handleColumnsChange = (newCols: string[]) => {
-    setColumns(newCols);
-    syncStructuredDraft(regex, newCols, examples);
-  };
-
-  const handleExampleChange = (index: number, value: string) => {
-    const newExamples = [...examples];
-    newExamples[index] = value;
-    latestExamplesRef.current = newExamples;
-    setExamples(newExamples);
-    syncStructuredDraft(regex, columns, newExamples);
-  };
-
+  const handleColumnsChange = (value: string[]) =>
+    syncStructuredDraft(regex, value, examples);
+  const handleExampleChange = (index: number, value: string) =>
+    syncStructuredDraft(
+      regex,
+      columns,
+      examples.map((example, i) => (i === index ? value : example))
+    );
   const handleAddExample = () => {
-    if (isMutationBlocked) {
-      return;
-    }
-    const newExamples = [...examples, ""];
-    latestExamplesRef.current = newExamples;
-    setExamples(newExamples);
-    setActiveExampleIndex(newExamples.length - 1);
-    syncStructuredDraft(regex, columns, newExamples);
+    syncStructuredDraft(regex, columns, [...examples, ""]);
+    setActiveExampleIndex(examples.length);
   };
-
   const handleRemoveExample = (index: number) => {
-    if (isMutationBlocked) {
-      return;
-    }
-    if (examples.length <= 1) {
-      return;
-    }
-    const newExamples = examples.filter((_, i) => i !== index);
-    latestExamplesRef.current = newExamples;
-    setExamples(newExamples);
-    syncStructuredDraft(regex, columns, newExamples);
-    if (activeExampleIndex >= newExamples.length) {
-      setActiveExampleIndex(newExamples.length - 1);
+    if (examples.length > 1) {
+      syncStructuredDraft(
+        regex,
+        columns,
+        examples.filter((_, i) => i !== index)
+      );
     }
   };
+  const undo = () => useDraftStore.getState().undo(filePath);
+  const redo = () => useDraftStore.getState().redo(filePath);
 
   useEffect(() => {
-    onSearchContextChange?.({
-      filePath,
-      regex,
-      examples,
-      activeExampleIndex,
-    });
+    onSearchContextChange?.({ filePath, regex, examples, activeExampleIndex });
   }, [activeExampleIndex, examples, filePath, onSearchContextChange, regex]);
 
   if (isLoading) {
@@ -278,11 +188,10 @@ export function FormatEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
-      {remoteContentError && (
-        <StatusBadge variant="error">{remoteContentError}</StatusBadge>
+      {headContentError && (
+        <StatusBadge variant="error">{headContentError}</StatusBadge>
       )}
 
-      {/* Parse errors */}
       {mode === "raw" && parseErrors.length > 0 && (
         <div className="flex flex-col gap-1">
           {parseErrors.map((err, i) => (
@@ -296,8 +205,7 @@ export function FormatEditor({
         </div>
       )}
 
-      {/* Content based on mode */}
-      {mode === "structured" && (
+      {mode === "structured" && canEditStructured && (
         <RegexLab
           activeExampleIndex={activeExampleIndex}
           columns={columns}
@@ -310,15 +218,22 @@ export function FormatEditor({
           onOpenIntersectionFileInApp={onOpenIntersectionFileInApp}
           onOpenSmsByTemplate={onOpenSmsByTemplate}
           onOpenTemplateBySms={onOpenTemplateBySms}
+          onRedo={redo}
           onRegexBlur={handleRegexBlur}
           onRegexChange={handleRegexChange}
           onRemoveExample={handleRemoveExample}
+          onUndo={undo}
           readOnly={readOnly || isDeleted}
           regex={regex}
           structuralIssues={structuralIssues}
         />
       )}
 
+      {mode === "structured" && !canEditStructured && (
+        <StatusBadge variant="warning">
+          {t("editor.structuredUnavailable")}
+        </StatusBadge>
+      )}
       {mode === "raw" && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
           <div className="flex min-h-10 shrink-0 items-center border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-elevated)] px-4 py-1 font-semibold text-[12px] text-[color:var(--c-text-muted)] uppercase tracking-[0.5px]">
@@ -328,10 +243,23 @@ export function FormatEditor({
             <Textarea
               className="min-h-[20rem] font-mono"
               onChange={(e) => handleRawChange(e.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  (event.metaKey || event.ctrlKey) &&
+                  event.key.toLowerCase() === "z"
+                ) {
+                  event.preventDefault();
+                  if (event.shiftKey) {
+                    redo();
+                  } else {
+                    undo();
+                  }
+                }
+              }}
               readOnly={readOnly || isDeleted}
               rows={20}
               spellCheck={false}
-              value={rawContent}
+              value={currentContent}
             />
           </div>
         </div>

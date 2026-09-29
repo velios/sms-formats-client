@@ -14,11 +14,11 @@ export interface WorkspaceSession {
   repository: RepoRef;
   prNumber: number;
   headSha: string;
-  baseSha?: string;
+  baseSha: string;
   bankPath: string;
   writable: boolean;
   readOnlyReason: "no-write-access" | null;
-  changedFiles?: WorkspaceSessionChangedFile[];
+  changedFiles: WorkspaceSessionChangedFile[];
 }
 
 function isRepoRef(value: unknown): value is RepoRef {
@@ -76,15 +76,13 @@ function isWorkspaceSession(value: unknown): value is WorkspaceSession {
       isRepoRef(candidate.repository) && Number.isInteger(candidate.prNumber)
     ) ||
     typeof candidate.headSha !== "string" ||
-    (typeof candidate.baseSha !== "undefined" &&
-      typeof candidate.baseSha !== "string") ||
+    typeof candidate.baseSha !== "string" ||
     typeof candidate.bankPath !== "string" ||
     typeof candidate.writable !== "boolean" ||
-    (typeof candidate.changedFiles !== "undefined" &&
-      !(
-        Array.isArray(candidate.changedFiles) &&
-        candidate.changedFiles.every(isWorkspaceSessionChangedFile)
-      )) ||
+    !(
+      Array.isArray(candidate.changedFiles) &&
+      candidate.changedFiles.every(isWorkspaceSessionChangedFile)
+    ) ||
     !isReadOnlyReason(candidate.readOnlyReason)
   ) {
     return false;
@@ -118,7 +116,7 @@ export function saveWorkspaceSession(session: WorkspaceSession): void {
       JSON.stringify(session)
     );
   } catch {
-    // Ignore storage failures in restricted browser profiles.
+    // Browser storage may be unavailable.
   }
 }
 
@@ -130,6 +128,6 @@ export function clearWorkspaceSession(): void {
     }
     localStorage.setItem(WORKSPACE_SESSION_STORAGE_KEY, "");
   } catch {
-    // Ignore storage failures in restricted browser profiles.
+    // Browser storage may be unavailable.
   }
 }

@@ -1,38 +1,60 @@
-# Zenmoney SMS Formats Editor
+# Редактор SMS-форматов Zenmoney
 
-Desktop-first web app for editing and publishing bank SMS formats.
+SPA для работы с одним открытым PR в [zenmoney/sms-formats](https://github.com/zenmoney/sms-formats) или его форке. Редактор загружает банк по head-коммиту PR, сохраняет локальные черновики и обновляет существующий PR через GitHub API. В этом же репозитории находится Telegram-бот распознавания SMS.
 
-Main data repository: [https://github.com/zenmoney/sms-formats](https://github.com/zenmoney/sms-formats)
+Редактор поддерживает форматы и `senders.txt`, структурное и текстовое редактирование, undo/redo, поиск, проверки совпадений и пересечений, сниппеты, пакет контекста для агента и импорт его ответа. Перед публикацией проверяется весь действующий банк. При смене head публикация блокируется; более поздние локальные правки сохраняются.
 
-## What It Does
-- Edit bank format files and `senders.txt`
-- Validate formats locally before publish
-- Create PR to `zenmoney/sms-formats` via GitHub API
-- Work without backend (browser + GitHub only)
+## Локальный запуск
 
-## Quick Start (Local)
+Используйте версию Bun из [.bun-version](.bun-version).
+
 ```bash
-bun install
+bun install --frozen-lockfile
 cp .env.example .env
 bun run dev
 ```
 
-Open: [http://localhost:5173](http://localhost:5173)
+Откройте адрес, напечатанный Vite. Значения в [.env.example](.env.example) задают исходный репозиторий для поиска форков, выбранный по умолчанию репозиторий и основную ветку. Переменные `VITE_*` попадают в браузерную сборку; серверные секреты туда помещать нельзя.
 
-## Local Dev & Debug
+PR открывается по маршруту `/repo/<owner>/<repo>/pr/<number>` или сокращённому `/pr/<number>`. Параметр `file` выбирает файл. В настройках приложения можно указать личный GitHub-токен; возможность записи определяется правами репозитория и PR. Редактор не создаёт форк или новый PR. Черновики сохраняются в IndexedDB отдельно для каждого репозитория и номера PR. Переключение репозитория скрывает текущие черновики, но сохраняет их для возвращения.
+
+## Проверки и сборка
+
 ```bash
-bun run test:watch   # tests during development
-bun run typecheck    # TypeScript checks
-bun run lint         # ultracite/biome checks
-bun run verify       # full gate: typecheck + tests + secrets + lint
+bun run verify         # types, tests, secrets, lint
+bun run test:watch
+bun run format
+bun run build          # SPA в dist/
+bun run bot:build      # Linux-бинарник в dist-bot/
+bun run bot:roundtrip  # локальный webhook и корпус из фикстуры
 ```
 
-## Minimal Env Notes
-- `VITE_GITHUB_SOURCE_REPO` defines upstream source (`owner/repo`) used to discover forks for repository switching.
-- `VITE_GITHUB_DEFAULT_SOURCE_REPO` defines which repository is selected by default when app opens (can be fork or upstream).
-- Keep `VITE_DEFAULT_BRANCH` aligned with the default branch for these repositories.
+Справочные документы и сниппеты собираются из `src/content/` перед запуском, сборкой, тестами и typecheck. Чистые предметные тесты и тесты бота выполняются в Node, интерфейсные — в jsdom. Изменения интерфейса дополнительно проверяются в браузере.
 
-## Publish
-- Open Publish panel in the app.
-- Provide GitHub PAT with `Contents (RW)` and `Pull Requests (RW)`.
-- Run `bun run verify` before creating PR.
+## Устройство проекта
+
+- `src/domain/` — форматы, распознавание, правила банка и PR, маршруты, валидация.
+- `src/infrastructure/` — GitHub и общий кеш содержимого по репозиторию, commit SHA и пути.
+- `src/features/workspace/` — открытие и обновление сессии, загрузка действующего банка, поиск и публикация.
+- `src/features/` — редакторы, панели и ядра отдельных возможностей.
+- `src/store/` — локальные документы с историей, область черновиков и настройки интерфейса.
+- `bot/` — Telegram-транспорт, дисковый корпус и его синхронизация.
+
+Пустое тело файла отличается от отсутствующего файла. Ошибка загрузки прерывает операцию над полным банком. Удаления в head и черновиках учитываются в проверках и пакете агента. Пакет передаёт три слоя с явными `<delete>`; переименование описывается записью нового файла и удалением старого.
+
+Распознавание SPA и бота использует JavaScript RegExp и общую нормализацию: переводы строк заменяются одним пробелом, края обрезаются, внутренние пробелы сохраняются. Совместимость всех regex с upstream-валидатором Python и мобильным движком этим не гарантируется. Recognition Progress — подсказка редактора; результат распознавания остаётся бинарным.
+
+Термины описаны в [CONTEXT.md](CONTEXT.md), решения — в [docs/adr/](docs/adr/), исходный аудит — в [отчёте](docs/audit-2026-09-29.md), итог изменений — в [отчёте реализации](docs/audit-implementation.md).
+
+## Бот и развёртывание
+
+```bash
+cp bot/.env.example bot/.env
+bun run bot:dev
+```
+
+Сервер использует токен бота, секрет и непредсказуемый путь webhook. В личном чате принимает SMS напрямую; guest-вызов требует `/sms`. Корпус содержит main и добавленные/изменённые форматы открытых PR. Checkout сохраняется на диске, обновляется условными REST-запросами и асинхронным Git-fetch. Неудачное обновление сохраняет последний пригодный корпус и повторяется позже.
+
+`RECOGNITION_BOT_DRY_RUN=1` печатает ответы без отправки в Telegram. `RECOGNITION_BOT_OFFLINE=1` использует уже подготовленный checkout без обновления удалённых метаданных; этот режим предназначен для локальной проверки.
+
+SPA и бот собираются отдельными Dockerfile. Workflows публикуют образы в GHCR и развёртывают их в Dokku после `verify` и локального roundtrip. Фильтр бота включает общий движок распознавания. Инфраструктура и маршрутизация принадлежат [zen-hub](https://github.com/velios/zen-hub); публикация этого PR сама по себе не запускает деплой до слияния в main.

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RepoRef } from "../types";
+import { indexBanksFromTree } from "@/domain/bank-index";
+import { resolvePullRequestWorkspaceSnapshot } from "@/domain/pull-request-workspace";
+import type { RepoRef } from "@/domain/types";
 
 const octokitMocks = vi.hoisted(() => {
   const createReview = vi.fn(() => Promise.resolve({}));
@@ -56,9 +58,7 @@ import {
   fetchPullRequestApprovalByCurrentUser,
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
-  indexBanksFromTree,
   resolveCommitAuthorLabel,
-  resolvePullRequestWorkspaceSnapshot,
   setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
   subscribeGitHubAuthChange,
@@ -240,6 +240,7 @@ describe("updatePullRequestHead", () => {
       updatePullRequestHead(
         "ghp_test",
         123,
+        "old-head-sha",
         [
           {
             path: "src/TestBank_1/formats/updated.txt",
@@ -286,10 +287,24 @@ describe("updatePullRequestHead", () => {
     );
   });
 
+  it("rejects a head that advanced after preflight without writing", async () => {
+    await expect(
+      updatePullRequestHead(
+        "ghp_test",
+        123,
+        "validated-earlier-head",
+        [],
+        repository
+      )
+    ).rejects.toThrow("head changed");
+    expect(octokitMocks.graphql).not.toHaveBeenCalled();
+  });
+
   it("uses the PR title when no custom commit message is provided", async () => {
     await updatePullRequestHead(
       "ghp_test",
       123,
+      "old-head-sha",
       [{ path: "src/TestBank_1/senders.txt", content: "TEST\n" }],
       repository
     );

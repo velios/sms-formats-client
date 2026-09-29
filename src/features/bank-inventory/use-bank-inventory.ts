@@ -12,13 +12,9 @@ export interface UseBankInventoryParams {
   bankPath: string;
   sendersPath: string;
   remoteFormatFiles: string[] | undefined;
-  // The already-chosen source of source changes; the fallback chain
-  // session → store → PR fetch is the caller's concern (ADR-0014).
   sourceChanges: SourceChangeRecord[];
 }
 
-// The hook subscribes to the draft store itself; everything else comes in as
-// parameters (ADR-0014).
 export function useBankInventory(
   params: UseBankInventoryParams
 ): BankInventory {

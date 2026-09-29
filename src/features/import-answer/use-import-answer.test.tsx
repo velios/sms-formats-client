@@ -14,13 +14,13 @@ const idbStorage = vi.hoisted(() => new Map<string, string>());
 vi.mock("idb-keyval", () => ({
   del: vi.fn((key: string) => {
     idbStorage.delete(String(key));
-    return Promise.resolve();
+    return Promise.resolve(true);
   }),
   get: vi.fn((key: string) => Promise.resolve(idbStorage.get(String(key)))),
   keys: vi.fn(() => Promise.resolve([...idbStorage.keys()])),
   set: vi.fn((key: string, value: string) => {
     idbStorage.set(String(key), value);
-    return Promise.resolve();
+    return Promise.resolve(true);
   }),
 }));
 
@@ -41,7 +41,7 @@ function block(tag: "file" | "delete", path: string, body: string): string {
 }
 
 function setup(overrides: Partial<UseImportAnswerParams> = {}) {
-  const calculateIntersections = vi.fn(() => Promise.resolve());
+  const calculateIntersections = vi.fn(() => Promise.resolve(true));
   const loadBodies = vi.fn(({ paths }: { paths: string[] }) =>
     Promise.resolve(new Map(paths.map((path) => [path, `head of ${path}`])))
   );
@@ -118,6 +118,7 @@ describe("useImportAnswer: bodies in force", () => {
       "",
       `head of ${FORMAT_B}`,
     ]);
+    expect(rows[1]?.headContent).toBeNull();
     expect(rows.map((row) => row.existsAtHead)).toEqual([true, false, true]);
     expect(rendered.result.current.canImport).toBe(true);
   });
@@ -220,7 +221,7 @@ describe("useImportAnswer: writing", () => {
   it("deletes an existing file and drops a file the PR only drafted", async () => {
     useDraftStore
       .getState()
-      .setDraft(NEW_FORMAT, "черновик нового", "sha-new", "");
+      .setDraft(NEW_FORMAT, "черновик нового", "sha-new", null);
     const rendered = setup();
 
     await paste(

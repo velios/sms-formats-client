@@ -63,7 +63,7 @@ describe("draft store persist", () => {
       {
         filePath: "src/TestBank/formats/a.txt",
         content: "local-draft",
-        remoteContent: "remote-content",
+        headContent: "remote-content",
       },
     ]);
 
@@ -76,7 +76,7 @@ describe("draft store persist", () => {
       {
         filePath: "src/TestBank/formats/a.txt",
         content: "local-draft",
-        remoteContent: "remote-content",
+        headContent: "remote-content",
       },
     ]);
 
@@ -87,7 +87,7 @@ describe("draft store persist", () => {
     ).toMatchObject({
       filePath: "src/TestBank/formats/a.txt",
       content: "local-draft",
-      remoteContent: "remote-content",
+      headContent: "remote-content",
     });
   });
 
@@ -134,6 +134,34 @@ describe("draft store persist", () => {
     });
   });
 
+  it("advances the baseline of other documents and preserves their later edits and history", async () => {
+    const { useDraftStore } = await loadStores();
+    const store = useDraftStore.getState();
+    store.activateScope("publish-test", false);
+    store.ensureDraft("a.txt", "A", "head", "A");
+    store.ensureDraft("b.txt", "B", "head", "B");
+    store.ensureDraft("c.txt", "C", "head", "C");
+    store.applyUserEdit("a.txt", "PUBLISHED", "head", "A");
+    const published = store.getChangedFiles();
+    store.applyUserEdit("b.txt", "LATER", "head", "B");
+    store.acknowledgePublished(published, "new-head", "publish-test");
+    expect(store.getDraft("a.txt")).toBeUndefined();
+    expect(store.getDraft("b.txt")).toMatchObject({
+      content: "LATER",
+      headContent: "B",
+      baselineHeadSha: "new-head",
+    });
+    expect(store.getDraft("c.txt")).toMatchObject({
+      content: "C",
+      headContent: "C",
+      baselineHeadSha: "new-head",
+    });
+    store.undo("b.txt");
+    expect(store.getDraft("b.txt")?.content).toBe("B");
+    store.redo("b.txt");
+    expect(store.getDraft("b.txt")?.content).toBe("LATER");
+  });
+
   it("removes persisted drafts for the active scope after discardAll", async () => {
     const { useDraftStore, useSourceStore } = await loadStores();
     useSourceStore.getState().setSource({
@@ -159,4 +187,16 @@ describe("draft store persist", () => {
       reloaded.useDraftStore.getState().getStoredDraftsForScope("repo:pr:123")
     ).toEqual([]);
   });
+});
+
+it("distinguishes an existing empty file from an absent file during deletion", async () => {
+  const { useDraftStore } = await loadStores();
+  const store = useDraftStore.getState();
+  store.activateScope("empty-file-test", false);
+  store.ensureDraft("existing.txt", "", "head", "");
+  store.markDeleted("existing.txt");
+  expect(store.getDraft("existing.txt")?.isDeleted).toBe(true);
+  store.setDraft("new.txt", "NEW", "head", null);
+  store.markDeleted("new.txt");
+  expect(store.getDraft("new.txt")).toBeUndefined();
 });

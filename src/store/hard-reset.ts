@@ -28,20 +28,20 @@ function clearAppLocalStorage(storage: Storage): void {
 }
 
 export async function hardResetAppState(): Promise<void> {
-  if (typeof window === "undefined") {
+  if (typeof globalThis.location === "undefined") {
     return;
   }
 
   try {
     clearAppLocalStorage(localStorage);
   } catch {
-    // Ignore storage failures in restricted browser profiles.
+    // Browser storage may be unavailable.
   }
 
   try {
     await del(DRAFT_STORE_STORAGE_KEY);
   } catch {
-    // Ignore IndexedDB failures in restricted browser profiles.
+    // Browser storage may be unavailable.
   }
 
   globalThis.location.reload();

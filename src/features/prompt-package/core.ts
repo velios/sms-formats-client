@@ -1,7 +1,3 @@
-// Pure assembly of the prompt package: facts in, one text artifact out.
-// No network, no stores, no localStorage, no React — the module is imported
-// and tested in isolation (ADR-0016).
-
 import {
   calculateFormatIntersectionStats,
   type FormatIntersectionStat,
@@ -13,20 +9,14 @@ export type PromptPackageLayer = "main" | "pr" | "draft";
 
 export interface PromptPackageFile {
   path: string;
-  content: string;
+  content: string | null;
 }
 
-// A file the fetching boundary could not put into the package: a binary blob
-// (`Blob.text == null`) or a truncated body (`isTruncated`). Never printed —
-// "missing from the layer" must keep meaning what the legend says it means.
 export interface PromptPackageSkippedFile {
   path: string;
   reason: "binary" | "truncated";
 }
 
-// A reference document as the human edits it: `name` is its source file name
-// (`cookbook.md`, `format-rules.md`, `regex-snippets.toml`), `content` is the
-// raw source.
 export interface PromptPackageDocument {
   name: string;
   content: string;
@@ -34,8 +24,6 @@ export interface PromptPackageDocument {
 
 export interface PromptPackageInput {
   bankName: string;
-  // Needed to tell the bank's format files from `senders.txt`: intersections
-  // are counted over formats only.
   bankPath: string;
   layers: Record<PromptPackageLayer, PromptPackageFile[]>;
   documents: PromptPackageDocument[];
@@ -48,16 +36,11 @@ export interface PromptPackageLayerSummary {
   fileCount: number;
 }
 
-// The subject of the preview: answers "did anything get lost?".
 export interface PromptPackageSummary {
-  // Always all three layers, in package order, zeroes included: an explicit
-  // zero explains a missing block and catches "drafts 0" on unsaved edits.
   layers: PromptPackageLayerSummary[];
   documents: string[];
   fileCount: number;
   bytes: number;
-  // UTF-8 bytes / 4, no tokenizer: the agent is foreign and unknown, so
-  // precision would be for show; a rough "how much am I dumping into the chat".
   estimatedTokens: number;
   skipped: PromptPackageSkippedFile[];
 }
@@ -67,14 +50,11 @@ export interface PromptPackage {
   summary: PromptPackageSummary;
 }
 
-// Package language is Russian, fixed in module constants and not switched by
-// the interface language: it is a property of the artifact, not of the UI
-// (ADR-0016).
 const LEGEND_TEMPLATE = `Это пакет данных для работы с форматами банковских SMS банка «{bank}». Структура пакета: этот блок \`legend\`, затем \`docs\` — справочные документы, затем \`intersections\` — пересечения форматов, затем блоки \`files\` — файлы банка в трёх слоях, в конце \`task\` — задача от пользователя.
 
-Слои файлов: \`layer="main"\` — состояние в основной ветке репозитория; \`layer="pr"\` — версии из открытого pull request; \`layer="draft"\` — несохранённые правки из браузерного редактора. Слои независимы: если файла нет в слое \`pr\` или \`draft\`, в этом слое он не менялся, и действует его версия из предыдущего слоя. Слой может отсутствовать целиком — это значит, что в нём нет ни одного файла банка: нет \`layer="pr"\` или \`layer="draft"\` — банк в этом слое не менялся; нет \`layer="main"\` — банка ещё нет в основной ветке, он создаётся в этом pull request. Актуальность: \`draft\` новее \`pr\`, \`pr\` новее \`main\` — свежайшее намерение автора ищи в самом позднем слое, где файл присутствует.
+Слои файлов: \`layer="main"\` — состояние в основной ветке репозитория; \`layer="pr"\` — версии из открытого pull request; \`layer="draft"\` — несохранённые правки из браузерного редактора. Удаление явно задано блоком \`<delete path="…">\` в соответствующем слое. Слои независимы: если файла нет в слое \`pr\` или \`draft\`, в этом слое он не менялся, и действует его версия из предыдущего слоя. Слой может отсутствовать целиком — это значит, что в нём нет ни одного файла банка: нет \`layer="pr"\` или \`layer="draft"\` — банк в этом слое не менялся; нет \`layer="main"\` — банка ещё нет в основной ветке, он создаётся в этом pull request. Актуальность: \`draft\` новее \`pr\`, \`pr\` новее \`main\` — свежайшее намерение автора ищи в самом позднем слое, где файл присутствует.
 
-Выполни задачу из блока \`task\` и верни ответ той же псевдо-XML, что и запрос: изменённый или новый файл — блоком \`<file path="…">\` с полным новым телом, без diff и без сокращений; удаление — блоком \`<delete path="…">\` с причиной одной строкой внутри; переименование — блоком \`<rename from="…" to="…">\` с причиной одной строкой внутри. Перед блоками всегда пиши краткий отчёт прозой: что сделал и чего делать не стал и почему.
+Выполни задачу из блока \`task\` и верни ответ той же псевдо-XML, что и запрос: изменённый или новый файл — блоком \`<file path="…">\` с полным новым телом, без diff и без сокращений; удаление — блоком \`<delete path="…">\` с причиной одной строкой внутри. Переименование оформляй новым \`<file>\` и удалением старого пути через \`<delete>\`. Перед блоками всегда пиши краткий отчёт прозой: что сделал и чего делать не стал и почему.
 
 Объём работ: по умолчанию меняй только те файлы, которых задача касается прямо. Массовую переделку остальных форматов банка делай только тогда, когда задача просит об этом явно. Когда задача разрешила её явно, убирай дубли объединением форматов: все примеры удаляемого файла до одного переноси в консолидирующий, а сам файл оформляй блоком \`<delete>\` с причиной. Ни один EXAMPLE не должен пропасть из банка.
 
@@ -82,10 +62,6 @@ const LEGEND_TEMPLATE = `Это пакет данных для работы с �
 
 export type PromptPresetKey = "fixChanged" | "tidyBank";
 
-// Default wordings of the task, offered in the modal and dropped into the field
-// as a starting point. They are package content, not interface text: Russian and
-// fixed here for the same reason as the legend (ADR-0016); i18n carries only
-// their names.
 export const PROMPT_PRESETS: Array<{ key: PromptPresetKey; task: string }> = [
   {
     key: "fixChanged",
@@ -93,8 +69,6 @@ export const PROMPT_PRESETS: Array<{ key: PromptPresetKey; task: string }> = [
   },
   {
     key: "tidyBank",
-    // Verified on a live bank (АТБ, 2026-08-03): the numbered structure is what
-    // makes the agent consolidate at all — a vague wording gave zero merges.
     task: `Приведи форматы банка в порядок по современному стандарту. Работай в таком порядке:
 
 1. Почини всё, что перечислено в блоке \`intersections\`: пересечения форматов и все примеры, не распознанные собственным regex (example_no_match).
@@ -139,8 +113,9 @@ function renderDocuments(documents: PromptPackageDocument[]): string {
 }
 
 function renderFile(file: PromptPackageFile): string {
-  // Bodies go in raw: no escaping, no CDATA — regexes and SMS text stay as in
-  // the file.
+  if (file.content === null) {
+    return `<delete path="${file.path}"></delete>`;
+  }
   return `<file path="${file.path}">\n${file.content}\n</file>`;
 }
 
@@ -148,22 +123,23 @@ function renderLayer(
   layer: PromptPackageLayer,
   files: PromptPackageFile[]
 ): string | null {
-  // An empty layer is not printed — the block is omitted entirely.
   if (files.length === 0) {
     return null;
   }
   return `<files layer="${layer}">\n${files.map(renderFile).join("\n")}\n</files>`;
 }
 
-// The versions that actually apply: a later layer wins over an earlier one, the
-// same reading the legend gives the agent.
 function resolveEffectiveFormats(
   input: PromptPackageInput
 ): Array<{ filePath: string; regex: string; examples: string[] }> {
   const effective = new Map<string, string>();
   for (const layer of LAYER_ORDER) {
     for (const file of input.layers[layer]) {
-      effective.set(file.path, file.content);
+      if (file.content === null) {
+        effective.delete(file.path);
+      } else {
+        effective.set(file.path, file.content);
+      }
     }
   }
   return [...effective]
@@ -208,8 +184,6 @@ function renderOwnMisses(stats: FormatIntersectionStat[]): string {
   return lines.length > 0 ? lines.join("\n") : `  ${NOTHING}`;
 }
 
-// The block is printed even when there is nothing to report: a missing block
-// would be indistinguishable from "no intersections".
 function renderIntersections(input: PromptPackageInput): string {
   const stats = [
     ...calculateFormatIntersectionStats(

@@ -1,39 +1,35 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { prepareFormatEntries } from "./format-entries";
+import { loadBankSnapshot } from "../workspace/bank-snapshot";
 
 const fetchFileContentMock = vi.fn();
 
-vi.mock("@/domain/github", () => ({
+vi.mock("@/infrastructure/github", () => ({
   fetchFileContent: (...args: unknown[]) => fetchFileContentMock(...args),
 }));
 
-describe("prepareFormatEntries", () => {
+describe("loadBankSnapshot", () => {
   beforeEach(() => {
     fetchFileContentMock.mockReset();
   });
 
   it("reuses remote content from the shared file content store", async () => {
-    const { useFileContentStore } = await import("@/store/file-content-store");
-    useFileContentStore.setState({ entries: {} });
-    useFileContentStore.getState().setFileContentEntry({
+    const { cacheFileContent } = await import("@/infrastructure/file-content");
+
+    cacheFileContent({
       repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
       filePath: "src/Bank/formats/cached.txt",
       content:
         "^(PAY .*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nPAY 100",
-      lastResolvedHeadSha: "head-sha",
-      loadedFrom: "editor",
-      status: "ready",
+      refName: "head-sha",
     });
 
-    const result = await prepareFormatEntries({
+    const result = await loadBankSnapshot({
       filePaths: ["src/Bank/formats/cached.txt"],
       draftStore: {
         getDraft() {
           return undefined;
         },
       },
-      prNumber: 123,
       sourceRefName: "head-sha",
       repository: { owner: "zenmoney", repo: "sms-formats" },
     });
@@ -66,13 +62,12 @@ describe("prepareFormatEntries", () => {
       "^(PAY .*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nPAY 100"
     );
 
-    const result = await prepareFormatEntries({
+    const result = await loadBankSnapshot({
       filePaths: [
         "src/Bank/formats/deleted.txt",
         "src/Bank/formats/active.txt",
       ],
       draftStore,
-      prNumber: 123,
       sourceRefName: "main",
       repository: { owner: "zenmoney", repo: "sms-formats" },
     });

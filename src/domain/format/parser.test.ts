@@ -152,3 +152,8 @@ describe("round-trip", () => {
     expect(reserialized).toBe(original);
   });
 });
+
+it("retains an empty example section while the user is editing it", () => {
+  const raw = serializeFormat("^(.*)$", ["comment"], ["A", ""]);
+  expect(parseFormatFile(raw).examples).toEqual(["A", ""]);
+});

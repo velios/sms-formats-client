@@ -1,17 +1,17 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type {
-  CachedFormatEntry,
-  PreparedFormatEntries,
-  prepareFormatEntries,
-} from "@/features/quick-check/format-entries";
+  BankSnapshot,
+  LoadedFormat,
+  loadBankSnapshot,
+} from "@/features/workspace/bank-snapshot";
 import type { IntersectionsScopeSignal } from "./core";
 import {
   type UseIntersectionsParams,
   useIntersections,
 } from "./use-intersections";
 
-type LoadEntries = typeof prepareFormatEntries;
+type LoadEntries = typeof loadBankSnapshot;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -28,21 +28,20 @@ const ANOTHER_PATH = "src/TBank_123/formats/another.txt";
 
 function makeEntry(
   filePath: string,
-  overrides: Partial<CachedFormatEntry> = {}
-): CachedFormatEntry {
+  overrides: Partial<LoadedFormat> = {}
+): LoadedFormat {
   return {
     filePath,
     fileName: filePath.split("/").pop() ?? filePath,
     regex: "^PAY (\\d+)$",
     examples: ["PAY 100", "PAY 200"],
     source: "remote",
-    fingerprint: "remote:head-sha",
     ...overrides,
   };
 }
 
 // current.txt's regex recognizes another.txt's "PAY 300" → Z(current) = 1
-function makePrepared(): PreparedFormatEntries {
+function makePrepared(): BankSnapshot {
   return {
     entries: [
       makeEntry(CURRENT_PATH),
@@ -51,6 +50,7 @@ function makePrepared(): PreparedFormatEntries {
         examples: ["PAY 300", "REFUND 50"],
       }),
     ],
+    contents: new Map(),
     loadErrorsCount: 0,
     remoteFetchedCount: 2,
     cachedCount: 0,
@@ -171,12 +171,12 @@ describe("useIntersections / calculate", () => {
   });
 
   it("silently drops a result superseded by a draft edit mid-flight", async () => {
-    const pending = deferred<PreparedFormatEntries>();
+    const pending = deferred<BankSnapshot>();
     const loadEntries = vi.fn<LoadEntries>().mockReturnValue(pending.promise);
     const params = makeParams({ loadEntries });
     const { result, rerender } = renderIntersections(params);
 
-    let calculation: Promise<void> = Promise.resolve();
+    let calculation: Promise<boolean> = Promise.resolve(true);
     act(() => {
       calculation = result.current.calculate();
     });
@@ -204,7 +204,7 @@ describe("useIntersections / calculate", () => {
   });
 
   it("lets a newer run win over an older in-flight run", async () => {
-    const first = deferred<PreparedFormatEntries>();
+    const first = deferred<BankSnapshot>();
     const loadEntries = vi
       .fn<LoadEntries>()
       .mockReturnValueOnce(first.promise)
@@ -215,7 +215,7 @@ describe("useIntersections / calculate", () => {
     const params = makeParams({ loadEntries });
     const { result } = renderIntersections(params);
 
-    let firstCalculation: Promise<void> = Promise.resolve();
+    let firstCalculation: Promise<boolean> = Promise.resolve(true);
     act(() => {
       firstCalculation = result.current.calculate();
     });
@@ -295,12 +295,12 @@ describe("useIntersections / identity reset (ADR-0013 bug fix)", () => {
   });
 
   it("drops an in-flight result after a source change", async () => {
-    const pending = deferred<PreparedFormatEntries>();
+    const pending = deferred<BankSnapshot>();
     const loadEntries = vi.fn<LoadEntries>().mockReturnValue(pending.promise);
     const params = makeParams({ loadEntries });
     const { result, rerender } = renderIntersections(params);
 
-    let calculation: Promise<void> = Promise.resolve();
+    let calculation: Promise<boolean> = Promise.resolve(true);
     act(() => {
       calculation = result.current.calculate();
     });

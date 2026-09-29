@@ -1,7 +1,7 @@
-import type { RepoRef, SourceRef } from "@/domain/types";
+import type { PullRequestSource, RepoRef } from "@/domain/types";
 
 type SourceDraftScopeRef =
-  | Pick<SourceRef, "type" | "name" | "prNumber">
+  | Pick<PullRequestSource, "type" | "name" | "prNumber">
   | { type: "pr"; name?: string; prNumber: number };
 
 function makeSourceDraftScopeKey(sourceRef: SourceDraftScopeRef): string {
@@ -19,7 +19,7 @@ export function makeDraftSourceKey(
 }
 
 export function isSameDraftScope(
-  currentSource: SourceRef | null,
+  currentSource: PullRequestSource | null,
   nextSource: SourceDraftScopeRef
 ): boolean {
   if (!currentSource) {

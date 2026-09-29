@@ -6,12 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { buildPullRequestWorkspacePath } from "@/domain/bank-route";
 import type { PullRequestLabel, RepoRef } from "@/domain/types";
 import { useOpenPRs } from "@/hooks/useGitHub";
-import {
-  getPullRequestGitHubUrl,
-  getPullRequestWorkspacePath,
-} from "@/lib/pull-request-navigation";
+import { getPullRequestGitHubUrl } from "@/lib/pull-request-navigation";
 import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
@@ -20,8 +18,8 @@ interface OpenPullRequestItem {
   title: string;
   headRef: string;
   headSha: string;
-  approvedCount: number;
-  failedValidationCount: number;
+  approvedCount: number | null;
+  failedValidationCount: number | null;
   validationErrors: string[];
   validationUrl: string | null;
   lastCommitAuthorLogin: string | null;
@@ -48,10 +46,13 @@ const dashboardIconLinkClassName =
 function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => {
     if (a.failedValidationCount !== b.failedValidationCount) {
-      return a.failedValidationCount - b.failedValidationCount;
+      return (
+        (a.failedValidationCount ?? Number.POSITIVE_INFINITY) -
+        (b.failedValidationCount ?? Number.POSITIVE_INFINITY)
+      );
     }
     if (a.approvedCount !== b.approvedCount) {
-      return b.approvedCount - a.approvedCount;
+      return (b.approvedCount ?? -1) - (a.approvedCount ?? -1);
     }
     return b.number - a.number;
   });
@@ -107,7 +108,7 @@ export function Dashboard() {
         continue;
       }
       const hasChanges = Object.values(scopeDrafts).some(
-        (draft) => draft.content !== draft.remoteContent || draft.isDeleted
+        (draft) => draft.content !== draft.headContent || draft.isDeleted
       );
       if (hasChanges) {
         next.add(prNumber);
@@ -227,7 +228,7 @@ export function Dashboard() {
                   key={pullRequest.number}
                   onClick={() =>
                     navigate(
-                      getPullRequestWorkspacePath({
+                      buildPullRequestWorkspacePath({
                         repository,
                         prNumber: pullRequest.number,
                       })
@@ -237,7 +238,7 @@ export function Dashboard() {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       navigate(
-                        getPullRequestWorkspacePath({
+                        buildPullRequestWorkspacePath({
                           repository,
                           prNumber: pullRequest.number,
                         })
@@ -293,9 +294,12 @@ export function Dashboard() {
                   </div>
                   <div className="flex items-center justify-end gap-1.5">
                     <StatusBadge className="shrink-0" variant="info">
-                      ✓ {pullRequest.approvedCount}
+                      ✓ {pullRequest.approvedCount ?? "?"}
                     </StatusBadge>
-                    {pullRequest.failedValidationCount > 0 && (
+                    {pullRequest.failedValidationCount === null && (
+                      <span title={t("source.checksUnavailable")}>✗ ?</span>
+                    )}
+                    {(pullRequest.failedValidationCount ?? 0) > 0 && (
                       <StatusBadge className="shrink-0" variant="error">
                         ✗ {pullRequest.failedValidationCount}
                       </StatusBadge>

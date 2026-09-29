@@ -4,6 +4,7 @@ import { ModalDialog } from "@/components/ModalDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FORMAT_TEMPLATE } from "@/domain/format";
+import { validateNewFormatPath } from "@/domain/format/file-path";
 import { useDraftStore, useSourceStore } from "@/store";
 
 interface Props {
@@ -20,12 +21,13 @@ export function CreateFormatModal({
   readOnly = false,
 }: Props) {
   const { t } = useTranslation();
-  const dialogTitleId = useId();
   const formatNameInputId = useId();
   const formatIdInputId = useId();
   const [formatName, setFormatName] = useState("");
   const [formatId, setFormatId] = useState("");
   const draftStore = useDraftStore();
+  const tree = useSourceStore((state) => state.tree);
+  const [error, setError] = useState<string | null>(null);
   const sourceRef = useSourceStore((s) => s.sourceRef);
 
   const handleCreate = () => {
@@ -37,18 +39,22 @@ export function CreateFormatModal({
       ? `${formatName.trim()}_${formatId.trim()}.txt`
       : `${formatName.trim()}.txt`;
     const filePath = `${bankPath}/formats/${fileName}`;
+    const pathError = validateNewFormatPath(filePath, bankPath, [
+      ...tree.map((entry) => entry.path),
+      ...draftStore.drafts.keys(),
+    ]);
+    if (pathError) {
+      setError(t(`createEntity.${pathError}`));
+      return;
+    }
     const baseSha = sourceRef?.sha ?? "";
 
-    draftStore.setDraft(filePath, FORMAT_TEMPLATE, baseSha, "");
+    draftStore.setDraft(filePath, FORMAT_TEMPLATE, baseSha, null);
     onCreated(filePath);
   };
 
   return (
-    <ModalDialog
-      onClose={onClose}
-      title={t("bank.createFormat")}
-      titleId={dialogTitleId}
-    >
+    <ModalDialog onClose={onClose} title={t("bank.createFormat")}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label
@@ -82,6 +88,7 @@ export function CreateFormatModal({
         </div>
       </div>
 
+      {error && <div role="alert">{error}</div>}
       <div className="mt-6 flex justify-end gap-2">
         <Button onClick={onClose} type="button">
           {t("app.cancel")}

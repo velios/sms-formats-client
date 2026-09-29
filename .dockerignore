@@ -8,3 +8,9 @@ ansible
 docs
 .github
 bot/.env
+.scratch
+.cache
+.vite
+coverage
+playwright-report
+test-results

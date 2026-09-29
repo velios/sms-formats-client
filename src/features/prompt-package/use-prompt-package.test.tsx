@@ -1,7 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlobFetchResult, fetchBlobsByRef } from "@/domain/github";
 import { buildBankInventory } from "@/features/bank-inventory/core";
+import type { BlobFetchResult, fetchBlobsByRef } from "@/infrastructure/github";
+import { queryClient } from "@/lib/query-client";
 import { PROMPT_PRESETS } from "./core";
 import {
   type PromptPackageDraftChange,
@@ -11,8 +12,9 @@ import {
 
 const tokenState = { token: "ghp_user" as string | null };
 
-vi.mock("@/domain/github", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/domain/github")>();
+vi.mock("@/infrastructure/github", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/infrastructure/github")>();
   return {
     ...actual,
     getGitHubUserToken: () => tokenState.token,
@@ -44,7 +46,7 @@ function draftChange(
 ): PromptPackageDraftChange {
   return {
     content: "draft body",
-    remoteContent: "head body",
+    headContent: "head body",
     isDeleted: false,
     ...overrides,
   };
@@ -56,7 +58,7 @@ const DRAFT_CHANGES: PromptPackageDraftChange[] = [
   draftChange({
     filePath: FORMAT_B,
     content: "draft b",
-    remoteContent: "head b",
+    headContent: "head b",
   }),
 ];
 
@@ -90,6 +92,7 @@ function makeParams(
     bankPath: BANK_PATH,
     repository: { owner: "zenmoney", repo: "sms-formats" },
     sourceRefName: "head-sha",
+    mainRefName: "main",
     inventory: buildInventory(),
     draftStore: { getChangedFiles: () => DRAFT_CHANGES },
     fetchBlobs: vi.fn(async (ref: string, paths: string[]) =>
@@ -102,6 +105,7 @@ function makeParams(
 let localStorageState: Map<string, string>;
 
 beforeEach(() => {
+  queryClient.clear();
   localStorageState = new Map<string, string>();
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => localStorageState.get(key) ?? null,
@@ -135,7 +139,7 @@ describe("usePromptPackage layers", () => {
     const calls = (fetchBlobs as unknown as ReturnType<typeof vi.fn>).mock
       .calls as unknown[];
     // main: head-ref composition minus files added in the PR.
-    // pr: only the changed files, and b.txt is free from `remoteContent`.
+    // pr: only the changed files, and b.txt is free from `headContent`.
     expect(calls).toEqual([
       [
         "main",
@@ -187,7 +191,7 @@ describe("usePromptPackage layers", () => {
         draftChange({
           filePath: FORMAT_A,
           content: formatFile("^СБП: (.+)$", ["СБП: Списано 100 р."]),
-          remoteContent: bodies[FORMAT_A] ?? "",
+          headContent: bodies[FORMAT_A] ?? "",
         }),
       ],
     };

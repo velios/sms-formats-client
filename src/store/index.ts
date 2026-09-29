@@ -5,25 +5,20 @@ import { config } from "@/config";
 import type {
   BankInfo,
   FileEntry,
+  PullRequestSource,
   RepoRef,
-  SourceRef,
-  ValidationIssue,
 } from "@/domain/types";
 import { DRAFT_STORE_STORAGE_KEY, draftStoreStateStorage } from "./persistence";
 
-// ─── Source store ───
-
 interface SourceState {
   repository: RepoRef;
-  sourceRef: SourceRef | null;
-  sourceChangedFiles: string[];
+  sourceRef: PullRequestSource | null;
   tree: FileEntry[];
   banks: BankInfo[];
   loading: boolean;
   error: string | null;
   setRepository: (repository: RepoRef) => void;
-  setSource: (ref: SourceRef | null) => void;
-  setSourceChangedFiles: (files: string[]) => void;
+  setSource: (ref: PullRequestSource | null) => void;
   setTree: (tree: FileEntry[]) => void;
   setBanks: (banks: BankInfo[]) => void;
   setLoading: (v: boolean) => void;
@@ -36,28 +31,23 @@ export const useSourceStore = create<SourceState>((set) => ({
     repo: config.defaultSourceRepo,
   },
   sourceRef: null,
-  sourceChangedFiles: [],
   tree: [],
   banks: [],
   loading: false,
   error: null,
   setRepository: (repository) => set({ repository }),
   setSource: (ref) => set({ sourceRef: ref, error: null }),
-  setSourceChangedFiles: (sourceChangedFiles) => set({ sourceChangedFiles }),
   setTree: (tree) => set({ tree }),
   setBanks: (banks) => set({ banks }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
 }));
 
-// ─── Draft store ───
-
 interface DraftEntry {
   filePath: string;
-  baseSha: string;
-  baseHeadSha: string;
+  baselineHeadSha: string;
   content: string;
-  remoteContent: string;
+  headContent: string | null;
   isDeleted: boolean;
   timestamp: number;
 }
@@ -77,20 +67,20 @@ interface DraftState {
   ensureDraft: (
     filePath: string,
     content: string,
-    baseSha: string,
-    remoteContent: string
+    baselineHeadSha: string,
+    headContent: string | null
   ) => void;
   applyUserEdit: (
     filePath: string,
     content: string,
-    baseSha: string,
-    remoteContent: string
+    baselineHeadSha: string,
+    headContent: string | null
   ) => void;
   setDraft: (
     filePath: string,
     content: string,
-    baseSha: string,
-    remoteContent: string
+    baselineHeadSha: string,
+    headContent: string | null
   ) => void;
   getDraft: (filePath: string) => DraftEntry | undefined;
   removeDraft: (filePath: string) => void;
@@ -105,6 +95,11 @@ interface DraftState {
   resetBankToRemote: (bankPath: string) => void;
   hasDrafts: () => boolean;
   getChangedFiles: () => DraftEntry[];
+  acknowledgePublished: (
+    files: DraftEntry[],
+    headSha: string,
+    scopeKey: string | null
+  ) => void;
   clearAll: () => void;
   discardAll: () => void;
 }
@@ -115,25 +110,22 @@ const draftStoreJsonStorage = createJSONStorage(() => draftStoreStateStorage);
 function createDraftEntry(params: {
   filePath: string;
   content: string;
-  baseSha: string;
-  baseHeadSha?: string;
-  remoteContent: string;
+  baselineHeadSha: string;
+  headContent: string | null;
   isDeleted?: boolean;
 }): DraftEntry {
   const {
     filePath,
     content,
-    baseSha,
-    baseHeadSha = useSourceStore.getState().sourceRef?.sha ?? "",
-    remoteContent,
+    baselineHeadSha,
+    headContent,
     isDeleted = false,
   } = params;
   return {
     filePath,
-    baseSha,
-    baseHeadSha,
+    baselineHeadSha,
     content,
-    remoteContent,
+    headContent,
     isDeleted,
     timestamp: Date.now(),
   };
@@ -182,15 +174,14 @@ function syncEntryContentFromHistory(entry: DraftEntry, filePath: string) {
   return createDraftEntry({
     filePath: entry.filePath,
     content: history.getState().content,
-    baseSha: entry.baseSha,
-    baseHeadSha: entry.baseHeadSha,
-    remoteContent: entry.remoteContent,
+    baselineHeadSha: entry.baselineHeadSha,
+    headContent: entry.headContent,
     isDeleted: history.getState().isDeleted,
   });
 }
 
 function hasPersistedDraftChanges(entry: DraftEntry): boolean {
-  return entry.content !== entry.remoteContent || entry.isDeleted;
+  return entry.content !== entry.headContent || entry.isDeleted;
 }
 
 function mapStoredDrafts(
@@ -207,6 +198,42 @@ function toStoredDraftRecord(
       hasPersistedDraftChanges(entry)
     )
   );
+}
+
+function rebasePublishedDrafts(
+  drafts: Map<string, DraftEntry>,
+  files: DraftEntry[],
+  headSha: string
+): string[] {
+  const removed: string[] = [];
+  for (const published of files) {
+    const current = drafts.get(published.filePath);
+    if (!current) {
+      continue;
+    }
+    if (current === published) {
+      drafts.delete(published.filePath);
+      removed.push(published.filePath);
+    } else {
+      drafts.set(
+        published.filePath,
+        createDraftEntry({
+          ...current,
+          baselineHeadSha: headSha,
+          headContent: published.isDeleted ? null : published.content,
+        })
+      );
+    }
+  }
+  for (const [filePath, current] of drafts) {
+    if (current.baselineHeadSha !== headSha) {
+      drafts.set(
+        filePath,
+        createDraftEntry({ ...current, baselineHeadSha: headSha })
+      );
+    }
+  }
+  return removed;
 }
 
 export const useDraftStore = create<DraftState>()(
@@ -254,13 +281,13 @@ export const useDraftStore = create<DraftState>()(
         getStoredDraftsForScope: (scopeKey) =>
           Object.values(get().storedDraftsByScope[scopeKey] ?? {}),
 
-        ensureDraft: (filePath, content, baseSha, remoteContent) => {
+        ensureDraft: (filePath, content, baselineHeadSha, headContent) => {
           const state = get();
           const existing = state.drafts.get(filePath);
           if (existing) {
             if (
-              existing.baseSha === baseSha &&
-              existing.remoteContent === remoteContent
+              existing.baselineHeadSha === baselineHeadSha &&
+              existing.headContent === headContent
             ) {
               ensureDraftHistory(
                 filePath,
@@ -273,9 +300,8 @@ export const useDraftStore = create<DraftState>()(
             const nextEntry = createDraftEntry({
               filePath,
               content: existing.content,
-              baseSha,
-              baseHeadSha: existing.baseHeadSha,
-              remoteContent,
+              baselineHeadSha,
+              headContent,
               isDeleted: existing.isDeleted,
             });
             nextDrafts.set(filePath, nextEntry);
@@ -291,8 +317,8 @@ export const useDraftStore = create<DraftState>()(
           const entry = createDraftEntry({
             filePath,
             content,
-            baseSha,
-            remoteContent,
+            baselineHeadSha,
+            headContent,
           });
           const nextDrafts = new Map(state.drafts);
           nextDrafts.set(filePath, entry);
@@ -300,17 +326,16 @@ export const useDraftStore = create<DraftState>()(
           resetDraftHistory(filePath, content);
         },
 
-        applyUserEdit: (filePath, content, baseSha, remoteContent) => {
+        applyUserEdit: (filePath, content, baselineHeadSha, headContent) => {
           const state = get();
           const existing: DraftEntry | undefined = state.drafts.get(filePath);
           const currentEntry =
             existing ??
             createDraftEntry({
               filePath,
-              content: remoteContent,
-              baseSha,
-              baseHeadSha: undefined,
-              remoteContent,
+              content: headContent ?? "",
+              baselineHeadSha,
+              headContent,
               isDeleted: false,
             });
           const history = ensureDraftHistory(
@@ -336,8 +361,8 @@ export const useDraftStore = create<DraftState>()(
           const nextEntry = createDraftEntry({
             filePath,
             content: history.getState().content,
-            baseSha,
-            remoteContent,
+            baselineHeadSha,
+            headContent,
             isDeleted: history.getState().isDeleted,
           });
           const nextDrafts = new Map(state.drafts);
@@ -345,14 +370,14 @@ export const useDraftStore = create<DraftState>()(
           setCurrentScopeDrafts(nextDrafts);
         },
 
-        setDraft: (filePath, content, baseSha, remoteContent) => {
+        setDraft: (filePath, content, baselineHeadSha, headContent) => {
           const state = get();
           const newDrafts = new Map(state.drafts);
           const entry = createDraftEntry({
             filePath,
             content,
-            baseSha,
-            remoteContent,
+            baselineHeadSha,
+            headContent,
           });
           newDrafts.set(filePath, entry);
           setCurrentScopeDrafts(newDrafts);
@@ -380,9 +405,8 @@ export const useDraftStore = create<DraftState>()(
           const newEntry = createDraftEntry({
             filePath: newFilePath,
             content: oldEntry.content,
-            baseSha: oldEntry.baseSha,
-            baseHeadSha: oldEntry.baseHeadSha,
-            remoteContent: oldEntry.remoteContent,
+            baselineHeadSha: oldEntry.baselineHeadSha,
+            headContent: oldEntry.headContent,
             isDeleted: oldEntry.isDeleted,
           });
           newDrafts.set(newFilePath, newEntry);
@@ -405,7 +429,7 @@ export const useDraftStore = create<DraftState>()(
           if (!entry) {
             return;
           }
-          if (entry.remoteContent === "") {
+          if (entry.headContent === null) {
             get().removeDraft(filePath);
             return;
           }
@@ -416,16 +440,16 @@ export const useDraftStore = create<DraftState>()(
           );
           if (
             history.getState().isDeleted &&
-            history.getState().content === entry.remoteContent
+            history.getState().content === entry.headContent
           ) {
             return;
           }
           if (
             !history.getState().isDeleted ||
-            history.getState().content !== entry.remoteContent
+            history.getState().content !== entry.headContent
           ) {
             history.setState((draft) => {
-              draft.content = entry.remoteContent;
+              draft.content = entry.headContent ?? "";
               draft.isDeleted = true;
             });
           }
@@ -480,22 +504,21 @@ export const useDraftStore = create<DraftState>()(
           if (!entry) {
             return;
           }
-          if (entry.remoteContent === "") {
+          if (entry.headContent === null) {
             get().removeDraft(filePath);
             return;
           }
           const nextDrafts = new Map(get().drafts);
           const nextEntry = createDraftEntry({
             filePath,
-            content: entry.remoteContent,
-            baseSha: entry.baseSha,
-            baseHeadSha: entry.baseHeadSha,
-            remoteContent: entry.remoteContent,
+            content: entry.headContent,
+            baselineHeadSha: entry.baselineHeadSha,
+            headContent: entry.headContent,
             isDeleted: false,
           });
           nextDrafts.set(filePath, nextEntry);
           setCurrentScopeDrafts(nextDrafts);
-          resetDraftHistory(filePath, entry.remoteContent, false);
+          resetDraftHistory(filePath, entry.headContent, false);
         },
 
         resetBankToRemote: (bankPath) => {
@@ -510,7 +533,7 @@ export const useDraftStore = create<DraftState>()(
         hasDrafts: () => {
           const drafts = get().drafts;
           for (const [, entry] of drafts) {
-            if (entry.content !== entry.remoteContent) {
+            if (entry.content !== entry.headContent) {
               return true;
             }
             if (entry.isDeleted) {
@@ -528,6 +551,31 @@ export const useDraftStore = create<DraftState>()(
             }
           }
           return result;
+        },
+
+        acknowledgePublished: (files, headSha, scopeKey) => {
+          const isActiveScope = get().draftScopeKey === scopeKey;
+          const drafts = isActiveScope
+            ? new Map(get().drafts)
+            : mapStoredDrafts(
+                scopeKey ? get().storedDraftsByScope[scopeKey] : undefined
+              );
+          const removed = rebasePublishedDrafts(drafts, files, headSha);
+          if (isActiveScope) {
+            for (const path of removed) {
+              draftHistoryByPath.delete(path);
+            }
+          }
+          if (isActiveScope) {
+            setCurrentScopeDrafts(drafts);
+          } else if (scopeKey) {
+            set({
+              storedDraftsByScope: {
+                ...get().storedDraftsByScope,
+                [scopeKey]: toStoredDraftRecord(drafts),
+              },
+            });
+          }
         },
 
         clearAll: () => {
@@ -553,6 +601,38 @@ export const useDraftStore = create<DraftState>()(
     },
     {
       name: DRAFT_STORE_STORAGE_KEY,
+      version: 1,
+      migrate: (persisted) => {
+        const stored = persisted as {
+          storedDraftsByScope?: Record<
+            string,
+            Record<string, Record<string, unknown>>
+          >;
+        };
+        return {
+          storedDraftsByScope: Object.fromEntries(
+            Object.entries(stored.storedDraftsByScope ?? {}).map(
+              ([scope, entries]) => [
+                scope,
+                Object.fromEntries(
+                  Object.entries(entries).map(([path, entry]) => [
+                    path,
+                    {
+                      filePath: path,
+                      content: entry.content,
+                      headContent:
+                        entry.remoteContent === "" ? null : entry.remoteContent,
+                      baselineHeadSha: entry.baseHeadSha || entry.baseSha,
+                      isDeleted: entry.isDeleted,
+                      timestamp: entry.timestamp,
+                    },
+                  ])
+                ),
+              ]
+            )
+          ),
+        };
+      },
       onRehydrateStorage: () => () => {
         useDraftStore.setState({ hasHydrated: true });
       },
@@ -580,52 +660,6 @@ export async function waitForDraftStoreHydration(): Promise<void> {
     void useDraftStore.persist.rehydrate();
   });
 }
-
-// ─── Publish store ───
-
-export type PublishStep =
-  | "idle"
-  | "validating"
-  | "committing"
-  | "syncing"
-  | "done"
-  | "error";
-
-interface PublishState {
-  step: PublishStep;
-  token: string | null;
-  prUrl: string | null;
-  error: string | null;
-  validationIssues: ValidationIssue[];
-  setStep: (s: PublishStep) => void;
-  setToken: (t: string | null) => void;
-  setPrUrl: (u: string | null) => void;
-  setError: (e: string | null) => void;
-  setValidationIssues: (issues: ValidationIssue[]) => void;
-  reset: () => void;
-}
-
-export const usePublishStore = create<PublishState>((set) => ({
-  step: "idle",
-  token: null,
-  prUrl: null,
-  error: null,
-  validationIssues: [],
-  setStep: (step) => set({ step }),
-  setToken: (token) => set({ token }),
-  setPrUrl: (prUrl) => set({ prUrl }),
-  setError: (error) => set({ error, step: "error" }),
-  setValidationIssues: (validationIssues) => set({ validationIssues }),
-  reset: () =>
-    set({
-      step: "idle",
-      prUrl: null,
-      error: null,
-      validationIssues: [],
-    }),
-}));
-
-// ─── UI store ───
 
 export type HighlightMode = "parts" | "groups";
 export type RightPaneTab = "explanation" | "quickref" | "snippets";

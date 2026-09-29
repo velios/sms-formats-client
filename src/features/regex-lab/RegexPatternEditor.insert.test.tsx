@@ -3,14 +3,14 @@ import { render } from "@testing-library/react";
 import { createRef } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  UnifiedRegexEditor,
-  type UnifiedRegexEditorHandle,
-} from "./UnifiedRegexEditor";
+  RegexPatternEditor,
+  type RegexPatternEditorHandle,
+} from "./RegexPatternEditor";
 
 function setup(regex: string, onRegexChange = vi.fn()) {
-  const ref = createRef<UnifiedRegexEditorHandle>();
+  const ref = createRef<RegexPatternEditorHandle>();
   const { container } = render(
-    <UnifiedRegexEditor
+    <RegexPatternEditor
       activeTokenIndex={null}
       canHighlight={false}
       highlightMode="groups"
@@ -37,7 +37,7 @@ beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 
-describe("UnifiedRegexEditor.insertAtCursor", () => {
+describe("RegexPatternEditor.insertAtCursor", () => {
   it("inserts at the caret position", () => {
     const { ref, view, onRegexChange } = setup("ab");
     view.dispatch({ selection: { anchor: 1 } });
