@@ -123,6 +123,7 @@ function resolveFileActionGating(params: {
   readOnly: boolean;
   isDeleted: boolean;
   isModified: boolean;
+  hasExamplePositionChanges: boolean;
   remoteBaseline: string | null;
   hasDocument: boolean;
 }): { canReset: boolean; canDelete: boolean; canRename: boolean } {
@@ -131,11 +132,13 @@ function resolveFileActionGating(params: {
     readOnly,
     isDeleted,
     isModified,
+    hasExamplePositionChanges,
     remoteBaseline,
     hasDocument,
   } = params;
   return {
-    canReset: !readOnly && (isModified || isDeleted),
+    canReset:
+      !readOnly && (isModified || isDeleted || hasExamplePositionChanges),
     canDelete: !(isSenders || readOnly || isDeleted) && hasDocument,
     canRename:
       !(isSenders || readOnly || isDeleted) &&
@@ -178,6 +181,11 @@ function WorkspaceFileControls({
   const remoteBaseline = draft ? draft.headContent : (headContent ?? null);
   const isDeleted = draft?.isDeleted ?? false;
   const isModified = draft ? draft.content !== draft.headContent : false;
+  // Replacing an original with an identical local Example only changes identity.
+  const hasExamplePositionChanges = Boolean(
+    !isSenders &&
+      draft?.examplePositions?.some((position, index) => position !== index + 1)
+  );
   const canUndo = draftStore.canUndo(filePath);
   const canRedo = draftStore.canRedo(filePath);
   const {
@@ -189,6 +197,7 @@ function WorkspaceFileControls({
     readOnly,
     isDeleted,
     isModified,
+    hasExamplePositionChanges,
     remoteBaseline,
     hasDocument: Boolean(draft) || headContent !== undefined,
   });
