@@ -1,8 +1,8 @@
+import { beforeAll, describe, expect, it, mock } from "bun:test";
 import { cursorCharLeft, deleteCharBackward } from "@codemirror/commands";
 import { EditorView } from "@codemirror/view";
 import { render } from "@testing-library/react";
 import { createRef } from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { PatternHighlightPlan } from "@/domain/format";
 import {
   analyzeRegexPattern,
@@ -44,7 +44,7 @@ function setup(
       canHighlight={withTokens}
       highlightMode="groups"
       highlightPlan={plan}
-      onRegexChange={vi.fn()}
+      onRegexChange={mock()}
       ref={ref}
       regex={regex}
       tokens={tokens}
@@ -63,7 +63,7 @@ function setup(
 }
 
 beforeAll(() => {
-  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  window.HTMLElement.prototype.scrollIntoView = mock();
 });
 
 describe("режим `\\s+`: правило ввода", () => {

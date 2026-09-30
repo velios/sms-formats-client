@@ -1,6 +1,6 @@
+import { beforeAll, describe, expect, it, mock } from "bun:test";
 import { render } from "@testing-library/react";
 import { createRef } from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   RegexPatternEditor,
   type RegexPatternEditorHandle,
@@ -27,12 +27,12 @@ function editor(
 }
 
 beforeAll(() => {
-  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  window.HTMLElement.prototype.scrollIntoView = mock();
 });
 
 describe("внешняя синхронизация regex не считается пользовательской правкой", () => {
   it("смена пропа regex (загрузка/навигация файла) не вызывает onRegexChange", () => {
-    const onRegexChange = vi.fn();
+    const onRegexChange = mock();
     const { rerender } = render(editor("", onRegexChange, false));
 
     // Имитируем загрузку контента файла: regex приходит из распарсенного файла.
@@ -42,7 +42,7 @@ describe("внешняя синхронизация regex не считаетс�
   });
 
   it("в режиме `\\s+` внешний regex вставляется дословно и не вызывает onRegexChange", () => {
-    const onRegexChange = vi.fn();
+    const onRegexChange = mock();
     const { rerender } = render(editor("", onRegexChange, true));
 
     // regex со `\s+` (как хранится) — фильтр не должен его трогать.

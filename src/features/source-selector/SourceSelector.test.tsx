@@ -1,19 +1,19 @@
+import { describe, expect, it, mock } from "bun:test";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>
       options?.defaultValue ?? key,
   }),
 }));
 
-vi.mock("react-router-dom", () => ({
+mock.module("react-router-dom", () => ({
   useLocation: () => ({ pathname: "/" }),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mock(),
 }));
 
-vi.mock("@/hooks/useGitHub", () => ({
+mock.module("@/hooks/useGitHub", () => ({
   useAvailableSourceRepos: () => ({
     data: [{ owner: "zenmoney", repo: "sms-formats" }],
   }),
@@ -30,10 +30,10 @@ vi.mock("@/hooks/useGitHub", () => ({
       },
     ],
   }),
-  useSwitchRepository: () => vi.fn(),
+  useSwitchRepository: () => mock(),
 }));
 
-vi.mock("@/store", () => {
+mock.module("@/store", () => {
   const state = {
     repository: { owner: "zenmoney", repo: "sms-formats" },
     sourceRef: {
@@ -47,7 +47,7 @@ vi.mock("@/store", () => {
     drafts: new Map(),
     getChangedFiles: () => [],
     hasDrafts: () => false,
-    clearAll: vi.fn(),
+    clearAll: mock(),
   };
   return {
     useSourceStore: (selector: (value: typeof state) => unknown) =>
@@ -56,7 +56,7 @@ vi.mock("@/store", () => {
   };
 });
 
-import { SourceSelector } from "./SourceSelector";
+const { SourceSelector } = await import("./SourceSelector");
 
 describe("SourceSelector", () => {
   it("renders classic repo trigger without search or commit SHA selector", () => {

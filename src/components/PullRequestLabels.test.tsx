@@ -1,5 +1,5 @@
+import { describe, expect, it, mock } from "bun:test";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
 import { PullRequestLabels } from "@/components/PullRequestLabels";
 
 describe("PullRequestLabels", () => {
@@ -28,7 +28,7 @@ describe("PullRequestLabels", () => {
   });
 
   it("stops click propagation while expanding labels", () => {
-    const handleRowClick = vi.fn();
+    const handleRowClick = mock();
 
     render(
       <div onClick={handleRowClick}>

@@ -1,5 +1,5 @@
+import { describe, expect, it, mock } from "bun:test";
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
 import type {
   BankSnapshot,
   LoadedFormat,
@@ -69,7 +69,7 @@ function makeParams(
     draftStore: { drafts: new Map(), getDraft: () => undefined },
     allFormatFiles: [CURRENT_PATH, ANOTHER_PATH],
     deletedFormatFiles: new Set<string>(),
-    loadEntries: vi.fn(async () => makePrepared()),
+    loadEntries: mock(async () => makePrepared()),
     ...overrides,
   };
 }
@@ -118,7 +118,7 @@ describe("useIntersections / calculate", () => {
   });
 
   it("reports no-source without invoking the loader", async () => {
-    const loadEntries = vi.fn<LoadEntries>();
+    const loadEntries = mock<LoadEntries>();
     const params = makeParams({ sourceRefName: undefined, loadEntries });
     const { result } = renderIntersections(params);
 
@@ -130,7 +130,7 @@ describe("useIntersections / calculate", () => {
   });
 
   it("reports missing-pr-number without invoking the loader", async () => {
-    const loadEntries = vi.fn<LoadEntries>();
+    const loadEntries = mock<LoadEntries>();
     const params = makeParams({ prNumber: null, loadEntries });
     const { result } = renderIntersections(params);
 
@@ -141,8 +141,7 @@ describe("useIntersections / calculate", () => {
   });
 
   it("keeps the last successful snapshot when a recalculation fails", async () => {
-    const loadEntries = vi
-      .fn<LoadEntries>()
+    const loadEntries = mock<LoadEntries>()
       .mockResolvedValueOnce(makePrepared())
       .mockRejectedValueOnce(new Error("boom"));
     const params = makeParams({ loadEntries });
@@ -158,9 +157,10 @@ describe("useIntersections / calculate", () => {
   });
 
   it("surfaces the loader's load errors count", async () => {
-    const loadEntries = vi
-      .fn<LoadEntries>()
-      .mockResolvedValue({ ...makePrepared(), loadErrorsCount: 3 });
+    const loadEntries = mock<LoadEntries>().mockResolvedValue({
+      ...makePrepared(),
+      loadErrorsCount: 3,
+    });
     const params = makeParams({ loadEntries });
     const { result } = renderIntersections(params);
 
@@ -172,7 +172,7 @@ describe("useIntersections / calculate", () => {
 
   it("silently drops a result superseded by a draft edit mid-flight", async () => {
     const pending = deferred<BankSnapshot>();
-    const loadEntries = vi.fn<LoadEntries>().mockReturnValue(pending.promise);
+    const loadEntries = mock<LoadEntries>().mockReturnValue(pending.promise);
     const params = makeParams({ loadEntries });
     const { result, rerender } = renderIntersections(params);
 
@@ -205,8 +205,7 @@ describe("useIntersections / calculate", () => {
 
   it("lets a newer run win over an older in-flight run", async () => {
     const first = deferred<BankSnapshot>();
-    const loadEntries = vi
-      .fn<LoadEntries>()
+    const loadEntries = mock<LoadEntries>()
       .mockReturnValueOnce(first.promise)
       .mockResolvedValueOnce({
         ...makePrepared(),
@@ -296,7 +295,7 @@ describe("useIntersections / identity reset (ADR-0013 bug fix)", () => {
 
   it("drops an in-flight result after a source change", async () => {
     const pending = deferred<BankSnapshot>();
-    const loadEntries = vi.fn<LoadEntries>().mockReturnValue(pending.promise);
+    const loadEntries = mock<LoadEntries>().mockReturnValue(pending.promise);
     const params = makeParams({ loadEntries });
     const { result, rerender } = renderIntersections(params);
 

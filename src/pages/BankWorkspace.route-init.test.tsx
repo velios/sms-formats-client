@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, type Mock, mock } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
@@ -7,9 +8,8 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { type ReactElement, type ReactNode, useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => {
+const mocks = (() => {
   const routeState = {
     location: {
       pathname: "/repo/zenmoney/sms-formats/pr/123",
@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
       repo: "sms-formats",
       prNumber: "123",
     },
-    navigate: vi.fn(),
+    navigate: mock(),
   };
 
   const tree = [
@@ -68,10 +68,10 @@ const mocks = vi.hoisted(() => {
     banks: [] as typeof banks,
     loading: false,
     error: null as string | null,
-    setRepository: vi.fn((repository: { owner: string; repo: string }) => {
+    setRepository: mock((repository: { owner: string; repo: string }) => {
       sourceState.repository = repository;
     }),
-    setSource: vi.fn(
+    setSource: mock(
       (
         sourceRef: {
           type: "pr";
@@ -83,19 +83,19 @@ const mocks = vi.hoisted(() => {
         sourceState.sourceRef = sourceRef;
       }
     ),
-    setSourceChangedFiles: vi.fn((files: string[]) => {
+    setSourceChangedFiles: mock((files: string[]) => {
       sourceState.sourceChangedFiles = files;
     }),
-    setTree: vi.fn((nextTree: typeof tree) => {
+    setTree: mock((nextTree: typeof tree) => {
       sourceState.tree = nextTree;
     }),
-    setBanks: vi.fn((nextBanks: typeof banks) => {
+    setBanks: mock((nextBanks: typeof banks) => {
       sourceState.banks = nextBanks;
     }),
-    setLoading: vi.fn((loading: boolean) => {
+    setLoading: mock((loading: boolean) => {
       sourceState.loading = loading;
     }),
-    setError: vi.fn((error: string | null) => {
+    setError: mock((error: string | null) => {
       sourceState.error = error;
     }),
   };
@@ -110,11 +110,11 @@ const mocks = vi.hoisted(() => {
     draftScopeKey: null as string | null,
     drafts: new Map<string, unknown>(),
     hasHydrated: true,
-    getStoredDraftsForScope: vi.fn(() => []),
-    activateScope: vi.fn((scopeKey: string) => {
+    getStoredDraftsForScope: mock(() => []),
+    activateScope: mock((scopeKey: string) => {
       draftState.draftScopeKey = scopeKey;
     }),
-    getChangedFiles: vi.fn<
+    getChangedFiles: mock<
       () => Array<{
         filePath: string;
         content: string;
@@ -122,9 +122,9 @@ const mocks = vi.hoisted(() => {
         baselineHeadSha: string;
       }>
     >(() => []),
-    getDeletedFiles: vi.fn(() => []),
+    getDeletedFiles: mock(() => []),
     getDraft:
-      vi.fn<
+      mock<
         (path: string) =>
           | {
               filePath: string;
@@ -134,11 +134,11 @@ const mocks = vi.hoisted(() => {
             }
           | undefined
       >(),
-    acknowledgePublished: vi.fn(),
-    resetBankToRemote: vi.fn(),
-    discardAll: vi.fn(),
-    clearAll: vi.fn(),
-    renameDraft: vi.fn(),
+    acknowledgePublished: mock(),
+    resetBankToRemote: mock(),
+    discardAll: mock(),
+    clearAll: mock(),
+    renameDraft: mock(),
   };
 
   const useDraftStore = (() => draftState) as (() => typeof draftState) & {
@@ -149,13 +149,13 @@ const mocks = vi.hoisted(() => {
   useDraftStore.subscribe = () => () => undefined;
 
   return {
-    fetchPullRequestApprovalByCurrentUser: vi.fn(() => Promise.resolve(false)),
+    fetchPullRequestApprovalByCurrentUser: mock(() => Promise.resolve(false)),
     banks,
     draftState,
-    fetchPullRequestFiles: vi.fn(() => Promise.resolve([])),
-    fetchRepoTree: vi.fn(() => Promise.resolve(tree)),
-    cacheFileContent: vi.fn(),
-    loadFileContents: vi.fn(async ({ filePaths }: { filePaths: string[] }) => ({
+    fetchPullRequestFiles: mock(() => Promise.resolve([])),
+    fetchRepoTree: mock(() => Promise.resolve(tree)),
+    cacheFileContent: mock(),
+    loadFileContents: mock(async ({ filePaths }: { filePaths: string[] }) => ({
       contents: new Map(
         filePaths.map((path) => [
           path,
@@ -165,11 +165,11 @@ const mocks = vi.hoisted(() => {
       cachedCount: 0,
       remoteFetchedCount: filePaths.length,
     })),
-    getCachedPullRequestApprovalPermission: vi.fn(() => false),
-    getGitHubAuthChangeVersion: vi.fn(() => 0),
-    indexBanksFromTree: vi.fn(() => banks),
-    loadWorkspaceSession: vi.fn<() => unknown>(() => null),
-    resolvePullRequestWorkspace: vi.fn(() =>
+    getCachedPullRequestApprovalPermission: mock(() => false),
+    getGitHubAuthChangeVersion: mock(() => 0),
+    indexBanksFromTree: mock(() => banks),
+    loadWorkspaceSession: mock<() => unknown>(() => null),
+    resolvePullRequestWorkspace: mock(() =>
       Promise.resolve({
         status: "supported" as const,
         repository: { owner: "zenmoney", repo: "sms-formats" },
@@ -190,26 +190,26 @@ const mocks = vi.hoisted(() => {
         ],
       })
     ),
-    refreshPullRequestApprovalPermission: vi.fn(() => Promise.resolve(false)),
+    refreshPullRequestApprovalPermission: mock(() => Promise.resolve(false)),
     routeState,
-    saveWorkspaceSession: vi.fn(),
+    saveWorkspaceSession: mock(),
     sourceState,
-    subscribeGitHubAuthChange: vi.fn(() => () => undefined),
+    subscribeGitHubAuthChange: mock(() => () => undefined),
     tree,
-    updatePullRequestHead: vi.fn(),
+    updatePullRequestHead: mock(),
     useDraftStore,
     useSourceStore,
   };
-});
+})();
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>
       options?.defaultValue ?? key,
   }),
 }));
 
-vi.mock("react-router-dom", () => ({
+mock.module("react-router-dom", () => ({
   useLocation: () => mocks.routeState.location,
   useNavigate: () => mocks.routeState.navigate,
   useParams: () => mocks.routeState.params,
@@ -218,7 +218,7 @@ vi.mock("react-router-dom", () => ({
   ],
 }));
 
-vi.mock("@/components/ui/button", () => ({
+mock.module("@/components/ui/button", () => ({
   Button: ({
     children,
     ...props
@@ -227,71 +227,70 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/input", () => ({
+mock.module("@/components/ui/input", () => ({
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input {...props} />
   ),
 }));
 
-vi.mock("@/components/ui/spinner", () => ({
+mock.module("@/components/ui/spinner", () => ({
   Spinner: () => <span>spinner</span>,
 }));
 
-vi.mock("@/components/ui/status-badge", () => ({
+mock.module("@/components/ui/status-badge", () => ({
   StatusBadge: ({
     children,
     ...props
   }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
 }));
 
-vi.mock("@/features/format-editor/FormatEditor", () => ({
+mock.module("@/features/format-editor/FormatEditor", () => ({
   FormatEditor: ({ filePath }: { filePath: string }) => (
     <div data-testid="format-editor">{filePath}</div>
   ),
 }));
 
-vi.mock("@/features/senders-editor/SendersEditor", () => ({
+mock.module("@/features/senders-editor/SendersEditor", () => ({
   SendersEditor: () => <div data-testid="senders-editor" />,
 }));
 
-vi.mock("@/features/workspace-header/WorkspaceHeaderBar", () => ({
+mock.module("@/features/workspace-header/WorkspaceHeaderBar", () => ({
   WorkspaceHeaderBar: () => <div data-testid="workspace-header-bar" />,
 }));
 
-vi.mock("@/features/create-entity/CreateFormatModal", () => ({
+mock.module("@/features/create-entity/CreateFormatModal", () => ({
   CreateFormatModal: () => null,
 }));
 
-vi.mock("@/features/quick-check/QuickCheckPanel", () => ({
+mock.module("@/features/quick-check/QuickCheckPanel", () => ({
   QuickCheckPanel: () => null,
 }));
 
-vi.mock("@/features/validation/ValidationPanel", () => ({
+mock.module("@/features/validation/ValidationPanel", () => ({
   ValidationPanel: () => null,
 }));
 
-vi.mock("@/lib/utils", () => ({
+mock.module("@/lib/utils", () => ({
   cn: (...values: Array<string | false | null | undefined>) =>
     values.filter(Boolean).join(" "),
 }));
 
-vi.mock("@/store", () => ({
+mock.module("@/store", () => ({
   useDraftStore: mocks.useDraftStore,
   useSourceStore: mocks.useSourceStore,
   waitForDraftStoreHydration: () => Promise.resolve(),
 }));
 
-vi.mock("@/store/workspace-session", async () => ({
-  ...(await vi.importActual<typeof import("@/store/workspace-session")>(
-    "@/store/workspace-session"
-  )),
+const actualWorkspaceSession = await import("@/store/workspace-session");
+mock.module("@/store/workspace-session", () => ({
+  ...actualWorkspaceSession,
   loadWorkspaceSession: mocks.loadWorkspaceSession,
   saveWorkspaceSession: mocks.saveWorkspaceSession,
 }));
 
-vi.mock("@/infrastructure/file-content", () => ({
+mock.module("@/infrastructure/file-content", () => ({
   cacheFileContent: mocks.cacheFileContent,
-  loadFileContent: vi.fn(async (params) => {
+  loadFileContent: mock(async (params) => {
     const content = await fetchFileContent(
       params.filePath,
       params.commitSha,
@@ -303,19 +302,18 @@ vi.mock("@/infrastructure/file-content", () => ({
   loadFileContents: mocks.loadFileContents,
 }));
 
-vi.mock("@/domain/bank-index", () => ({
+mock.module("@/domain/bank-index", () => ({
   indexBanksFromTree: mocks.indexBanksFromTree,
 }));
 
-vi.mock("@/infrastructure/github", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/infrastructure/github")
-  >("@/infrastructure/github");
+const actualGitHub = await import("@/infrastructure/github");
+mock.module("@/infrastructure/github", () => {
+  const actual = actualGitHub;
   return {
     ...actual,
-    approvePullRequest: vi.fn(),
-    fetchFileContent: vi.fn(() => Promise.resolve("")),
-    fetchOpenPRs: vi.fn(() => Promise.resolve([])),
+    approvePullRequest: mock(),
+    fetchFileContent: mock(() => Promise.resolve("")),
+    fetchOpenPRs: mock(() => Promise.resolve([])),
     fetchPullRequestApprovalByCurrentUser:
       mocks.fetchPullRequestApprovalByCurrentUser,
     fetchPullRequestFiles: mocks.fetchPullRequestFiles,
@@ -323,7 +321,7 @@ vi.mock("@/infrastructure/github", async () => {
     getCachedPullRequestApprovalPermission:
       mocks.getCachedPullRequestApprovalPermission,
     getGitHubAuthChangeVersion: mocks.getGitHubAuthChangeVersion,
-    getGitHubUserToken: vi.fn(() => ""),
+    getGitHubUserToken: mock(() => ""),
     refreshPullRequestApprovalPermission:
       mocks.refreshPullRequestApprovalPermission,
     resolvePullRequestWorkspace: mocks.resolvePullRequestWorkspace,
@@ -332,12 +330,10 @@ vi.mock("@/infrastructure/github", async () => {
   };
 });
 
-import {
-  fetchFileContent,
-  fetchOpenPRs,
-  getGitHubUserToken,
-} from "@/infrastructure/github";
-import { BankWorkspace } from "./BankWorkspace";
+const { fetchFileContent, fetchOpenPRs, getGitHubUserToken } = await import(
+  "@/infrastructure/github"
+);
+const { BankWorkspace } = await import("./BankWorkspace");
 
 function QueryWrapper({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -762,7 +758,9 @@ describe("BankWorkspace route init", () => {
   });
 
   it("acknowledges the published snapshot and reloads the workspace after a successful PR update", async () => {
-    vi.mocked(getGitHubUserToken).mockReturnValue("gh-token");
+    (getGitHubUserToken as Mock<typeof getGitHubUserToken>).mockReturnValue(
+      "gh-token"
+    );
     mocks.draftState.getChangedFiles.mockReturnValue([
       {
         filePath: "src/TBank_123/senders.txt",
@@ -898,10 +896,14 @@ describe("BankWorkspace route init", () => {
   });
 
   it("defers every workspace mutation until all reads resolve, committing the new head in one pass", async () => {
-    vi.mocked(getGitHubUserToken).mockReturnValue("gh-token");
-    vi.mocked(fetchOpenPRs).mockClear();
-    vi.mocked(fetchFileContent).mockClear();
-    vi.mocked(fetchFileContent).mockResolvedValue("primed content");
+    (getGitHubUserToken as Mock<typeof getGitHubUserToken>).mockReturnValue(
+      "gh-token"
+    );
+    (fetchOpenPRs as Mock<typeof fetchOpenPRs>).mockClear();
+    (fetchFileContent as Mock<typeof fetchFileContent>).mockClear();
+    (fetchFileContent as Mock<typeof fetchFileContent>).mockResolvedValue(
+      "primed content"
+    );
     mocks.draftState.getChangedFiles.mockReturnValue([
       {
         filePath: "src/TBank_123/senders.txt",
@@ -966,7 +968,7 @@ describe("BankWorkspace route init", () => {
       mock.mock.invocationCallOrder.at(-1) ?? -1;
     const readOrder = Math.max(
       lastOrder(mocks.fetchRepoTree),
-      lastOrder(vi.mocked(fetchFileContent))
+      lastOrder(fetchFileContent as Mock<typeof fetchFileContent>)
     );
     const setSourceCalls = mocks.sourceState.setSource.mock.calls;
     const newHeadIndex = setSourceCalls.findIndex(
@@ -1004,9 +1006,11 @@ describe("BankWorkspace route init", () => {
     await waitFor(() =>
       expect(screen.getByTestId("format-editor")).toBeInTheDocument()
     );
-    vi.mocked(fetchOpenPRs).mockRejectedValueOnce(new Error("list offline"));
-    const current =
-      await mocks.resolvePullRequestWorkspace.mock.results[0]?.value;
+    (fetchOpenPRs as Mock<typeof fetchOpenPRs>).mockRejectedValueOnce(
+      new Error("list offline")
+    );
+    const current = (await mocks.resolvePullRequestWorkspace.mock.results[0]
+      ?.value) as Awaited<ReturnType<typeof mocks.resolvePullRequestWorkspace>>;
     mocks.resolvePullRequestWorkspace.mockResolvedValueOnce({
       ...current,
       headSha: "next-head",

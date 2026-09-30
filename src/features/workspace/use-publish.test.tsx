@@ -1,36 +1,35 @@
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useSyncExternalStore } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { serializeFormat } from "@/domain/format";
 import type { PullRequestWorkspaceResolution } from "@/domain/pull-request-workspace";
-import {
-  useDraftStore,
-  useSourceStore,
-  waitForDraftStoreHydration,
-} from "@/store";
-import { saveWorkspaceSession } from "@/store/workspace-session";
-import { useBankPublishAction } from "./use-publish";
-import { WorkspaceSessionController } from "./workspace-session";
+import { setTestGlobal } from "@/test-globals";
 
-const mocks = vi.hoisted(() => {
+const mocks = (() => {
   const values = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
+  setTestGlobal("localStorage", {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => values.set(key, value),
   });
-  return { resolve: vi.fn(), update: vi.fn(), load: vi.fn() };
-});
-vi.mock("idb-keyval", () => ({ get: vi.fn(), set: vi.fn(), del: vi.fn() }));
-vi.mock("@/infrastructure/github", () => ({
+  return { resolve: mock(), update: mock(), load: mock() };
+})();
+mock.module("idb-keyval", () => ({ get: mock(), set: mock(), del: mock() }));
+mock.module("@/infrastructure/github", () => ({
   getGitHubUserToken: () => "test-token",
   resolvePullRequestWorkspace: mocks.resolve,
-  fetchRepoTree: vi.fn(async () => []),
+  fetchRepoTree: mock(async () => []),
   updatePullRequestHead: mocks.update,
 }));
-vi.mock("@/infrastructure/file-content", () => ({
+mock.module("@/infrastructure/file-content", () => ({
   loadFileContents: mocks.load,
-  loadFileContent: vi.fn(async () => original),
+  loadFileContent: mock(async () => original),
 }));
+
+const { serializeFormat } = await import("@/domain/format");
+const { useDraftStore, useSourceStore, waitForDraftStoreHydration } =
+  await import("@/store");
+const { saveWorkspaceSession } = await import("@/store/workspace-session");
+const { useBankPublishAction } = await import("./use-publish");
+const { WorkspaceSessionController } = await import("./workspace-session");
 
 const repository = { owner: "zenmoney", repo: "sms-formats" };
 const bankPath = "src/Bank";

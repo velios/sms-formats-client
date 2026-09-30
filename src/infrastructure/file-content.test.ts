@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { queryClient } from "@/lib/query-client";
-import { getFileContent, loadFileContent } from "./file-content";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 
-const fetchFileContentMock = vi.hoisted(() => vi.fn());
-vi.mock("@/infrastructure/github", () => ({
+const fetchFileContentMock = mock();
+mock.module("@/infrastructure/github", () => ({
   fetchFileContent: (...args: unknown[]) => fetchFileContentMock(...args),
 }));
+
+const { queryClient } = await import("@/lib/query-client");
+const { getFileContent, loadFileContent } = await import("./file-content");
 const revision = {
   repository: { owner: "zenmoney", repo: "sms-formats" },
   filePath: "src/Bank/formats/a.txt",
@@ -53,7 +54,7 @@ it("shares cached and in-flight contents with the GraphQL package loader", async
   fetchFileContentMock.mockReset();
   fetchFileContentMock.mockResolvedValue("EDITOR");
   const { loadRevisionBlobs } = await import("./file-content");
-  const fetchBlobs = vi.fn(async (_ref: string, paths: string[]) =>
+  const fetchBlobs = mock(async (_ref: string, paths: string[]) =>
     paths.map((path) => ({ path, status: "loaded" as const, text: "PACKAGE" }))
   );
   const editor = loadFileContent(revision);

@@ -1,16 +1,10 @@
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { serializeFormat } from "@/domain/format";
-import {
-  useDraftStore,
-  useSourceStore,
-  waitForDraftStoreHydration,
-} from "@/store";
-import { FormatEditor } from "./FormatEditor";
+import { setTestGlobal } from "@/test-globals";
 
-const fixture = vi.hoisted(() => {
+const fixture = (() => {
   const values = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
+  setTestGlobal("localStorage", {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => values.set(key, value),
   });
@@ -27,19 +21,19 @@ const fixture = vi.hoisted(() => {
       onRedo: () => void;
     },
   };
-});
-vi.mock("idb-keyval", () => ({ get: vi.fn(), set: vi.fn(), del: vi.fn() }));
-vi.mock("@/hooks/useWorkspaceFileContent", () => ({
+})();
+mock.module("idb-keyval", () => ({ get: mock(), set: mock(), del: mock() }));
+mock.module("@/hooks/useWorkspaceFileContent", () => ({
   useWorkspaceFileContent: () => ({
     data: fixture.content,
     isLoading: false,
     error: null,
   }),
 }));
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-vi.mock("@/features/regex-lab/RegexLab", () => ({
+mock.module("@/features/regex-lab/RegexLab", () => ({
   RegexLab: (props: NonNullable<typeof fixture.props>) => {
     fixture.props = props;
     return (
@@ -49,6 +43,11 @@ vi.mock("@/features/regex-lab/RegexLab", () => ({
     );
   },
 }));
+
+const { serializeFormat } = await import("@/domain/format");
+const { useDraftStore, useSourceStore, waitForDraftStoreHydration } =
+  await import("@/store");
+const { FormatEditor } = await import("./FormatEditor");
 const path = "src/Bank/formats/a.txt";
 describe("one document across editor views", () => {
   beforeEach(async () => {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { compileRegexes } from "@/domain/format";
 import {
   answerGuestMessage,
@@ -31,7 +31,7 @@ const corpus: CompiledCorpus = {
 };
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  mock.restore();
 });
 
 // A reply to an SMS plus "@zenmoneysms_bot /sms" — the canonical guest call that
@@ -61,7 +61,7 @@ class TooManyRequestsError extends Error {
   }
 }
 
-function guestMessageText(answerGuestQuery: ReturnType<typeof vi.fn>): string {
+function guestMessageText(answerGuestQuery: ReturnType<typeof mock>): string {
   const result = answerGuestQuery.mock.calls[0]?.[0] as {
     input_message_content: { message_text: string };
   };
@@ -70,17 +70,17 @@ function guestMessageText(answerGuestQuery: ReturnType<typeof vi.fn>): string {
 
 describe("answerGuestMessage", () => {
   it("answers the recognized format via answerGuestQuery on the happy path", async () => {
-    const answerGuestQuery = vi.fn().mockResolvedValue({});
+    const answerGuestQuery = mock().mockResolvedValue({});
     const ctx: GuestQueryContext = { guestMessage, answerGuestQuery };
 
     await answerGuestMessage(ctx, corpus, { dryRun: false });
 
-    expect(answerGuestQuery).toHaveBeenCalledOnce();
+    expect(answerGuestQuery).toHaveBeenCalledTimes(1);
     expect(guestMessageText(answerGuestQuery)).toBe(RECOGNIZED);
   });
 
   it("prefers the quoted fragment of the replied-to message", async () => {
-    const answerGuestQuery = vi.fn().mockResolvedValue({});
+    const answerGuestQuery = mock().mockResolvedValue({});
     const ctx: GuestQueryContext = {
       guestMessage: {
         text: "@zenmoneysms_bot /sms",
@@ -97,7 +97,7 @@ describe("answerGuestMessage", () => {
   });
 
   it("stays silent (no answerGuestQuery) when the call carries no /sms", async () => {
-    const answerGuestQuery = vi.fn().mockResolvedValue({});
+    const answerGuestQuery = mock().mockResolvedValue({});
     const ctx: GuestQueryContext = {
       // A mention + reply but no /sms token: someone talking about the bot, not
       // summoning it. The handler must return without answering so the webhook
@@ -116,7 +116,7 @@ describe("answerGuestMessage", () => {
   });
 
   it("ignores a context with no guest message", async () => {
-    const answerGuestQuery = vi.fn().mockResolvedValue({});
+    const answerGuestQuery = mock().mockResolvedValue({});
     const ctx: GuestQueryContext = { answerGuestQuery };
 
     await answerGuestMessage(ctx, corpus, { dryRun: false });
@@ -125,7 +125,7 @@ describe("answerGuestMessage", () => {
   });
 
   it("answers the initializing stub when the corpus is not ready yet", async () => {
-    const answerGuestQuery = vi.fn().mockResolvedValue({});
+    const answerGuestQuery = mock().mockResolvedValue({});
     const ctx: GuestQueryContext = { guestMessage, answerGuestQuery };
 
     await answerGuestMessage(ctx, null, { dryRun: false });
@@ -134,27 +134,27 @@ describe("answerGuestMessage", () => {
   });
 
   it("does not rethrow when answerGuestQuery rejects, so the webhook can still ack 200", async () => {
-    const answerGuestQuery = vi.fn().mockRejectedValue(new ExpiredQueryError());
-    const errWrite = vi
-      .spyOn(process.stderr, "write")
-      .mockImplementation(() => true);
+    const answerGuestQuery = mock().mockRejectedValue(new ExpiredQueryError());
+    const errWrite = spyOn(process.stderr, "write").mockImplementation(
+      () => true
+    );
     const ctx: GuestQueryContext = { guestMessage, answerGuestQuery };
 
     await expect(
       answerGuestMessage(ctx, corpus, { dryRun: false })
     ).resolves.toBeUndefined();
 
-    expect(answerGuestQuery).toHaveBeenCalledOnce();
+    expect(answerGuestQuery).toHaveBeenCalledTimes(1);
     expect(errWrite).toHaveBeenCalledWith(
       expect.stringContaining("answerGuestQuery failed")
     );
   });
 
   it("prints the reply instead of sending it in dry-run", async () => {
-    const answerGuestQuery = vi.fn().mockResolvedValue({});
-    const outWrite = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation(() => true);
+    const answerGuestQuery = mock().mockResolvedValue({});
+    const outWrite = spyOn(process.stdout, "write").mockImplementation(
+      () => true
+    );
     const ctx: GuestQueryContext = { guestMessage, answerGuestQuery };
 
     await answerGuestMessage(ctx, corpus, { dryRun: true });
@@ -166,12 +166,12 @@ describe("answerGuestMessage", () => {
 
 describe("answerPrivateMessage", () => {
   it("recognizes the whole message text and replies with the formats", async () => {
-    const reply = vi.fn().mockResolvedValue({});
+    const reply = mock().mockResolvedValue({});
     const ctx: PrivateMessageContext = { message: { text: DEMO_SMS }, reply };
 
     await answerPrivateMessage(ctx, corpus, { dryRun: false });
 
-    expect(reply).toHaveBeenCalledOnce();
+    expect(reply).toHaveBeenCalledTimes(1);
     expect(reply.mock.calls[0]?.[0]).toBe(RECOGNIZED);
     expect(reply.mock.calls[0]?.[1]).toEqual({
       parse_mode: "HTML",
@@ -180,7 +180,7 @@ describe("answerPrivateMessage", () => {
   });
 
   it("strips a leading /sms and recognizes the payload", async () => {
-    const reply = vi.fn().mockResolvedValue({});
+    const reply = mock().mockResolvedValue({});
     const ctx: PrivateMessageContext = {
       message: { text: `/sms ${DEMO_SMS}` },
       reply,
@@ -192,7 +192,7 @@ describe("answerPrivateMessage", () => {
   });
 
   it("answers the direct usage hint for /start", async () => {
-    const reply = vi.fn().mockResolvedValue({});
+    const reply = mock().mockResolvedValue({});
     const ctx: PrivateMessageContext = { message: { text: "/start" }, reply };
 
     await answerPrivateMessage(ctx, corpus, { dryRun: false });
@@ -201,7 +201,7 @@ describe("answerPrivateMessage", () => {
   });
 
   it("answers the direct usage hint for an empty /sms", async () => {
-    const reply = vi.fn().mockResolvedValue({});
+    const reply = mock().mockResolvedValue({});
     const ctx: PrivateMessageContext = { message: { text: "/sms" }, reply };
 
     await answerPrivateMessage(ctx, corpus, { dryRun: false });
@@ -210,7 +210,7 @@ describe("answerPrivateMessage", () => {
   });
 
   it("answers the direct usage hint for a textless message", async () => {
-    const reply = vi.fn().mockResolvedValue({});
+    const reply = mock().mockResolvedValue({});
     const ctx: PrivateMessageContext = { message: {}, reply };
 
     await answerPrivateMessage(ctx, corpus, { dryRun: false });
@@ -219,7 +219,7 @@ describe("answerPrivateMessage", () => {
   });
 
   it("answers the initializing stub when the corpus is not ready yet", async () => {
-    const reply = vi.fn().mockResolvedValue({});
+    const reply = mock().mockResolvedValue({});
     const ctx: PrivateMessageContext = { message: { text: DEMO_SMS }, reply };
 
     await answerPrivateMessage(ctx, null, { dryRun: false });
@@ -228,27 +228,27 @@ describe("answerPrivateMessage", () => {
   });
 
   it("does not rethrow when reply rejects, so the webhook can still ack 200", async () => {
-    const reply = vi.fn().mockRejectedValue(new TooManyRequestsError());
-    const errWrite = vi
-      .spyOn(process.stderr, "write")
-      .mockImplementation(() => true);
+    const reply = mock().mockRejectedValue(new TooManyRequestsError());
+    const errWrite = spyOn(process.stderr, "write").mockImplementation(
+      () => true
+    );
     const ctx: PrivateMessageContext = { message: { text: DEMO_SMS }, reply };
 
     await expect(
       answerPrivateMessage(ctx, corpus, { dryRun: false })
     ).resolves.toBeUndefined();
 
-    expect(reply).toHaveBeenCalledOnce();
+    expect(reply).toHaveBeenCalledTimes(1);
     expect(errWrite).toHaveBeenCalledWith(
       expect.stringContaining("reply failed")
     );
   });
 
   it("prints the reply instead of sending it in dry-run", async () => {
-    const reply = vi.fn().mockResolvedValue({});
-    const outWrite = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation(() => true);
+    const reply = mock().mockResolvedValue({});
+    const outWrite = spyOn(process.stdout, "write").mockImplementation(
+      () => true
+    );
     const ctx: PrivateMessageContext = { message: { text: DEMO_SMS }, reply };
 
     await answerPrivateMessage(ctx, corpus, { dryRun: true });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   type FormatSearchDoc,
   matchAndScore,
@@ -46,7 +46,7 @@ describe("format-search", () => {
       docsByPath: docs,
     });
 
-    expect(result).toEqual([paths[0]]);
+    expect(result).toEqual([paths[0]!]);
   });
 
   it("prefers exact name match over fuzzy-only match", () => {
@@ -74,7 +74,7 @@ describe("format-search", () => {
       docsByPath: docs,
     });
 
-    expect(result).toEqual([paths[0], paths[1]]);
+    expect(result).toEqual([paths[0]!, paths[1]!]);
   });
 
   it("normalizes case and spaces", () => {

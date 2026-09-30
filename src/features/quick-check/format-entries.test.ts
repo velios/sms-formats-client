@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadBankSnapshot } from "../workspace/bank-snapshot";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 
-const fetchFileContentMock = vi.fn();
+const fetchFileContentMock = mock();
 
-vi.mock("@/infrastructure/github", () => ({
+mock.module("@/infrastructure/github", () => ({
   fetchFileContent: (...args: unknown[]) => fetchFileContentMock(...args),
 }));
+
+const { loadBankSnapshot } = await import("../workspace/bank-snapshot");
 
 describe("loadBankSnapshot", () => {
   beforeEach(() => {

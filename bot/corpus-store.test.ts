@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, mock } from "bun:test";
 import { CorpusStore, type Snapshot } from "./corpus-store";
 
 function snapshot(mainSha: string): Snapshot {
@@ -7,23 +7,23 @@ function snapshot(mainSha: string): Snapshot {
 
 describe("CorpusStore freshness gate", () => {
   it("is empty before the first sync (cold start)", () => {
-    const store = new CorpusStore({ ttlMs: 1000, sync: vi.fn() });
+    const store = new CorpusStore({ ttlMs: 1000, sync: mock() });
     expect(store.current).toBeNull();
   });
 
   it("triggers one check on the first demand and swaps the snapshot in", async () => {
-    const sync = vi.fn().mockResolvedValue(snapshot("a"));
+    const sync = mock().mockResolvedValue(snapshot("a"));
     const store = new CorpusStore({ ttlMs: 1000, sync, now: () => 0 });
 
     store.noteDemand();
     await store.whenSettled();
 
-    expect(sync).toHaveBeenCalledOnce();
+    expect(sync).toHaveBeenCalledTimes(1);
     expect(store.current).toEqual(snapshot("a"));
   });
 
   it("serves from memory inside the TTL window without re-checking", async () => {
-    const sync = vi.fn().mockResolvedValue(snapshot("a"));
+    const sync = mock().mockResolvedValue(snapshot("a"));
     let now = 0;
     const store = new CorpusStore({ ttlMs: 1000, sync, now: () => now });
 
@@ -33,12 +33,11 @@ describe("CorpusStore freshness gate", () => {
     store.noteDemand();
     await store.whenSettled();
 
-    expect(sync).toHaveBeenCalledOnce();
+    expect(sync).toHaveBeenCalledTimes(1);
   });
 
   it("re-checks once the TTL window has elapsed", async () => {
-    const sync = vi
-      .fn()
+    const sync = mock()
       .mockResolvedValueOnce(snapshot("a"))
       .mockResolvedValueOnce(snapshot("b"));
     let now = 0;
@@ -55,23 +54,23 @@ describe("CorpusStore freshness gate", () => {
   });
 
   it("never runs without demand (zero traffic ⇒ zero checks)", () => {
-    const sync = vi.fn().mockResolvedValue(snapshot("a"));
+    const sync = mock().mockResolvedValue(snapshot("a"));
     new CorpusStore({ ttlMs: 1000, sync, now: () => 1e9 });
     expect(sync).not.toHaveBeenCalled();
   });
 
   it("keeps at most one sync in flight", async () => {
     let release!: (s: Snapshot) => void;
-    const sync = vi
-      .fn()
-      .mockReturnValue(new Promise<Snapshot>((r) => (release = r)));
+    const sync = mock().mockReturnValue(
+      new Promise<Snapshot>((r) => (release = r))
+    );
     let now = 0;
     const store = new CorpusStore({ ttlMs: 1000, sync, now: () => now });
 
     store.noteDemand();
     now = 5000; // window elapsed, but a sync is still running
     store.noteDemand();
-    expect(sync).toHaveBeenCalledOnce();
+    expect(sync).toHaveBeenCalledTimes(1);
 
     release(snapshot("a"));
     await store.whenSettled();
@@ -79,8 +78,7 @@ describe("CorpusStore freshness gate", () => {
   });
 
   it("keeps the current snapshot when nothing changed (sync ⇒ null)", async () => {
-    const sync = vi
-      .fn()
+    const sync = mock()
       .mockResolvedValueOnce(snapshot("a"))
       .mockResolvedValueOnce(null);
     let now = 0;
@@ -96,9 +94,8 @@ describe("CorpusStore freshness gate", () => {
   });
 
   it("serves the last good snapshot when a sync fails, then retries next TTL", async () => {
-    const onError = vi.fn();
-    const sync = vi
-      .fn()
+    const onError = mock();
+    const sync = mock()
       .mockResolvedValueOnce(snapshot("a"))
       .mockRejectedValueOnce(new Error("git exploded"))
       .mockResolvedValueOnce(snapshot("c"));
@@ -117,7 +114,7 @@ describe("CorpusStore freshness gate", () => {
     store.noteDemand();
     await store.whenSettled();
     expect(store.current).toEqual(snapshot("a")); // last good retained
-    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledTimes(1);
 
     now = 4000; // retry succeeds
     store.noteDemand();
@@ -126,7 +123,7 @@ describe("CorpusStore freshness gate", () => {
   });
 
   it("seeds a disk snapshot but leaves the TTL gate open for the first request", async () => {
-    const sync = vi.fn().mockResolvedValue(snapshot("fresh"));
+    const sync = mock().mockResolvedValue(snapshot("fresh"));
     const store = new CorpusStore({ ttlMs: 1000, sync, now: () => 5000 });
 
     store.seed(snapshot("disk"));
@@ -134,7 +131,7 @@ describe("CorpusStore freshness gate", () => {
 
     store.noteDemand(); // gate open despite the seed
     await store.whenSettled();
-    expect(sync).toHaveBeenCalledOnce();
+    expect(sync).toHaveBeenCalledTimes(1);
     expect(store.current).toEqual(snapshot("fresh"));
   });
 });

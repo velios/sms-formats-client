@@ -1,15 +1,15 @@
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  changeLanguage: vi.fn(),
-  hardResetAppState: vi.fn(async () => undefined),
-  navigate: vi.fn(),
-  setLocale: vi.fn(),
-}));
+const mocks = {
+  changeLanguage: mock(),
+  hardResetAppState: mock(async () => undefined),
+  navigate: mock(),
+  setLocale: mock(),
+};
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     i18n: {
       changeLanguage: mocks.changeLanguage,
@@ -18,12 +18,12 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("react-router-dom", () => ({
+mock.module("react-router-dom", () => ({
   useLocation: () => ({ pathname: "/" }),
   useNavigate: () => mocks.navigate,
 }));
 
-vi.mock("@/components/ModalDialog", () => ({
+mock.module("@/components/ModalDialog", () => ({
   ModalDialog: ({
     children,
     title,
@@ -38,21 +38,21 @@ vi.mock("@/components/ModalDialog", () => ({
   ),
 }));
 
-vi.mock("@/infrastructure/github", () => ({
-  getCachedPullRequestApprovalPermission: vi.fn(() => false),
-  getGitHubAuthChangeVersion: vi.fn(() => 0),
-  getGitHubUserToken: vi.fn(() => "ghp_saved"),
-  refreshPullRequestApprovalPermission: vi.fn(async () => false),
-  setGitHubUserToken: vi.fn(),
-  subscribeGitHubAuthChange: vi.fn(() => () => undefined),
-  validateToken: vi.fn(async () => undefined),
+mock.module("@/infrastructure/github", () => ({
+  getCachedPullRequestApprovalPermission: mock(() => false),
+  getGitHubAuthChangeVersion: mock(() => 0),
+  getGitHubUserToken: mock(() => "ghp_saved"),
+  refreshPullRequestApprovalPermission: mock(async () => false),
+  setGitHubUserToken: mock(),
+  subscribeGitHubAuthChange: mock(() => () => undefined),
+  validateToken: mock(async () => undefined),
 }));
 
-vi.mock("@/features/source-selector/SourceSelector", () => ({
+mock.module("@/features/source-selector/SourceSelector", () => ({
   SourceSelector: () => <div data-testid="source-selector" />,
 }));
 
-vi.mock("@/store", () => ({
+mock.module("@/store", () => ({
   useSourceStore: (
     selector: (state: {
       repository: { owner: string; repo: string };
@@ -73,11 +73,11 @@ vi.mock("@/store", () => ({
     }),
 }));
 
-vi.mock("@/store/hard-reset", () => ({
+mock.module("@/store/hard-reset", () => ({
   hardResetAppState: mocks.hardResetAppState,
 }));
 
-import { AppHeader } from "./AppHeader";
+const { AppHeader } = await import("./AppHeader");
 
 describe("AppHeader", () => {
   beforeEach(() => {

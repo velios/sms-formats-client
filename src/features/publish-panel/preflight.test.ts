@@ -1,13 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { restoreTestGlobals, setTestGlobal } from "@/test-globals";
 
-vi.mock("@/store", () => ({}));
+mock.module("@/store", () => ({}));
 
-import { resolvePublishPreflightState } from "./preflight";
+const { resolvePublishPreflightState } = await import("./preflight");
 
 describe("resolvePublishPreflightState", () => {
   beforeEach(() => {
     const storage = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
+    setTestGlobal("localStorage", {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => {
         storage.set(key, value);
@@ -19,7 +20,7 @@ describe("resolvePublishPreflightState", () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    restoreTestGlobals();
   });
 
   it("blocks publish on stale head before checking read-only", () => {

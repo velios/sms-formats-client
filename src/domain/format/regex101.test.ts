@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { buildRegex101Url } from "./regex101";
 
 describe("buildRegex101Url", () => {

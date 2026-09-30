@@ -1,18 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { indexBanksFromTree } from "@/domain/bank-index";
-import { resolvePullRequestWorkspaceSnapshot } from "@/domain/pull-request-workspace";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { RepoRef } from "@/domain/types";
+import { restoreTestGlobals, setTestGlobal } from "@/test-globals";
 
-const octokitMocks = vi.hoisted(() => {
-  const createReview = vi.fn(() => Promise.resolve({}));
-  const getPullRequest = vi.fn();
-  const getContent = vi.fn();
-  const getRepository = vi.fn();
-  const compareCommitsWithBasehead = vi.fn();
-  const getAuthenticated = vi.fn(() =>
+const octokitMocks = (() => {
+  const createReview = mock(() => Promise.resolve({}));
+  const getPullRequest = mock();
+  const getContent = mock();
+  const getRepository = mock();
+  const compareCommitsWithBasehead = mock();
+  const getAuthenticated = mock(() =>
     Promise.resolve({ data: { login: "current-user" } })
   );
-  const paginate = vi.fn<
+  const paginate = mock<
     (...args: unknown[]) => Promise<
       Array<{
         user?: { login?: string } | null;
@@ -21,7 +20,7 @@ const octokitMocks = vi.hoisted(() => {
     >
   >(() => Promise.resolve([]));
 
-  const graphql = vi.fn<
+  const graphql = mock<
     (query: string, variables: Record<string, unknown>) => Promise<unknown>
   >(() => Promise.resolve({ repository: {} }));
 
@@ -39,7 +38,7 @@ const octokitMocks = vi.hoisted(() => {
       pulls = {
         createReview,
         get: getPullRequest,
-        listReviews: vi.fn(),
+        listReviews: mock(),
       };
 
       users = {
@@ -51,13 +50,17 @@ const octokitMocks = vi.hoisted(() => {
       graphql = graphql;
     },
   };
-});
+})();
 
-vi.mock("@octokit/rest", () => ({
+mock.module("@octokit/rest", () => ({
   Octokit: octokitMocks.Octokit,
 }));
 
-import {
+const { indexBanksFromTree } = await import("@/domain/bank-index");
+const { resolvePullRequestWorkspaceSnapshot } = await import(
+  "@/domain/pull-request-workspace"
+);
+const {
   approvePullRequest,
   classifyPullRequestResolverError,
   describeGraphqlBlobError,
@@ -73,7 +76,7 @@ import {
   setGitHubUserToken,
   subscribeGitHubAuthChange,
   updatePullRequestHead,
-} from "./client";
+} = await import("./client");
 
 describe("indexBanksFromTree", () => {
   it("indexes banks from explicit tree folders", () => {
@@ -114,7 +117,7 @@ describe("pull request approval permission cache", () => {
 
   beforeEach(() => {
     const storage = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
+    setTestGlobal("localStorage", {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => {
         storage.set(key, value);
@@ -135,7 +138,7 @@ describe("pull request approval permission cache", () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    restoreTestGlobals();
     setGitHubUserToken(null);
   });
 
@@ -177,7 +180,7 @@ describe("pull request approval permission cache", () => {
   });
 
   it("notifies subscribers when user token is set or reset", () => {
-    const onAuthChange = vi.fn();
+    const onAuthChange = mock();
     const initialVersion = getGitHubAuthChangeVersion();
     const unsubscribe = subscribeGitHubAuthChange(onAuthChange);
 

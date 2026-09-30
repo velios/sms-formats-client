@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { analyzeRegexPattern } from "./pattern-analysis";
 import { buildPatternHighlightPlan } from "./pattern-highlight";
 import { recognitionProgress, testRegex } from "./regex";

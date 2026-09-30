@@ -1,11 +1,12 @@
+import { expect, it, mock } from "bun:test";
 import { render } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
-import { serializeFormat } from "@/domain/format";
-import { StructuralDiff } from "./StructuralDiff";
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+
+const { serializeFormat } = await import("@/domain/format");
+const { StructuralDiff } = await import("./StructuralDiff");
 it("shows a significant change in internal SMS whitespace", () => {
   const { container } = render(
     <StructuralDiff

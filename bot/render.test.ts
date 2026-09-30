@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { CorpusFormat } from "./corpus";
 import type { RecognizedFormat } from "./recognize";
 import {

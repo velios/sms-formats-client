@@ -1,13 +1,14 @@
+import { afterEach, expect, it, mock } from "bun:test";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
-import { serializeFormat } from "@/domain/format";
-import { useBankFormatSearch } from "./use-bank-search";
 
-const mocks = vi.hoisted(() => ({ load: vi.fn() }));
-vi.mock("@/infrastructure/file-content", () => ({
+const mocks = { load: mock() };
+mock.module("@/infrastructure/file-content", () => ({
   loadFileContent: mocks.load,
 }));
-afterEach(() => vi.clearAllMocks());
+
+const { serializeFormat } = await import("@/domain/format");
+const { useBankFormatSearch } = await import("./use-bank-search");
+afterEach(() => mock.clearAllMocks());
 
 const path = "src/Bank/formats/a.txt";
 const params = {

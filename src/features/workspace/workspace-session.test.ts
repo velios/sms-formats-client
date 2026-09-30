@@ -1,46 +1,45 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { FileEntry } from "@/domain/types";
-import {
-  useDraftStore,
-  useSourceStore,
-  waitForDraftStoreHydration,
-} from "@/store";
-import {
-  loadWorkspaceSession,
-  saveWorkspaceSession,
-  type WorkspaceSession,
-} from "@/store/workspace-session";
-import { WorkspaceSessionController } from "./workspace-session";
+import type { WorkspaceSession } from "@/store/workspace-session";
+import { setTestGlobal } from "@/test-globals";
+import type { WorkspaceSessionController as WorkspaceSessionControllerType } from "./workspace-session";
 
-vi.hoisted(() => {
+(() => {
   const values = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
+  setTestGlobal("localStorage", {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => {
       values.set(key, value);
     },
   });
-});
-const mocks = vi.hoisted(() => ({
-  resolve: vi.fn(),
-  tree: vi.fn(),
-  content: vi.fn(),
+})();
+const mocks = (() => ({
+  resolve: mock(),
+  tree: mock(),
+  content: mock(),
   storage: new Map<string, string>(),
-}));
-vi.mock("idb-keyval", () => ({
-  get: vi.fn(async (key: string) => mocks.storage.get(key)),
-  set: vi.fn(async (key: string, value: string) => {
+}))();
+mock.module("idb-keyval", () => ({
+  get: mock(async (key: string) => mocks.storage.get(key)),
+  set: mock(async (key: string, value: string) => {
     mocks.storage.set(key, value);
   }),
-  del: vi.fn(),
+  del: mock(),
 }));
-vi.mock("@/infrastructure/github", () => ({
+mock.module("@/infrastructure/github", () => ({
   resolvePullRequestWorkspace: mocks.resolve,
   fetchRepoTree: mocks.tree,
 }));
-vi.mock("@/infrastructure/file-content", () => ({
+mock.module("@/infrastructure/file-content", () => ({
   loadFileContent: mocks.content,
 }));
+
+const { useDraftStore, useSourceStore, waitForDraftStoreHydration } =
+  await import("@/store");
+const { loadWorkspaceSession, saveWorkspaceSession } = await import(
+  "@/store/workspace-session"
+);
+const { WorkspaceSessionController } = await import("./workspace-session");
 
 const repository = { owner: "zenmoney", repo: "sms-formats" };
 const path = "src/Bank/formats/a.txt";
@@ -65,7 +64,7 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
-const controllers: WorkspaceSessionController[] = [];
+const controllers: WorkspaceSessionControllerType[] = [];
 function makeController(prNumber: number) {
   const controller = new WorkspaceSessionController(repository, prNumber);
   controllers.push(controller);
@@ -586,7 +585,7 @@ describe("workspace lifecycle", () => {
       const ticket = first.beginPublication()!;
       first.deactivate();
       let current = first;
-      let other: WorkspaceSessionController | undefined;
+      let other: WorkspaceSessionControllerType | undefined;
       if (newInstance) {
         other = await open(2);
         other.deactivate();

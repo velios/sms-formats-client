@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { ALLOWED_COLUMNS } from "./types";
 
 describe("ALLOWED_COLUMNS", () => {

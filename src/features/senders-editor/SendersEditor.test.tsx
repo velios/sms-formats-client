@@ -1,29 +1,26 @@
+import { beforeEach, expect, it, mock } from "bun:test";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
-import {
-  useDraftStore,
-  useSourceStore,
-  waitForDraftStoreHydration,
-} from "@/store";
-import { SendersEditor } from "./SendersEditor";
+import { setTestGlobal } from "@/test-globals";
 
-vi.hoisted(() =>
-  vi.stubGlobal("localStorage", {
-    getItem: () => null,
-    setItem: () => undefined,
-  })
-);
-vi.mock("idb-keyval", () => ({ get: vi.fn(), set: vi.fn(), del: vi.fn() }));
-vi.mock("react-i18next", () => ({
+setTestGlobal("localStorage", {
+  getItem: () => null,
+  setItem: () => undefined,
+});
+mock.module("idb-keyval", () => ({ get: mock(), set: mock(), del: mock() }));
+mock.module("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-vi.mock("@/hooks/useWorkspaceFileContent", () => ({
+mock.module("@/hooks/useWorkspaceFileContent", () => ({
   useWorkspaceFileContent: () => ({
     data: "BANK",
     isLoading: false,
     error: null,
   }),
 }));
+
+const { useDraftStore, useSourceStore, waitForDraftStoreHydration } =
+  await import("@/store");
+const { SendersEditor } = await import("./SendersEditor");
 const path = "src/Bank/senders.txt";
 
 beforeEach(async () => {

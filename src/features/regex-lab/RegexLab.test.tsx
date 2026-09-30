@@ -1,22 +1,21 @@
+import { beforeAll, describe, expect, it, mock } from "bun:test";
 import { fireEvent, render, screen } from "@testing-library/react";
 import * as React from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { RegexLab } from "./RegexLab";
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: { resolvedLanguage: "ru" },
   }),
 }));
 
-vi.mock("@/components/ModalDialog", () => ({
+mock.module("@/components/ModalDialog", () => ({
   ModalDialog: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
 }));
 
-vi.mock("@/components/ui/button", () => ({
+mock.module("@/components/ui/button", () => ({
   Button: ({
     asChild,
     children,
@@ -31,24 +30,24 @@ vi.mock("@/components/ui/button", () => ({
   },
 }));
 
-vi.mock("@/components/ui/input", () => ({
+mock.module("@/components/ui/input", () => ({
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input {...props} />
   ),
 }));
 
-vi.mock("@/components/ui/status-badge", () => ({
+mock.module("@/components/ui/status-badge", () => ({
   StatusBadge: ({
     children,
     ...props
   }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
 }));
 
-vi.mock("@/features/quick-reference/QuickReference", () => ({
+mock.module("@/features/quick-reference/QuickReference", () => ({
   QuickReference: () => <div>quick-reference</div>,
 }));
 
-vi.mock("@/features/regex-lab/RegexPatternEditor", () => ({
+mock.module("@/features/regex-lab/RegexPatternEditor", () => ({
   RegexPatternEditor: ({
     regex,
     onBlur,
@@ -67,15 +66,15 @@ vi.mock("@/features/regex-lab/RegexPatternEditor", () => ({
   ),
 }));
 
-vi.mock("@/lib/utils", () => ({
+mock.module("@/lib/utils", () => ({
   cn: (...values: Array<string | false | null | undefined>) =>
     values.filter(Boolean).join(" "),
 }));
 
-vi.mock("@/store", () => {
+mock.module("@/store", () => {
   const uiState = {
     highlightMode: "groups" as const,
-    setHighlightMode: vi.fn(),
+    setHighlightMode: mock(),
   };
   return {
     useUIStore: <T,>(selector?: (state: typeof uiState) => T) =>
@@ -83,10 +82,12 @@ vi.mock("@/store", () => {
   };
 });
 
+const { RegexLab } = await import("./RegexLab");
+
 function RegexLabHarness() {
   const [activeExampleIndex, setActiveExampleIndex] = React.useState(0);
   const [examples, setExamples] = React.useState(["PAY 100", "PAY 200"]);
-  const handleOpenIntersectionFileInApp = vi.fn();
+  const handleOpenIntersectionFileInApp = mock();
 
   return (
     <RegexLab
@@ -122,7 +123,7 @@ function RegexLabHarness() {
 }
 
 beforeAll(() => {
-  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  window.HTMLElement.prototype.scrollIntoView = mock();
 });
 
 describe("RegexLab intersection example toggle", () => {
@@ -160,7 +161,7 @@ describe("RegexLab intersection example toggle", () => {
   });
 
   it("opens the linked file from an intersection tab action", () => {
-    const handleOpenIntersectionFileInApp = vi.fn();
+    const handleOpenIntersectionFileInApp = mock();
 
     render(
       <RegexLab

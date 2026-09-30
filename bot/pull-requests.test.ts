@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { listOpenPullRequests } from "./pull-requests";
 
 function jsonResponse(body: unknown, etag = 'W/"e1"'): Response {

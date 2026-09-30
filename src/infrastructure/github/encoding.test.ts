@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { decodeBase64Utf8, encodeBase64Utf8 } from "./encoding";
 
 describe("github encoding", () => {
