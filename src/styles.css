@@ -351,13 +351,17 @@
     @apply overflow-hidden rounded-lg border border-border bg-card;
   }
   .ui-panel-heading {
-    @apply flex min-h-9 flex-wrap items-center justify-between gap-2 border-border border-b bg-muted px-3 py-1 font-semibold text-muted-foreground text-xs uppercase tracking-wide;
+    @apply flex min-h-9 flex-wrap items-center justify-between gap-2 border-border border-b bg-muted py-1 font-semibold text-muted-foreground text-xs uppercase tracking-wide;
+    padding-inline: var(--panel-gap);
   }
   .ui-panel-heading[data-variant="tabs"] {
     @apply justify-start p-0;
   }
   .ui-panel-heading [role="group"] {
     @apply shrink-0;
+  }
+  .ui-panel-inset {
+    padding-inline: var(--panel-gap);
   }
   .ui-panel-body {
     padding: var(--panel-gap);

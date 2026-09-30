@@ -27,14 +27,14 @@ interface OpenPullRequestItem {
 }
 
 const dashboardPanelClassName =
-  "flex h-full min-h-0 w-full max-w-[1280px] flex-col overflow-hidden rounded-lg border border-border bg-card";
+  "ui-panel flex h-full min-h-0 w-full max-w-[1280px] flex-col";
 
 const dashboardPanelHeaderClassName =
-  "flex h-[52px] shrink-0 items-center gap-2.5 border-b border-border bg-muted px-5";
+  "ui-panel-inset flex h-[52px] shrink-0 items-center gap-2.5 border-b border-border bg-muted";
 
 const dashboardRowClassName = (isActive: boolean) =>
   cn(
-    "grid cursor-pointer grid-cols-[52px_minmax(0,1fr)_280px_116px] items-center gap-x-4 border-border border-b px-5 py-2.5 text-sm",
+    "ui-panel-inset grid cursor-pointer grid-cols-[52px_minmax(0,1fr)_280px_116px] items-center gap-x-4 border-border border-b py-2.5 text-sm",
     isActive ? "bg-accent text-primary" : "hover:bg-accent"
   );
 
@@ -184,12 +184,12 @@ export function Dashboard() {
 
         <div className="min-h-0 overflow-y-auto">
           {isLoading ? (
-            <div className="flex items-center gap-2 p-4 text-muted-foreground text-sm">
+            <div className="ui-panel-body flex items-center gap-2 text-muted-foreground text-sm">
               <Spinner />
               <span>{t("app.loading")}</span>
             </div>
           ) : error ? (
-            <div className="flex items-center justify-between gap-3 p-4">
+            <div className="ui-panel-body flex items-center justify-between gap-3">
               <StatusBadge variant="error">
                 {error.message || t("app.error")}
               </StatusBadge>
@@ -198,7 +198,7 @@ export function Dashboard() {
               </Button>
             </div>
           ) : visiblePRs.length === 0 ? (
-            <div className="p-4 text-muted-foreground text-sm">
+            <div className="ui-panel-body text-muted-foreground text-sm">
               {normalizedQuery
                 ? t("bank.noResults")
                 : t("source.empty", {
