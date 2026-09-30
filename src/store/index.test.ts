@@ -398,3 +398,214 @@ it("retains a locally replaced duplicate's identity without adding it to publica
   ).toEqual([null]);
   expect(useDraftStore.getState().getChangedFiles()).toEqual([]);
 });
+
+it.each([
+  {
+    publishedExamples: ["A", "B", "C", "X"],
+    publishedPositions: [1, 2, 3, null],
+    lateExamples: ["A", "edited B", "C", "X"],
+    expected: [1, 2, 3, 4],
+    previous: [1, 2, 3],
+  },
+  {
+    publishedExamples: ["A", "X", "B", "C"],
+    publishedPositions: [1, null, 2, 3],
+    lateExamples: ["A", "X", "edited B", "C"],
+    expected: [1, 2, 3, 4],
+    previous: [1, 3, 4],
+  },
+  {
+    publishedExamples: ["A", "C"],
+    publishedPositions: [1, 3],
+    lateExamples: ["edited A", "C"],
+    expected: [1, 2],
+    previous: [1, null, 2],
+  },
+])(
+  "reassigns published Example positions in late edits, undo/redo, and reload (%j)",
+  async ({
+    publishedExamples,
+    publishedPositions,
+    lateExamples,
+    expected,
+    previous,
+  }) => {
+    const { useDraftStore } = await loadStores();
+    const store = useDraftStore.getState();
+    const format = (examples: readonly string[]) =>
+      `^(.*)$\n\n-----COLUMNS-----\ncomment\n${examples.map((text) => `\n-----EXAMPLE-----\n${text}\n`).join("")}`;
+    const baseline = format(["A", "B", "C"]);
+    const published = format(publishedExamples);
+    const late = format(lateExamples);
+    store.activateScope("publish-positions", false);
+    store.ensureDraft("examples.txt", baseline, "old-head", baseline);
+    store.applyUserEdit("examples.txt", published, "old-head", baseline, [
+      ...publishedPositions,
+    ]);
+    const captured = store.getChangedFiles();
+    store.applyUserEdit("examples.txt", late, "old-head", baseline, [
+      ...publishedPositions,
+    ]);
+    store.acknowledgePublished(captured, "published-head", "publish-positions");
+    expect(store.getDraft("examples.txt")).toMatchObject({
+      content: late,
+      headContent: published,
+      baselineHeadSha: "published-head",
+      examplePositions: expected,
+    });
+    store.undo("examples.txt");
+    expect(store.getDraft("examples.txt")?.content).toBe(published);
+    expect(store.getDraft("examples.txt")?.examplePositions).toEqual(
+      publishedExamples.map((_, index) => index + 1)
+    );
+    store.undo("examples.txt");
+    expect(store.getDraft("examples.txt")?.content).toBe(baseline);
+    expect(store.getDraft("examples.txt")?.examplePositions).toEqual([
+      ...previous,
+    ]);
+    store.redo("examples.txt");
+    store.redo("examples.txt");
+    expect(store.getDraft("examples.txt")?.examplePositions).toEqual([
+      ...expected,
+    ]);
+    const reloaded = await loadStores();
+    reloaded.useDraftStore.getState().activateScope("publish-positions");
+    expect(
+      reloaded.useDraftStore.getState().getDraft("examples.txt")
+    ).toMatchObject({
+      content: late,
+      headContent: published,
+      examplePositions: expected,
+    });
+  }
+);
+
+it("reassigns an inactive publication scope without changing another scope's document or history", async () => {
+  const { useDraftStore } = await loadStores();
+  const store = useDraftStore.getState();
+  const baseline =
+    "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nA\n";
+  const published = `${baseline}\n-----EXAMPLE-----\nX\n`;
+  store.activateScope("publishing", false);
+  store.ensureDraft("same.txt", baseline, "old", baseline);
+  store.applyUserEdit("same.txt", published, "old", baseline, [1, null]);
+  const captured = store.getChangedFiles();
+  store.applyUserEdit(
+    "same.txt",
+    published.replace("\nX\n", "\nedited X\n"),
+    "old",
+    baseline,
+    [1, null]
+  );
+  store.activateScope("other", false);
+  store.ensureDraft("same.txt", baseline, "other", baseline);
+  store.applyUserEdit(
+    "same.txt",
+    baseline.replace("\nA\n", "\nother A\n"),
+    "other",
+    baseline,
+    [1]
+  );
+  store.acknowledgePublished(captured, "published", "publishing");
+  expect(store.getDraft("same.txt")?.examplePositions).toEqual([1]);
+  store.undo("same.txt");
+  expect(store.getDraft("same.txt")?.content).toBe(baseline);
+  store.redo("same.txt");
+  expect(store.getDraft("same.txt")?.content).toContain("other A");
+  store.activateScope("publishing");
+  expect(store.getDraft("same.txt")).toMatchObject({
+    examplePositions: [1, 2],
+    headContent: published,
+    baselineHeadSha: "published",
+  });
+});
+
+it("keeps the undo cursor and future redo steps when publication finishes after an undo", async () => {
+  const { useDraftStore } = await loadStores();
+  const store = useDraftStore.getState();
+  const baseline =
+    "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nA\n";
+  const published = `${baseline}\n-----EXAMPLE-----\nX\n`;
+  const late = published.replace("\nX\n", "\nedited X\n");
+  store.activateScope("cursor", false);
+  store.ensureDraft("a.txt", baseline, "old", baseline);
+  store.applyUserEdit("a.txt", published, "old", baseline, [1, null]);
+  const captured = store.getChangedFiles();
+  store.applyUserEdit("a.txt", late, "old", baseline, [1, null]);
+  store.undo("a.txt");
+  store.undo("a.txt");
+  store.acknowledgePublished(captured, "published", "cursor");
+  expect(store.getDraft("a.txt")).toMatchObject({
+    content: baseline,
+    headContent: published,
+    examplePositions: [1],
+  });
+  expect(store.canUndo("a.txt")).toBe(false);
+  expect(store.canRedo("a.txt")).toBe(true);
+  store.redo("a.txt");
+  expect(store.getDraft("a.txt")).toMatchObject({
+    content: published,
+    examplePositions: [1, 2],
+  });
+  store.redo("a.txt");
+  expect(store.getDraft("a.txt")).toMatchObject({
+    content: late,
+    examplePositions: [1, 2],
+  });
+});
+
+it("does not restore a locally replaced source Example's identity when acknowledging a late edit", async () => {
+  const { useDraftStore } = await loadStores();
+  const store = useDraftStore.getState();
+  const baseline =
+    "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nA\n";
+  const published = `${baseline}\n-----EXAMPLE-----\nX\n`;
+  store.activateScope("replacement", false);
+  store.ensureDraft("a.txt", baseline, "old", baseline);
+  store.applyUserEdit("a.txt", published, "old", baseline, [1, null]);
+  const captured = store.getChangedFiles();
+  store.applyUserEdit("a.txt", published, "old", baseline, [null, null]);
+  store.acknowledgePublished(captured, "published", "replacement");
+  expect(store.getDraft("a.txt")?.examplePositions).toEqual([null, 2]);
+  store.undo("a.txt");
+  expect(store.getDraft("a.txt")?.examplePositions).toEqual([1, 2]);
+  store.redo("a.txt");
+  expect(store.getDraft("a.txt")?.examplePositions).toEqual([null, 2]);
+});
+
+it("retains metadata-only undo steps that become equal after a source Example is published as deleted", async () => {
+  const { useDraftStore } = await loadStores();
+  const store = useDraftStore.getState();
+  const published =
+    "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nA\n";
+  const baseline = `${published}\n-----EXAMPLE-----\nB\n`;
+  const late = published.replace("\nA\n", "\nedited A\n");
+  store.activateScope("equal-steps", false);
+  store.ensureDraft("a.txt", baseline, "old", baseline);
+  store.applyUserEdit("a.txt", baseline, "old", baseline, [1, null]);
+  store.applyUserEdit("a.txt", published, "old", baseline, [1]);
+  const captured = store.getChangedFiles();
+  store.applyUserEdit("a.txt", late, "old", baseline, [1]);
+  store.acknowledgePublished(captured, "published", "equal-steps");
+  store.undo("a.txt");
+  expect(store.getDraft("a.txt")?.content).toBe(published);
+  store.undo("a.txt");
+  expect(store.getDraft("a.txt")).toMatchObject({
+    content: baseline,
+    examplePositions: [1, null],
+  });
+  expect(store.canUndo("a.txt")).toBe(true);
+  store.undo("a.txt");
+  expect(store.getDraft("a.txt")).toMatchObject({
+    content: baseline,
+    examplePositions: [1, null],
+  });
+  expect(store.canUndo("a.txt")).toBe(false);
+  store.redo("a.txt");
+  store.redo("a.txt");
+  store.redo("a.txt");
+  expect(store.getDraft("a.txt")).toMatchObject({
+    content: late,
+    examplePositions: [1],
+  });
+});

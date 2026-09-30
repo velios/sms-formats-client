@@ -56,6 +56,7 @@ interface DraftEntry {
 }
 
 interface DraftHistoryState {
+  rebasedStep?: number;
   examplePositions: ExamplePositions;
   content: string;
   isDeleted: boolean;
@@ -250,10 +251,64 @@ function toStoredDraftRecord(
   );
 }
 
+function publishedExamplePositions(
+  content: string,
+  positions: ExamplePositions,
+  published: DraftEntry
+): ExamplePositions {
+  if (published.isDeleted) {
+    return reconcileExamplePositions("", content, []);
+  }
+  const captured =
+    published.examplePositions ??
+    initialExamplePositions(published.headContent);
+  const inferred = reconcileExamplePositions(
+    published.content,
+    content,
+    initialExamplePositions(published.content)
+  );
+  return positions.map((position, index) => {
+    if (position !== null) {
+      const sourceIndex = captured.indexOf(position);
+      return sourceIndex >= 0 ? sourceIndex + 1 : null;
+    }
+    const newPosition = inferred[index];
+    return newPosition && captured[newPosition - 1] === null
+      ? newPosition
+      : null;
+  });
+}
+
+function rebasePublishedHistory(filePath: string, published: DraftEntry) {
+  const history = getDraftHistory(filePath);
+  if (!history) {
+    return;
+  }
+  const states = history.getHistorySnapshot().map((state, index) => ({
+    ...state,
+    // Keep metadata-only undo steps even when rebasing makes their values equal.
+    rebasedStep: index,
+    examplePositions: publishedExamplePositions(
+      state.content,
+      state.examplePositions,
+      published
+    ),
+  }));
+  const nextHistory = createTravels<DraftHistoryState>(states[0]!, {
+    maxHistory: 200,
+  });
+  for (const state of states.slice(1)) {
+    nextHistory.setState(state);
+  }
+  nextHistory.go(history.getPosition());
+  draftHistoryByPath.set(filePath, nextHistory);
+}
+
 function rebasePublishedDrafts(
   drafts: Map<string, DraftEntry>,
   files: DraftEntry[],
-  headSha: string
+  headSha: string,
+  isActiveScope: boolean
 ): string[] {
   const removed: string[] = [];
   for (const published of files) {
@@ -277,12 +332,22 @@ function rebasePublishedDrafts(
       drafts.delete(published.filePath);
       removed.push(published.filePath);
     } else {
+      const headContent = published.isDeleted ? null : published.content;
+      if (isActiveScope) {
+        rebasePublishedHistory(published.filePath, published);
+      }
       drafts.set(
         published.filePath,
         createDraftEntry({
           ...current,
           baselineHeadSha: headSha,
-          headContent: published.isDeleted ? null : published.content,
+          headContent,
+          examplePositions: publishedExamplePositions(
+            current.content,
+            current.examplePositions ??
+              initialExamplePositions(current.headContent),
+            published
+          ),
         })
       );
     }
@@ -656,7 +721,12 @@ export const useDraftStore = create<DraftState>()(
             : mapStoredDrafts(
                 scopeKey ? get().storedDraftsByScope[scopeKey] : undefined
               );
-          const removed = rebasePublishedDrafts(drafts, files, headSha);
+          const removed = rebasePublishedDrafts(
+            drafts,
+            files,
+            headSha,
+            isActiveScope
+          );
           if (isActiveScope) {
             for (const path of removed) {
               draftHistoryByPath.delete(path);
