@@ -38,7 +38,31 @@ export default defineConfig(({ mode }) => {
                 test: /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
               },
               {
+                name: "shared",
+                priority: 15,
+                test: (id) => {
+                  const path = id.replace(/\\/g, "/");
+                  return (
+                    path.includes("/node_modules/") ||
+                    /\/src\/(?:domain|hooks|lib|infrastructure|store|i18n)\//.test(
+                      path
+                    ) ||
+                    path.endsWith("/src/config.ts") ||
+                    /\/src\/components\/(?!AppHeader)/.test(path) ||
+                    /\/src\/features\/(?:resizable-panels|source-selector)\//.test(
+                      path
+                    ) ||
+                    path.includes("vite/preload-helper")
+                  );
+                },
+              },
+              {
                 name: "app",
+                priority: 10,
+                tags: ["$initial"],
+              },
+              {
+                name: "workspace",
                 priority: 0,
                 test: () => true,
               },

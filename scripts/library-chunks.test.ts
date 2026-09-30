@@ -2,17 +2,29 @@ import { expect, test } from "bun:test";
 import type { OutputChunk } from "rolldown";
 import { build } from "vite";
 
-async function buildChunks(changeText = false) {
+async function buildChunks(change?: "dashboard" | "workspace") {
   const result = await build({
     logLevel: "silent",
     build: { write: false },
-    plugins: changeText
+    plugins: change
       ? [
           {
-            name: "change-dashboard-text",
+            name: "change-ui",
             transform(code, id) {
-              if (id.endsWith("/src/pages/Dashboard.tsx")) {
+              if (
+                change === "dashboard" &&
+                id.endsWith("/src/pages/Dashboard.tsx")
+              ) {
                 return code.replace("Pull Requests", "Pull Requests updated");
+              }
+              if (
+                change === "workspace" &&
+                id.endsWith("/src/pages/BankWorkspace.tsx")
+              ) {
+                return code.replace(
+                  "ui-panel-stack h-full",
+                  "ui-panel-stack h-full cache-probe"
+                );
               }
             },
           },
@@ -27,9 +39,9 @@ async function buildChunks(changeText = false) {
   );
 }
 
-test("three application groups stay isolated and stable across UI text changes", async () => {
+test("shared code prevents workspace cache invalidation after dashboard changes", async () => {
   const chunks = await buildChunks();
-  const updated = await buildChunks(true);
+  const updated = await buildChunks("dashboard");
   const entry = chunks.find((chunk) => chunk.isEntry);
   expect(entry).toBeDefined();
   expect(updated.find((chunk) => chunk.isEntry)?.fileName).not.toBe(
@@ -64,8 +76,55 @@ test("three application groups stay isolated and stable across UI text changes",
     "index",
     "react",
     "rolldown-runtime",
+    "shared",
+    "workspace",
   ]);
+  const workspace = chunks.find((chunk) => chunk.name === "workspace")!;
+  expect(workspace.imports).not.toContain(entry!.fileName);
+  for (const name of [
+    "workspace",
+    "shared",
+    "react",
+    "codemirror",
+    "rolldown-runtime",
+  ]) {
+    const original = chunks.find((chunk) => chunk.name === name)!;
+    expect(updated.find((chunk) => chunk.name === name)).toMatchObject({
+      fileName: original.fileName,
+      code: original.code,
+    });
+  }
+
+  const workspaceUpdated = await buildChunks("workspace");
   expect(
-    chunks.find((chunk) => chunk.name === "rolldown-runtime")!.code.length
-  ).toBeLessThan(1000);
+    workspaceUpdated.find((chunk) => chunk.name === "workspace")!.fileName
+  ).not.toBe(workspace.fileName);
+  for (const name of ["shared", "react", "codemirror", "rolldown-runtime"]) {
+    const original = chunks.find((chunk) => chunk.name === name)!;
+    expect(workspaceUpdated.find((chunk) => chunk.name === name)).toMatchObject(
+      {
+        fileName: original.fileName,
+        code: original.code,
+      }
+    );
+  }
+
+  const initial = new Set<string>();
+  function visit(fileName: string) {
+    if (initial.has(fileName)) {
+      return;
+    }
+    initial.add(fileName);
+    for (const dependency of chunks.find(
+      (chunk) => chunk.fileName === fileName
+    )!.imports) {
+      visit(dependency);
+    }
+  }
+  visit(entry!.fileName);
+  expect(initial.size).toBe(4);
+  expect(initial.has(workspace.fileName)).toBe(false);
+  expect(
+    initial.has(chunks.find((chunk) => chunk.name === "codemirror")!.fileName)
+  ).toBe(false);
 }, 30_000);
