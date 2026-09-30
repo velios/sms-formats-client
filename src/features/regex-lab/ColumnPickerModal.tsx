@@ -109,7 +109,7 @@ export function ColumnPickerModal({
           <div className="p-4 text-muted-foreground text-sm">—</div>
         )}
       </div>
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="ui-dialog-actions mt-6 justify-end">
         <Button onClick={onClose} type="button">
           {t("app.cancel")}
         </Button>

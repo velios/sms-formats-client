@@ -353,6 +353,9 @@
   .ui-panel-heading {
     @apply flex min-h-9 flex-wrap items-center justify-between gap-2 border-border border-b bg-muted px-3 py-1 font-semibold text-muted-foreground text-xs uppercase tracking-wide;
   }
+  .ui-panel-heading[data-variant="tabs"] {
+    @apply justify-start p-0;
+  }
   .ui-panel-heading [role="group"] {
     @apply shrink-0;
   }
@@ -366,6 +369,9 @@
   .ui-tabs {
     @apply flex border-border border-b;
   }
+  .ui-panel-heading[data-variant="tabs"] > .ui-tabs {
+    @apply w-full border-b-0;
+  }
   .ui-tab {
     @apply cursor-pointer border-transparent border-b-2 px-3 py-1.5 font-medium text-muted-foreground text-xs leading-normal outline-none transition-colors hover:bg-muted hover:text-primary focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px];
   }
@@ -377,6 +383,22 @@
   }
   .ui-card {
     @apply rounded-md border border-border bg-card p-2 text-xs leading-[18px];
+  }
+  .ui-field {
+    @apply flex flex-col gap-1;
+  }
+  .ui-field-label,
+  .ui-field-hint {
+    @apply text-muted-foreground text-xs;
+  }
+  .ui-dialog-actions {
+    @apply flex shrink-0 items-center gap-2;
+  }
+  .sms-text-layer {
+    @apply min-h-[60px] px-3 py-2 font-mono text-sm leading-[1.6];
+    overflow-wrap: break-word;
+    tab-size: 4;
+    white-space: pre-wrap;
   }
   .regex-token {
     @apply rounded-[2px] border px-px font-semibold;

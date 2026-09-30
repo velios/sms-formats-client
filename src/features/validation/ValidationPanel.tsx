@@ -145,7 +145,7 @@ export function ValidationPanel({ bankPath, bank, onClose }: Props) {
         </div>
       ) : null}
 
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="ui-dialog-actions mt-6 justify-end">
         <Button onClick={onClose} type="button">
           {t("app.close")}
         </Button>

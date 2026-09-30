@@ -42,11 +42,8 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
   return (
     <ModalDialog onClose={onClose} title={t("publish.updateDialogTitle")}>
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label
-            className="text-muted-foreground text-xs"
-            htmlFor={commitTitleInputId}
-          >
+        <div className="ui-field">
+          <label className="ui-field-label" htmlFor={commitTitleInputId}>
             {t("publish.commitTitleLabel")}
           </label>
           <Input
@@ -57,11 +54,8 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
             value={commitTitle}
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <label
-            className="text-muted-foreground text-xs"
-            htmlFor={commitDescriptionInputId}
-          >
+        <div className="ui-field">
+          <label className="ui-field-label" htmlFor={commitDescriptionInputId}>
             {t("publish.commitDescriptionLabel")}
           </label>
           <Textarea
@@ -73,7 +67,7 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
         </div>
       </div>
 
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="ui-dialog-actions mt-6 justify-end">
         <Button disabled={isBusy} onClick={onClose} type="button">
           {t("publish.cancel")}
         </Button>

@@ -163,11 +163,8 @@ export function PromptPackageModal({
       title={t("promptPackage.title", { bank: bankName })}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-        <div className="flex flex-col gap-1.5">
-          <label
-            className="font-medium text-muted-foreground text-sm"
-            htmlFor={taskId}
-          >
+        <div className="ui-field">
+          <label className="ui-field-label font-medium" htmlFor={taskId}>
             {t("promptPackage.taskLabel")}
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -196,8 +193,8 @@ export function PromptPackageModal({
           />
         </div>
 
-        <fieldset className="flex flex-col gap-1.5 border-0 p-0">
-          <legend className="mb-1.5 font-medium text-muted-foreground text-sm">
+        <fieldset className="ui-field border-0 p-0">
+          <legend className="ui-field-label mb-1 font-medium">
             {t("promptPackage.documentsLabel")}
           </legend>
           {DOCUMENT_KEYS.map((key) => (
@@ -255,7 +252,7 @@ export function PromptPackageModal({
         </div>
       </div>
 
-      <div className="mt-4 flex shrink-0 items-center gap-2 border-border border-t pt-4">
+      <div className="ui-dialog-actions mt-4 border-border border-t pt-4">
         <Button
           disabled={!result || promptPackage.isBuilding}
           onClick={() => void handleCopy()}

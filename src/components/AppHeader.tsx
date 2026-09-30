@@ -189,11 +189,8 @@ export function AppHeader() {
           onClose={() => setGithubTokenModalOpen(false)}
           title={t("githubAuth.title")}
         >
-          <div className="mb-4 flex flex-col gap-2">
-            <label
-              className="text-muted-foreground text-xs"
-              htmlFor={githubTokenInputId}
-            >
+          <div className="ui-field mb-4">
+            <label className="ui-field-label" htmlFor={githubTokenInputId}>
               {t("githubAuth.tokenLabel")}
             </label>
             <Input
@@ -207,9 +204,7 @@ export function AppHeader() {
               type="password"
               value={githubTokenInput}
             />
-            <div className="text-muted-foreground text-sm">
-              {t("githubAuth.tokenHint")}
-            </div>
+            <div className="ui-field-hint">{t("githubAuth.tokenHint")}</div>
             {hasSavedGitHubToken && (
               <StatusBadge variant="success">
                 {t("githubAuth.tokenSaved")}
@@ -219,7 +214,7 @@ export function AppHeader() {
               <StatusBadge variant="error">{githubTokenError}</StatusBadge>
             )}
           </div>
-          <div className="mt-6 flex justify-end gap-2">
+          <div className="ui-dialog-actions mt-6 justify-end">
             <Button
               className="mr-auto"
               disabled={isSavingGitHubToken || isHardResetting}

@@ -30,8 +30,8 @@ export function PatternExplanationPane({
 
   return (
     <div className={cn("ui-panel", "flex min-h-0 flex-col")}>
-      <div className={cn("ui-panel-heading", "justify-start px-0 py-0")}>
-        <div className={cn("ui-tabs", "w-full border-b-0")}>
+      <div className="ui-panel-heading" data-variant="tabs">
+        <div className="ui-tabs">
           {!readOnly && (
             <button
               className="ui-tab"

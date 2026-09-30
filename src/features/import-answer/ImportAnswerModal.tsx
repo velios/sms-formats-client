@@ -60,25 +60,27 @@ function PasteView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="font-semibold text-muted-foreground text-xs uppercase tracking-[0.5px]">
-        {t("importAnswer.answerLabel")}
+      <div className="ui-field min-h-0 flex-1">
+        <div className="ui-field-label font-semibold uppercase tracking-[0.5px]">
+          {t("importAnswer.answerLabel")}
+        </div>
+        <Textarea
+          className="min-h-0 flex-1 font-mono text-xs leading-[1.6]"
+          onChange={(event) => {
+            onChange(event.target.value);
+            if (pastedRef.current) {
+              pastedRef.current = false;
+              onPasted();
+            }
+          }}
+          onPaste={() => {
+            pastedRef.current = true;
+          }}
+          placeholder={t("importAnswer.answerPlaceholder")}
+          value={text}
+        />
       </div>
-      <Textarea
-        className="min-h-0 flex-1 font-mono text-xs leading-[1.6]"
-        onChange={(event) => {
-          onChange(event.target.value);
-          if (pastedRef.current) {
-            pastedRef.current = false;
-            onPasted();
-          }
-        }}
-        onPaste={() => {
-          pastedRef.current = true;
-        }}
-        placeholder={t("importAnswer.answerPlaceholder")}
-        value={text}
-      />
-      <div className="flex items-center gap-3 border-border border-t pt-4">
+      <div className="ui-dialog-actions border-border border-t pt-4">
         <Button
           disabled={text.trim() === ""}
           onClick={onShowChanges}
@@ -326,7 +328,7 @@ export function ImportAnswerModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 border-border border-t pt-3">
+          <div className="ui-dialog-actions border-border border-t pt-3">
             {!imported && (
               <>
                 <Button

@@ -441,8 +441,8 @@ export function QuickCheckPanel({
       </div>
 
       {mode === "template-by-sms" ? (
-        <div className="flex flex-col gap-1">
-          <label className="text-muted-foreground text-xs" htmlFor={inputId}>
+        <div className="ui-field">
+          <label className="ui-field-label" htmlFor={inputId}>
             {t("quickCheck.smsLabel")}
           </label>
           <Textarea
@@ -452,11 +452,11 @@ export function QuickCheckPanel({
             placeholder={t("quickCheck.smsPlaceholder")}
             value={smsText}
           />
-          <div className="text-muted-foreground text-xs">
+          <div className="ui-field-hint">
             {t("quickCheck.scopeInfo", { count: formatPaths.length })}
           </div>
           {activeFormatContext && (
-            <div className="text-muted-foreground text-xs">
+            <div className="ui-field-hint">
               {t("quickCheck.activeSmsSource", {
                 file: extractFormatFileName(activeFormatContext.filePath),
                 index: activeFormatContext.activeExampleIndex + 1,
@@ -465,8 +465,8 @@ export function QuickCheckPanel({
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-1">
-          <label className="text-muted-foreground text-xs" htmlFor={inputId}>
+        <div className="ui-field">
+          <label className="ui-field-label" htmlFor={inputId}>
             {t("quickCheck.templateRegexLabel")}
           </label>
           <Textarea
@@ -476,11 +476,11 @@ export function QuickCheckPanel({
             placeholder={t("quickCheck.templateRegexPlaceholder")}
             value={templateRegex}
           />
-          <div className="text-muted-foreground text-xs">
+          <div className="ui-field-hint">
             {t("quickCheck.scopeInfo", { count: formatPaths.length })}
           </div>
           {activeFormatContext && (
-            <div className="text-muted-foreground text-xs">
+            <div className="ui-field-hint">
               {t("quickCheck.activeTemplateSource", {
                 file: extractFormatFileName(activeFormatContext.filePath),
               })}
@@ -714,7 +714,7 @@ export function QuickCheckPanel({
         ))}
       </div>
 
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="ui-dialog-actions mt-6 justify-end">
         <Button onClick={onClose} type="button" variant="default">
           {t("app.close")}
         </Button>

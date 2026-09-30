@@ -68,13 +68,13 @@ export function MatchOverlayTextarea({
     <div className="relative overflow-hidden rounded-md border border-border bg-card focus-within:border-ring">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 min-h-[60px] overflow-auto px-3 py-2 text-foreground text-sm leading-[1.6] [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap]"
+        className="sms-text-layer pointer-events-none absolute inset-0 overflow-auto text-foreground"
         ref={highlightsRef}
       >
         {renderHighlightedText(segments)}
       </div>
       <textarea
-        className="relative z-[1] min-h-[60px] w-full resize-y border-none bg-transparent px-3 py-2 text-sm text-transparent leading-[1.6] caret-foreground outline-none [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] selection:bg-primary-soft"
+        className="sms-text-layer relative z-[1] w-full resize-y border-none bg-transparent text-transparent caret-foreground outline-none selection:bg-primary-soft"
         onChange={(e) => onTextChange(e.target.value)}
         onScroll={(e) =>
           handleScroll(e.currentTarget.scrollTop, e.currentTarget.scrollLeft)
