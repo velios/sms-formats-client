@@ -17,8 +17,53 @@ function markerOffsets(content: string): number[] {
   );
 }
 
-// Preserve section markers outside the single changed text range. Exact sections
-// inside a replacement retain their positions; new sections have no source position.
+function unchangedMarkerOffset(
+  offset: number,
+  start: number,
+  suffixStart: number,
+  lengthDifference: number,
+  sameCount: boolean
+): number {
+  if (offset >= suffixStart) {
+    return offset + lengthDifference;
+  }
+  return sameCount && offset < start ? offset : -1;
+}
+
+function alignChangedSections(
+  oldCount: number,
+  newCount: number,
+  matches: Map<number, number>,
+  positions: ExamplePositions
+): ExamplePositions {
+  const result = Array.from(
+    { length: newCount },
+    (_, index) => positions[matches.get(index) ?? -1] ?? null
+  );
+  const used = new Set(matches.values());
+  let start = 0;
+  for (let end = 0; end <= newCount; end++) {
+    if (end < newCount && !matches.has(end)) {
+      continue;
+    }
+    const oldStart = (matches.get(start - 1) ?? -1) + 1;
+    const oldEnd = matches.get(end) ?? oldCount;
+    const remaining = Array.from(
+      { length: Math.max(0, oldEnd - oldStart) },
+      (_, index) => oldStart + index
+    ).filter((index) => !used.has(index));
+    // Align edits within their retained neighbours; surplus insertions stay local.
+    const shift = Math.max(0, end - start - remaining.length);
+    for (let index = start; index < end; index++) {
+      result[index] = positions[remaining[index - start - shift] ?? -1] ?? null;
+    }
+    start = end + 1;
+  }
+  return result;
+}
+
+// Preserve unchanged section boundaries around a raw replacement. Match duplicate
+// sections from the end so an insertion before an original stays local.
 export function reconcileExamplePositions(
   previous: string,
   next: string,
@@ -33,42 +78,42 @@ export function reconcileExamplePositions(
   const oldExamples = parseFormatFile(previous).examples;
   const newExamples = parseFormatFile(next).examples;
   const used = new Set<number>();
-  const result: ExamplePositions = newMarkers.map(() => null);
-  const assigned = new Set<number>();
+  const assigned = new Map<number, number>();
   for (let index = newMarkers.length - 1; index >= 0; index--) {
-    if (oldMarkers.length !== newMarkers.length) {
-      continue;
-    }
     const offset = newMarkers[index]!;
-    const oldOffset =
-      offset >= next.length - end
-        ? offset + previous.length - next.length
-        : offset < start
-          ? offset
-          : -1;
+    const oldOffset = unchangedMarkerOffset(
+      offset,
+      start,
+      next.length - end,
+      previous.length - next.length,
+      oldMarkers.length === newMarkers.length
+    );
     const oldIndex = oldMarkers.indexOf(oldOffset);
     if (oldIndex < 0 || used.has(oldIndex)) {
       continue;
     }
     used.add(oldIndex);
-    assigned.add(index);
-    result[index] = positions[oldIndex] ?? null;
+    assigned.set(index, oldIndex);
   }
-  for (let index = 0; index < newExamples.length; index++) {
+  for (let index = newExamples.length - 1; index >= 0; index--) {
     if (assigned.has(index)) {
       continue;
     }
-    const oldIndex = oldExamples.findIndex(
+    const oldIndex = oldExamples.findLastIndex(
       (example, candidate) =>
         !used.has(candidate) && example === newExamples[index]
     );
     if (oldIndex >= 0) {
       used.add(oldIndex);
-      assigned.add(index);
-      result[index] = positions[oldIndex] ?? null;
+      assigned.set(index, oldIndex);
     }
   }
-  return result;
+  return alignChangedSections(
+    oldExamples.length,
+    newExamples.length,
+    assigned,
+    positions
+  );
 }
 
 function changedRange(previous: string, next: string) {

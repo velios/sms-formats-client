@@ -7,6 +7,40 @@ import { serializeFormat } from "./parser";
 
 const format = (examples: string[]) =>
   serializeFormat("^(.*)$", ["comment"], examples);
+it("retains the edited original when raw paste also inserts a section before it", () => {
+  expect(
+    reconcileExamplePositions(
+      format(["A", "B", "C"]),
+      format(["A", "X", "edited B", "C"]),
+      [1, 2, 3]
+    )
+  ).toEqual([1, null, 2, 3]);
+});
+it("keeps a duplicate inserted before an original local", () => {
+  expect(
+    reconcileExamplePositions(
+      format(["A", "B", "C"]),
+      format(["A", "B", "B", "C"]),
+      [1, 2, 3]
+    )
+  ).toEqual([1, null, 2, 3]);
+});
+it("keeps edits between their original neighbours when another section is appended", () => {
+  expect(
+    reconcileExamplePositions(
+      format(["A", "B", "C"]),
+      format(["A", "edited B", "C", "X"]),
+      [1, 2, 3]
+    )
+  ).toEqual([1, 2, 3, null]);
+  expect(
+    reconcileExamplePositions(
+      format(["A", "B", "C"]),
+      format(["edited A", "C"]),
+      [1, 2, 3]
+    )
+  ).toEqual([1, 3]);
+});
 it("retains source positions through raw insertion, text edit, deletion, and empty list", () => {
   let content = format(["A", "B", "C"]);
   let positions = initialExamplePositions(content);
