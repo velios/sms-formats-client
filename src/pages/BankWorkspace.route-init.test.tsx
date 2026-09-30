@@ -8,6 +8,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { type ReactElement, type ReactNode, useState } from "react";
+import type { WorkspaceSessionController } from "@/features/workspace/workspace-session";
 
 const mocks = (() => {
   const routeState = {
@@ -149,6 +150,7 @@ const mocks = (() => {
   useDraftStore.subscribe = () => () => undefined;
 
   return {
+    workspaceController: null as WorkspaceSessionController | null,
     fetchPullRequestApprovalByCurrentUser: mock(() => Promise.resolve(false)),
     banks,
     draftState,
@@ -333,6 +335,19 @@ mock.module("@/infrastructure/github", () => {
 const { fetchFileContent, fetchOpenPRs, getGitHubUserToken } = await import(
   "@/infrastructure/github"
 );
+const { useWorkspaceSession: useActualWorkspaceSession } = await import(
+  "@/features/workspace/use-workspace-session"
+);
+mock.module("@/features/workspace/use-workspace-session", () => ({
+  useWorkspaceSession: (
+    ...args: Parameters<typeof useActualWorkspaceSession>
+  ) => {
+    const value = useActualWorkspaceSession(...args);
+    mocks.workspaceController = value.controller;
+    return value;
+  },
+}));
+
 const { BankWorkspace } = await import("./BankWorkspace");
 
 function QueryWrapper({ children }: { children: ReactNode }) {
@@ -346,8 +361,19 @@ function render(ui: ReactElement) {
   return rtlRender(ui, { wrapper: QueryWrapper });
 }
 
+function checkWorkspaceUpdates() {
+  const controller = mocks.workspaceController;
+  if (!controller) {
+    throw new Error("Workspace controller is not mounted");
+  }
+  act(() => {
+    void controller.checkUpdates();
+  });
+}
+
 describe("BankWorkspace route init", () => {
   beforeEach(() => {
+    mocks.workspaceController = null;
     mocks.routeState.location.pathname = "/repo/zenmoney/sms-formats/pr/123";
     mocks.routeState.location.search =
       "?file=src/TBank_123/formats/current.txt";
@@ -636,9 +662,7 @@ describe("BankWorkspace route init", () => {
       )
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "workspace.checkUpdates" })
-    );
+    checkWorkspaceUpdates();
 
     await waitFor(() =>
       expect(
@@ -684,9 +708,7 @@ describe("BankWorkspace route init", () => {
       )
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "workspace.checkUpdates" })
-    );
+    checkWorkspaceUpdates();
 
     await waitFor(() =>
       expect(mocks.cacheFileContent).toHaveBeenCalledWith(
@@ -735,9 +757,7 @@ describe("BankWorkspace route init", () => {
       expect(screen.getByTestId("format-editor")).toBeInTheDocument()
     );
     mocks.draftState.discardAll.mockClear();
-    fireEvent.click(
-      screen.getByRole("button", { name: "workspace.checkUpdates" })
-    );
+    checkWorkspaceUpdates();
     await waitFor(() => expect(mocks.fetchRepoTree).toHaveBeenCalledTimes(2));
     mocks.draftState.getChangedFiles.mockReturnValue([
       {
@@ -1015,9 +1035,7 @@ describe("BankWorkspace route init", () => {
       ...current,
       headSha: "next-head",
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "workspace.checkUpdates" })
-    );
+    checkWorkspaceUpdates();
     await waitFor(() =>
       expect(mocks.sourceState.sourceRef?.sha).toBe("next-head")
     );

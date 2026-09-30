@@ -27,6 +27,11 @@ export function WorkspaceSessionNotice({
             ? t("publish.readOnly")
             : null;
 
+  const canRetry = pending || !state.session;
+  if (!(notice || state.error || canRetry)) {
+    return null;
+  }
+
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
       <div className="flex flex-col gap-2">
@@ -53,26 +58,22 @@ export function WorkspaceSessionNotice({
             {t("workspace.discardAndRefresh")}
           </Button>
         )}
-        <Button
-          disabled={busy}
-          onClick={() => {
-            if (pending) {
-              void controller.syncPublication();
-            } else if (state.session) {
-              void controller.checkUpdates();
-            } else {
-              void controller.open();
-            }
-          }}
-          type="button"
-          variant="ghost"
-        >
-          {pending
-            ? t("workspace.retrySync")
-            : state.session
-              ? t("workspace.checkUpdates")
-              : t("app.retry")}
-        </Button>
+        {canRetry && (
+          <Button
+            disabled={busy}
+            onClick={() => {
+              if (pending) {
+                void controller.syncPublication();
+              } else {
+                void controller.open();
+              }
+            }}
+            type="button"
+            variant="ghost"
+          >
+            {pending ? t("workspace.retrySync") : t("app.retry")}
+          </Button>
+        )}
       </div>
     </div>
   );
