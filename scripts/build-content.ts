@@ -20,7 +20,7 @@ const GENERATED_HEADER =
 
 // Renders one markdown document to external JSON, emitting both the HTML
 // the app renders and the raw markdown the prompt package embeds (ADR-0016).
-async function buildDocument(slug: string): Promise<void> {
+async function buildDocument(slug: string) {
   const markdownHtml = (
     Bun as unknown as { markdown?: { html?: (md: string) => string } }
   ).markdown?.html;
@@ -31,13 +31,10 @@ async function buildDocument(slug: string): Promise<void> {
   }
   const md = await Bun.file(join(contentDir, `${slug}.md`)).text();
   const html = markdownHtml(md);
-  await Bun.write(
-    join(contentDir, `${slug}.generated.json`),
-    JSON.stringify({ html, markdown: md })
-  );
+  return { html, markdown: md };
 }
 
-async function buildSnippets(): Promise<void> {
+async function buildSnippets() {
   const raw = (snippetData as { snippet?: unknown[] }).snippet;
   if (!Array.isArray(raw) || raw.length === 0) {
     fail("regex-snippets.toml has no [[snippet]] entries.");
@@ -62,33 +59,39 @@ async function buildSnippets(): Promise<void> {
   });
 
   const toml = await Bun.file(join(contentDir, "regex-snippets.toml")).text();
-  await Bun.write(
-    join(contentDir, "snippets.generated.json"),
-    JSON.stringify({ snippets, toml })
-  );
+  return { snippets, toml };
 }
 
-await Promise.all([
+const [cookbook, rules, snippets] = await Promise.all([
   buildDocument("cookbook"),
   buildDocument("format-rules"),
   buildSnippets(),
+]);
+await Promise.all([
+  Bun.write(
+    join(contentDir, "cookbook-snippets.generated.json"),
+    JSON.stringify({ ...cookbook, ...snippets })
+  ),
+  Bun.write(
+    join(contentDir, "format-rules.generated.json"),
+    JSON.stringify(rules)
+  ),
 ]);
 await Bun.write(
   join(contentDir, "reference.generated.ts"),
   `${GENERATED_HEADER}
 import type { RegexSnippet } from "@/features/snippet-library/schema";
 import { loadData } from "./load-data";
-const [cookbook, rules, snippets] = await Promise.all([
-  loadData<{ html: string; markdown: string }>("cookbook"),
+const [catalog, rules] = await Promise.all([
+  loadData<{ html: string; markdown: string; snippets: RegexSnippet[]; toml: string }>("cookbook-snippets"),
   loadData<{ html: string; markdown: string }>("format-rules"),
-  loadData<{ snippets: RegexSnippet[]; toml: string }>("snippets"),
 ]);
-export const COOKBOOK_HTML = cookbook.html;
-export const COOKBOOK_MARKDOWN = cookbook.markdown;
+export const COOKBOOK_HTML = catalog.html;
+export const COOKBOOK_MARKDOWN = catalog.markdown;
 export const FORMAT_RULES_HTML = rules.html;
 export const FORMAT_RULES_MARKDOWN = rules.markdown;
-export const REGEX_SNIPPETS = snippets.snippets;
-export const SNIPPETS_TOML = snippets.toml;
+export const REGEX_SNIPPETS = catalog.snippets;
+export const SNIPPETS_TOML = catalog.toml;
 `
 );
 process.stdout.write(

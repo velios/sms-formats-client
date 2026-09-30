@@ -78,6 +78,11 @@ test("data and functional changes preserve independent library caches", async ()
     const config = loaded!.config;
     const baseline = await buildOutput(root, config);
     const original = chunks(baseline);
+    expect(
+      baseline.filter(
+        (item) => item.type === "asset" && item.fileName.endsWith(".json")
+      )
+    ).toHaveLength(4);
     for (const name of libraries) {
       const group = original.filter((chunk) => chunk.name === name);
       expect(group).toHaveLength(1);
@@ -112,16 +117,16 @@ test("data and functional changes preserve independent library caches", async ()
     const cases = [
       ["src/i18n/ru.json", "Назад к списку PR", "Вернуться к списку PR", "ru"],
       [
-        "src/content/cookbook.generated.json",
+        "src/content/cookbook-snippets.generated.json",
         '"html":"',
         '"html":"Updated ',
-        "cookbook",
+        "cookbook-snippets",
       ],
       [
-        "src/content/snippets.generated.json",
+        "src/content/cookbook-snippets.generated.json",
         '"desc":"',
         '"desc":"Updated ',
-        "snippets",
+        "cookbook-snippets",
       ],
       [
         "src/pages/Dashboard.tsx",
@@ -163,7 +168,7 @@ test("data and functional changes preserve independent library caches", async ()
         )
         .map((chunk) => chunk.name);
       expect(changed.some((name) => libraries.includes(name))).toBe(false);
-      if (["ru", "cookbook", "snippets"].includes(changedName)) {
+      if (["ru", "cookbook-snippets"].includes(changedName)) {
         expect(changed).toEqual([]);
         const assets = updated.filter(
           (item) =>

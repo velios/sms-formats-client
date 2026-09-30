@@ -8,9 +8,8 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 const dataFiles = {
   ru: "src/i18n/ru.json",
   en: "src/i18n/en.json",
-  cookbook: "src/content/cookbook.generated.json",
+  "cookbook-snippets": "src/content/cookbook-snippets.generated.json",
   "format-rules": "src/content/format-rules.generated.json",
-  snippets: "src/content/snippets.generated.json",
 };
 
 function externalData(): Plugin {
