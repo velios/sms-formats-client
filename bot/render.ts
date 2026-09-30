@@ -1,3 +1,4 @@
+import { buildFormatUrl } from "@/domain/format";
 import { type CorpusFormat, openPrCount, type Source } from "./corpus";
 import type { RecognizedFormat } from "./recognize";
 
@@ -41,15 +42,35 @@ function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-function formatLine(format: RecognizedFormat): string {
+function formatLine(format: RecognizedFormat, sms: string): string {
   const title = escapeHtml(`${format.bank}/${format.formatId}`);
-  return `- <a href="${escapeHtml(format.fileUrl)}">${title}</a>`;
+  const [, owner, repo, , , ...fileSegments] = new URL(format.fileUrl).pathname
+    .split("/")
+    .map(decodeURIComponent);
+  if (!(owner && repo && fileSegments.length)) {
+    throw new Error(`Invalid corpus file URL: ${format.fileUrl}`);
+  }
+  const formatUrl = buildFormatUrl({
+    origin: "https://sms.zentable.ru",
+    repository: { owner, repo },
+    source:
+      format.source.kind === "main"
+        ? { type: "main" }
+        : { type: "pr", prNumber: format.source.number },
+    filePath: fileSegments.join("/"),
+    sms,
+  });
+  return `- <a href="${escapeHtml(format.fileUrl)}">${title}</a> (<a href="${escapeHtml(formatUrl)}">zensms</a>)`;
 }
 
-function groupBySource(recognized: RecognizedFormat[]): SourceGroup[] {
+function groupBySource(
+  recognized: RecognizedFormat[],
+  sms: string
+): SourceGroup[] {
   const groups = new Map<string, SourceGroup>();
   for (const format of recognized) {
     const key = sourceKey(format.source);
@@ -58,7 +79,7 @@ function groupBySource(recognized: RecognizedFormat[]): SourceGroup[] {
       group = { source: format.source, lines: [] };
       groups.set(key, group);
     }
-    group.lines.push(formatLine(format));
+    group.lines.push(formatLine(format, sms));
   }
   return [...groups.values()].sort(
     (a, b) => sourceOrder(a.source) - sourceOrder(b.source)
@@ -67,12 +88,13 @@ function groupBySource(recognized: RecognizedFormat[]): SourceGroup[] {
 
 export function renderResponse(
   recognized: RecognizedFormat[],
-  corpus: CorpusFormat[]
+  corpus: CorpusFormat[],
+  sms: string
 ): string {
   if (recognized.length === 0) {
     return noMatchMessage(corpus);
   }
-  return groupBySource(recognized)
+  return groupBySource(recognized, sms)
     .map((group) => [sourceHeader(group.source), ...group.lines].join("\n"))
     .join("\n");
 }

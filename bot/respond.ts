@@ -23,5 +23,9 @@ export function respond(
   if (corpus === null) {
     return INITIALIZING_MESSAGE;
   }
-  return renderResponse(recognize(intent.sms, corpus), corpus.formats);
+  return renderResponse(
+    recognize(intent.sms, corpus),
+    corpus.formats,
+    intent.sms
+  );
 }

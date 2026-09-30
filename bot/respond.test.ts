@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { compileRegexes } from "@/domain/format";
+import { compileRegexes, decodeSmsPayload } from "@/domain/format";
 import type { CorpusFormat } from "./corpus";
 import type { CompiledCorpus } from "./recognize";
 import { INITIALIZING_MESSAGE } from "./render";
@@ -25,6 +25,14 @@ const corpus: CompiledCorpus = {
 };
 
 describe("respond", () => {
+  it("recognizes normalized text but links the original extracted SMS", () => {
+    const sms = " \r\nPokupka 1000 RUB.\r\nKarta *1234. Dostupno 5000 RUB\n ";
+    const response = respond({ kind: "sms", sms }, corpus);
+    expect(response).toContain(`href="${SBER_URL}"`);
+    const payload = response.match(/#add-sms=([A-Za-z0-9_-]*)/)?.[1];
+    expect(decodeSmsPayload(payload ?? "invalid!")).toBe(sms);
+  });
+
   it("returns null for a silent intent", () => {
     expect(respond({ kind: "silent" }, corpus)).toBeNull();
   });
@@ -34,9 +42,12 @@ describe("respond", () => {
   });
 
   it("recognizes an sms intent and renders the formats linked to their files", () => {
-    expect(respond({ kind: "sms", sms: DEMO_SMS }, corpus)).toBe(
-      `main:\n- <a href="${SBER_URL}">sberbank/12</a>`
+    const response = respond({ kind: "sms", sms: DEMO_SMS }, corpus);
+    expect(response).toContain(
+      `main:\n- <a href="${SBER_URL}">sberbank/12</a> (`
     );
+    const payload = response.match(/#add-sms=([A-Za-z0-9_-]*)/)?.[1];
+    expect(decodeSmsPayload(payload ?? "invalid!")).toBe(DEMO_SMS);
   });
 
   it("renders the no-match message for an unrecognized sms", () => {
