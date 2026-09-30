@@ -668,3 +668,70 @@ describe("workspace lifecycle", () => {
     });
   });
 });
+
+it("keeps publishable edits read-only after rights loss and reload, then restores rights", async () => {
+  await waitForDraftStoreHydration();
+  useDraftStore.setState({
+    drafts: new Map(),
+    storedDraftsByScope: {},
+    workspaceSessionsByScope: {},
+    draftScopeKey: null,
+  });
+  mocks.tree.mockResolvedValue(tree);
+  mocks.content.mockResolvedValue("original");
+  mocks.resolve.mockResolvedValue(session());
+  const first = await open();
+  edit();
+  mocks.resolve.mockResolvedValue({
+    ...session(),
+    writable: false,
+    readOnlyReason: "no-write-access",
+  });
+  await first.checkUpdates();
+  first.deactivate();
+  const second = await open();
+  expect(second.getSnapshot().experiment).toBe(false);
+  expect(second.getSnapshot().session?.writable).toBe(false);
+  expect(useDraftStore.getState().draftScopeKey).toBe(
+    "zenmoney/sms-formats:pr:1"
+  );
+  expect(useDraftStore.getState().getDraft(path)?.content).toBe("edited");
+  expect(second.beginPublication()).toBeNull();
+  mocks.resolve.mockResolvedValue(session());
+  await second.checkUpdates();
+  expect(second.getSnapshot().session?.writable).toBe(true);
+  expect(useDraftStore.getState().getDraft(path)?.content).toBe("edited");
+});
+it("switches restored readonly experiments to separate publish scope when rights return", async () => {
+  await waitForDraftStoreHydration();
+  useDraftStore.setState({
+    drafts: new Map(),
+    storedDraftsByScope: {},
+    workspaceSessionsByScope: {},
+    draftScopeKey: null,
+  });
+  mocks.tree.mockResolvedValue(tree);
+  mocks.content.mockResolvedValue("original");
+  mocks.resolve.mockResolvedValue({
+    ...session(),
+    writable: false,
+    readOnlyReason: "no-write-access",
+  });
+  const controller = await open();
+  expect(controller.getSnapshot().experiment).toBe(true);
+  edit();
+  expect(controller.beginPublication()).toBeNull();
+  mocks.resolve.mockResolvedValue(session());
+  await controller.checkUpdates();
+  expect(controller.getSnapshot().experiment).toBe(false);
+  expect(useDraftStore.getState().draftScopeKey).toBe(
+    "zenmoney/sms-formats:pr:1"
+  );
+  expect(useDraftStore.getState().getChangedFiles()).toEqual([]);
+  expect(
+    useDraftStore
+      .getState()
+      .getStoredDraftsForScope("experiment:zenmoney/sms-formats:pr:1")[0]
+      ?.content
+  ).toBe("edited");
+});

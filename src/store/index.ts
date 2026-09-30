@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { config } from "@/config";
 import type { BankInfo, FileEntry, RepoRef, SourceRef } from "@/domain/types";
+import { isExperimentScope } from "./draft-scope";
 import { DRAFT_STORE_STORAGE_KEY, draftStoreStateStorage } from "./persistence";
 import type { SavedWorkspaceSession } from "./workspace-session";
 
@@ -192,11 +193,12 @@ function mapStoredDrafts(
 }
 
 function toStoredDraftRecord(
-  drafts: Map<string, DraftEntry>
+  drafts: Map<string, DraftEntry>,
+  keepBaseline = false
 ): Record<string, DraftEntry> {
   return Object.fromEntries(
-    Array.from(drafts.entries()).filter(([, entry]) =>
-      hasPersistedDraftChanges(entry)
+    Array.from(drafts.entries()).filter(
+      ([, entry]) => keepBaseline || hasPersistedDraftChanges(entry)
     )
   );
 }
@@ -261,7 +263,10 @@ export const useDraftStore = create<DraftState>()(
         }
 
         const nextStoredDraftsByScope = { ...state.storedDraftsByScope };
-        const nextStoredDrafts = toStoredDraftRecord(nextDrafts);
+        const nextStoredDrafts = toStoredDraftRecord(
+          nextDrafts,
+          isExperimentScope(scopeKey)
+        );
         if (Object.keys(nextStoredDrafts).length === 0) {
           delete nextStoredDraftsByScope[scopeKey];
         } else {

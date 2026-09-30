@@ -93,12 +93,16 @@ export function FormatEditor({
     setActiveExampleIndex((index) => Math.min(index, examples.length - 1));
   }, [examples.length]);
   useEffect(() => {
-    if (!readOnly && headContent !== undefined && baseSha === sourceRef?.sha) {
+    if (
+      !(draft || readOnly) &&
+      headContent !== undefined &&
+      baseSha === sourceRef?.sha
+    ) {
       useDraftStore
         .getState()
         .ensureDraft(filePath, headContent, baseSha, headContent);
     }
-  }, [baseSha, filePath, readOnly, headContent, sourceRef?.sha]);
+  }, [baseSha, draft, filePath, readOnly, headContent, sourceRef?.sha]);
 
   const writeDocument = (content: string) => {
     if (isMutationBlocked) {

@@ -1,5 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { buildPullRequestWorkspacePath } from "@/domain/bank-route";
@@ -8,6 +8,11 @@ import {
   useOpenPRs,
   useSwitchRepository,
 } from "@/hooks/useGitHub";
+import {
+  getGitHubAuthChangeVersion,
+  getGitHubUserToken,
+  subscribeGitHubAuthChange,
+} from "@/infrastructure/github";
 import { getPullRequestGitHubUrl } from "@/lib/pull-request-navigation";
 import { cn } from "@/lib/utils";
 import { useSourceStore } from "@/store";
@@ -57,6 +62,12 @@ function getRoutePullRequestNumber(pathname: string): number | null {
 
 export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const { t } = useTranslation();
+  useSyncExternalStore(
+    subscribeGitHubAuthChange,
+    getGitHubAuthChangeVersion,
+    getGitHubAuthChangeVersion
+  );
+  const hasToken = Boolean(getGitHubUserToken());
   const location = useLocation();
   const navigate = useNavigate();
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
@@ -67,9 +78,9 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const routePrNumber = getRoutePullRequestNumber(location.pathname);
 
   const { data: availableRepos = [], isFetching: isReposFetching } =
-    useAvailableSourceRepos(openMenu === "repo" && allowRepoSwitch);
+    useAvailableSourceRepos(openMenu === "repo" && allowRepoSwitch && hasToken);
   const { data: openPRs = [], isFetching: isPRsFetching } = useOpenPRs(
-    openMenu === "source" && !isHome
+    openMenu === "source" && !isHome && hasToken
   );
 
   const sortedPRs = useMemo(() => sortPRs(openPRs), [openPRs]);
@@ -81,7 +92,9 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
       : routePrNumber;
   const sourceLabel = activePrNumber
     ? `PR #${activePrNumber}`
-    : t("source.pullRequest", { defaultValue: "PR" });
+    : location.pathname.includes("/main")
+      ? "main"
+      : t("source.pullRequest", { defaultValue: "PR" });
   const sourceUrl = activePrNumber
     ? getPullRequestGitHubUrl(activePrNumber, repository)
     : repositoryUrl;
@@ -100,7 +113,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
         <div className="relative flex min-w-0 items-center gap-1">
           <DropdownMenu.Root
             onOpenChange={(open) => setOpenMenu(open ? "repo" : null)}
-            open={openMenu === "repo"}
+            open={hasToken && openMenu === "repo"}
           >
             <DropdownMenu.Trigger asChild>
               <button
@@ -166,7 +179,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
           <div className="relative flex min-w-0 items-center gap-1">
             <DropdownMenu.Root
               onOpenChange={(open) => setOpenMenu(open ? "source" : null)}
-              open={openMenu === "source"}
+              open={hasToken && openMenu === "source"}
             >
               <DropdownMenu.Trigger asChild>
                 <button
@@ -194,6 +207,20 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                 sideOffset={6}
                 style={{ minWidth: 420 }}
               >
+                <DropdownMenu.Item asChild>
+                  <button
+                    className={sourceNavOptionClassName(!activePrNumber)}
+                    onClick={() => {
+                      closeMenu();
+                      navigate(
+                        `/repo/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}/main${location.search}`
+                      );
+                    }}
+                    type="button"
+                  >
+                    main
+                  </button>
+                </DropdownMenu.Item>
                 {isPRsFetching && (
                   <div className="ui-panel-inset py-2 text-muted-foreground text-sm">
                     {t("app.loading")}

@@ -16,19 +16,10 @@ export function WorkspaceSessionNotice({
   const { t } = useTranslation();
   const busy = state.operation !== null;
   const pending = state.block === "sync-pending";
-  const notice =
-    state.block === "stale"
-      ? t("workspace.cachedStaleNotice")
-      : pending
-        ? t("publish.updatedRefreshFailed")
-        : state.block
-          ? t(`workspace.unavailable.${state.block}`)
-          : state.session?.writable === false
-            ? t("publish.readOnly")
-            : null;
+  const notice = noticeText(state, t);
 
   const canRetry = pending || !state.session;
-  if (!(notice || state.error || canRetry)) {
+  if (!(notice || state.error || canRetry || state.session)) {
     return null;
   }
 
@@ -46,11 +37,25 @@ export function WorkspaceSessionNotice({
         )}
       </div>
       <div className="flex gap-2">
+        {state.session && !pending && (
+          <Button
+            disabled={busy}
+            onClick={() => {
+              void controller.checkUpdates();
+            }}
+            type="button"
+            variant="ghost"
+          >
+            {t("workspace.checkUpdates")}
+          </Button>
+        )}
         {state.block === "stale" && state.nextSession && (
           <Button
             disabled={busy}
             onClick={() => {
-              void controller.discardAndRefresh();
+              if (window.confirm(t("experiment.refreshPrConfirm"))) {
+                void controller.discardAndRefresh();
+              }
             }}
             type="button"
             variant="ghost"
@@ -77,4 +82,19 @@ export function WorkspaceSessionNotice({
       </div>
     </div>
   );
+}
+
+function noticeText(
+  state: WorkspaceState,
+  t: (key: string) => string
+): string | null {
+  return state.block === "stale"
+    ? t("workspace.cachedStaleNotice")
+    : state.block === "sync-pending"
+      ? t("publish.updatedRefreshFailed")
+      : state.block
+        ? t(`workspace.unavailable.${state.block}`)
+        : state.session?.writable === false
+          ? t(state.experiment ? "experiment.localOnly" : "publish.readOnly")
+          : null;
 }

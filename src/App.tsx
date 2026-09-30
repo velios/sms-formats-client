@@ -30,6 +30,10 @@ export function App() {
               <Route element={<Navigate replace to="/" />} path="/workspace" />
               <Route
                 element={<BankWorkspace />}
+                path="/repo/:owner/:repo/main"
+              />
+              <Route
+                element={<BankWorkspace />}
                 path="/repo/:owner/:repo/pr/:prNumber/*"
               />
               <Route element={<PullRequestShortcut />} path="/pr/:prNumber" />

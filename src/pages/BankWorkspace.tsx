@@ -69,6 +69,7 @@ import {
   subscribeGitHubAuthChange,
 } from "@/infrastructure/github";
 import { useDraftStore, useSourceStore } from "@/store";
+import { SourceWorkspace } from "./SourceWorkspace";
 
 const ImportAnswerModal = lazy(() =>
   import("@/features/import-answer/ImportAnswerModal").then((module) => ({
@@ -83,7 +84,7 @@ const PromptPackageModal = lazy(() =>
 const NO_PULL_REQUEST_CHANGES: PullRequestChangedFile[] = [];
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Workspace composition.
-export function BankWorkspace() {
+export function PullRequestBankWorkspace() {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -112,9 +113,11 @@ export function BankWorkspace() {
   );
   const activeSession = routeInitState.session;
   const workspaceReadOnly =
-    !activeSession?.writable ||
-    routeInitState.block !== null ||
-    routeInitState.operation === "opening";
+    !(activeSession?.writable || routeInitState.experiment) ||
+    (routeInitState.block !== null &&
+      !(routeInitState.experiment && routeInitState.block === "stale")) ||
+    routeInitState.operation === "opening" ||
+    routeInitState.operation === "discarding";
   const tree = useSourceStore((s) => s.tree);
   const [showCreateFormat, setShowCreateFormat] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
@@ -446,6 +449,18 @@ export function BankWorkspace() {
     );
   }, [selectedFile, showSenders]);
 
+  if (
+    (!activeSession || routeInitState.experiment) &&
+    routeInitState.operation === null &&
+    (routeInitState.block === "closed" ||
+      routeInitState.block === "merged" ||
+      routeInitState.block === "multiple-banks" ||
+      routeInitState.block === "outside-bank-scope" ||
+      routeInitState.block === "no-bank-changes")
+  ) {
+    return <SourceWorkspace />;
+  }
+
   if (!activeSession) {
     return routeInitState.operation === "opening" ? (
       <div className="ui-panel ui-panel-body ui-state">
@@ -492,6 +507,7 @@ export function BankWorkspace() {
         allFormatFiles={inventory.formatFiles}
         bankName={displayName}
         bankRepoUrl={bankRepoUrl}
+        localOnly={Boolean(routeInitState.experiment)}
         mode={editorMode}
         onModeChange={setEditorMode}
         onRenameFile={handleRenameFile}
@@ -505,6 +521,16 @@ export function BankWorkspace() {
         controller={routeInit.controller}
         state={routeInitState}
       />
+
+      {requestedFile &&
+        !selectedFile &&
+        requestedFile !== sendersPath &&
+        !bankPathsAtHeadRef.has(requestedFile) &&
+        !draftStore.getDraft(requestedFile) && (
+          <StatusBadge variant="warning">
+            {t("experiment.missing", { path: requestedFile })}
+          </StatusBadge>
+        )}
 
       {selectedFileRemoved && (
         <StatusBadge variant="warning">
@@ -525,7 +551,7 @@ export function BankWorkspace() {
                   })
                 : null
             }
-            canImportAnswer={!workspaceReadOnly}
+            canImportAnswer={!(workspaceReadOnly || routeInitState.experiment)}
             canResetToSource={canResetToSource}
             hasGitHubUserToken={hasGitHubUserToken}
             isApprovingPullRequest={isApprovingPullRequest}
@@ -554,6 +580,8 @@ export function BankWorkspace() {
             onResetToSource={handleResetToSource}
             publishActionLabel={publishActionLabel}
             publishDisabled={
+              !activeSession.writable ||
+              Boolean(routeInitState.experiment) ||
               workspaceReadOnly ||
               routeInitState.operation !== null ||
               changedFilesForPublish.length === 0
@@ -565,7 +593,9 @@ export function BankWorkspace() {
           />
 
           <FormatsPanel
-            createFormatDisabled={workspaceReadOnly}
+            createFormatDisabled={
+              workspaceReadOnly || Boolean(routeInitState.experiment)
+            }
             fileRecords={inventory.recordsByPath}
             formatIntersectionStats={intersections.stats}
             formatSearch={formatSearch}
@@ -700,5 +730,19 @@ export function BankWorkspace() {
         />
       )}
     </div>
+  );
+}
+
+export function BankWorkspace() {
+  useSyncExternalStore(
+    subscribeGitHubAuthChange,
+    getGitHubAuthChangeVersion,
+    getGitHubAuthChangeVersion
+  );
+  const params = useParams();
+  return getGitHubUserToken() && params.prNumber ? (
+    <PullRequestBankWorkspace />
+  ) : (
+    <SourceWorkspace />
   );
 }

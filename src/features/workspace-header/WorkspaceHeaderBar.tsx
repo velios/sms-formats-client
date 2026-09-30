@@ -9,6 +9,7 @@ import { useDraftStore, useSourceStore } from "@/store";
 export type WorkspaceEditorMode = "structured" | "raw";
 
 interface Props {
+  localOnly?: boolean;
   bankName: string;
   bankRepoUrl: string;
   showSenders: boolean;
@@ -29,6 +30,7 @@ const headerActionButtonClassName = "gap-1 whitespace-nowrap";
 const headerDividerClassName = "h-5 w-px shrink-0 bg-border";
 
 export function WorkspaceHeaderBar({
+  localOnly = false,
   bankName,
   bankRepoUrl,
   showSenders,
@@ -84,6 +86,7 @@ export function WorkspaceHeaderBar({
           allFormatFiles={allFormatFiles}
           filePath={filePath}
           isSenders={showSenders}
+          localOnly={localOnly}
           onRenameFile={onRenameFile}
           readOnly={readOnly}
         />
@@ -143,12 +146,14 @@ function resolveFileActionGating(params: {
 
 function WorkspaceFileControls({
   filePath,
+  localOnly = false,
   isSenders,
   readOnly,
   allFormatFiles,
   onRenameFile,
 }: {
   filePath: string;
+  localOnly?: boolean;
   isSenders: boolean;
   readOnly: boolean;
   allFormatFiles: string[];
@@ -272,7 +277,7 @@ function WorkspaceFileControls({
       </div>
       <div className={headerDividerClassName} />
       <div className="flex shrink-0 items-center gap-0.5">
-        {!isSenders && (
+        {!(isSenders || localOnly) && (
           <Button
             aria-label={t("editor.renameFormat")}
             className={headerActionButtonClassName}
@@ -311,7 +316,7 @@ function WorkspaceFileControls({
           {t("editor.redo")}
         </Button>
         <div className="mx-1.5 h-[18px] w-px shrink-0 bg-border" />
-        {!isSenders && (
+        {!(isSenders || localOnly) && (
           <Button
             aria-label={t("editor.deleteFormat")}
             className={headerActionButtonClassName}

@@ -43,11 +43,15 @@ describe("WorkspaceSessionNotice", () => {
     }
   });
 
-  it("leaves no notice row or manual check action in a ready workspace", () => {
-    const { container } = render(
+  it("offers an explicit freshness check without polling in a ready workspace", () => {
+    render(
       <WorkspaceSessionNotice controller={controller} state={readyState} />
     );
-    expect(container).toBeEmptyDOMElement();
+    expect(actions.checkUpdates).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "workspace.checkUpdates" })
+    );
+    expect(actions.checkUpdates).toHaveBeenCalledTimes(1);
   });
 
   it.each([

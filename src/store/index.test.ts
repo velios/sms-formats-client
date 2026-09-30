@@ -278,3 +278,29 @@ it("distinguishes an existing empty file from an absent file during deletion", a
   store.markDeleted("new.txt");
   expect(store.getDraft("new.txt")).toBeUndefined();
 });
+
+it("persists experiment baseline even without edits and keeps publish scopes separate", async () => {
+  const first = await loadStores();
+  const scope = "experiment:owner/repo:main";
+  const path = "src/Bank/formats/a.txt";
+  first.useDraftStore.getState().activateScope(scope);
+  first.useDraftStore
+    .getState()
+    .ensureDraft(path, "original", "commit-A", "original");
+  const second = await loadStores();
+  second.useDraftStore.getState().activateScope(scope);
+  expect(second.useDraftStore.getState().getDraft(path)).toMatchObject({
+    content: "original",
+    headContent: "original",
+    baselineHeadSha: "commit-A",
+  });
+  second.useDraftStore
+    .getState()
+    .applyUserEdit(path, "experiment", "commit-A", "original");
+  second.useDraftStore.getState().activateScope("owner/repo:pr:7");
+  expect(second.useDraftStore.getState().getChangedFiles()).toEqual([]);
+  second.useDraftStore.getState().activateScope(scope);
+  expect(second.useDraftStore.getState().getDraft(path)?.content).toBe(
+    "experiment"
+  );
+});

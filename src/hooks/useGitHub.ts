@@ -77,7 +77,7 @@ export function useAvailableSourceRepos(enabled = true) {
 
 export function useSwitchRepository() {
   const currentRepository = useSourceStore((state) => state.repository);
-  const clearDrafts = useDraftStore((state) => state.clearAll);
+  const activateScope = useDraftStore((state) => state.activateScope);
   const setRepository = useSourceStore((state) => state.setRepository);
   const setSource = useSourceStore((state) => state.setSource);
   const setTree = useSourceStore((state) => state.setTree);
@@ -92,7 +92,7 @@ export function useSwitchRepository() {
       return;
     }
 
-    clearDrafts();
+    activateScope(null);
     setRepository(nextRepository);
     setSource(null);
     setTree([]);

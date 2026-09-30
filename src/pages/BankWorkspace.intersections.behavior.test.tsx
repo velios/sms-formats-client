@@ -367,7 +367,9 @@ mock.module("@/infrastructure/github", () => {
   };
 });
 
-const { BankWorkspace } = await import("./BankWorkspace");
+const { PullRequestBankWorkspace: BankWorkspace } = await import(
+  "./BankWorkspace"
+);
 
 function QueryWrapper({ children }: { children: ReactNode }) {
   const [client] = useState(

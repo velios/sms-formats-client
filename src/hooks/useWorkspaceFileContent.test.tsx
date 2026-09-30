@@ -139,3 +139,26 @@ describe("useWorkspaceFileContent", () => {
     });
   });
 });
+
+it("uses the restored draft baseline without reading a newer head", async () => {
+  fetchFileContentMock.mockClear();
+  const { useDraftStore, useSourceStore, useWorkspaceFileContent } =
+    await loadModules();
+  useSourceStore
+    .getState()
+    .setSource({ type: "main", name: "main", sha: "new-head" });
+  useDraftStore.getState().activateScope("experiment:owner/repo:main");
+  useDraftStore
+    .getState()
+    .setDraft(
+      "src/Bank/formats/a.txt",
+      "local edits",
+      "original-head",
+      "original body"
+    );
+  const { result } = renderHook(() =>
+    useWorkspaceFileContent({ filePath: "src/Bank/formats/a.txt" })
+  );
+  expect(result.current.data).toBe("original body");
+  expect(fetchFileContentMock).not.toHaveBeenCalled();
+});
