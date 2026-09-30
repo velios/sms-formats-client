@@ -368,7 +368,10 @@ describe("workspace lifecycle", () => {
       "published"
     );
     expect(second.getSnapshot().session?.prNumber).toBe(2);
-    expect(useSourceStore.getState().sourceRef?.prNumber).toBe(2);
+    expect(useSourceStore.getState().sourceRef).toMatchObject({
+      type: "pr",
+      prNumber: 2,
+    });
   });
 
   it("restores a pending publication before classifying late drafts as externally stale", async () => {

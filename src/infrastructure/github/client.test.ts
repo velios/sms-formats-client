@@ -6,6 +6,7 @@ const octokitMocks = (() => {
   const createReview = mock(() => Promise.resolve({}));
   const getPullRequest = mock();
   const getContent = mock();
+  const getBranch = mock();
   const getRepository = mock();
   const compareCommitsWithBasehead = mock();
   const getAuthenticated = mock(() =>
@@ -27,6 +28,7 @@ const octokitMocks = (() => {
   return {
     createReview,
     getContent,
+    getBranch,
     getRepository,
     compareCommitsWithBasehead,
     getAuthenticated,
@@ -34,7 +36,12 @@ const octokitMocks = (() => {
     graphql,
     paginate,
     Octokit: class MockOctokit {
-      repos = { get: getRepository, getContent, compareCommitsWithBasehead };
+      repos = {
+        get: getRepository,
+        getContent,
+        getBranch,
+        compareCommitsWithBasehead,
+      };
       pulls = {
         createReview,
         get: getPullRequest,
@@ -66,6 +73,8 @@ const {
   describeGraphqlBlobError,
   fetchBlobsByRef,
   fetchFileContent,
+  fetchSourceHead,
+  GitHubRateLimitError,
   fetchPullRequestApprovalByCurrentUser,
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
@@ -658,5 +667,75 @@ describe("revision REST reads", () => {
       basehead: "advanced-main...pr-head",
       per_page: 1,
     });
+  });
+});
+
+describe("source head REST contract and request budget", () => {
+  it("reads main commit SHA and closed/merged PR head in one REST request each", async () => {
+    setGitHubUserToken("head-contract");
+    const repository = { owner: "zenmoney", repo: "sms-formats" };
+    octokitMocks.getBranch.mockResolvedValue({
+      data: { commit: { sha: "commit-main" } },
+    });
+    expect(
+      (await fetchSourceHead({ type: "main" }, repository)).sourceRef.sha
+    ).toBe("commit-main");
+    for (const merged of [false, true]) {
+      octokitMocks.getPullRequest.mockResolvedValue({
+        data: {
+          head: { ref: "feature", sha: "commit-pr" },
+          state: "closed",
+          merged,
+        },
+      });
+      const head = await fetchSourceHead(
+        { type: "pr", prNumber: 59 },
+        repository
+      );
+      expect(head.sourceRef).toEqual({
+        type: "pr",
+        name: "feature",
+        sha: "commit-pr",
+        prNumber: 59,
+      });
+      expect(head.prState).toBe(merged ? "merged" : "closed");
+    }
+  });
+
+  it("uses remaining/reset on successful responses to block the next request", async () => {
+    setGitHubUserToken("rate-success");
+    const repository = { owner: "owner", repo: "repo" };
+    const retryAt = Math.ceil(Date.now() / 1000) * 1000 + 120_000;
+    octokitMocks.getBranch.mockResolvedValue({
+      data: { commit: { sha: "head" } },
+      headers: {
+        "x-ratelimit-remaining": "0",
+        "x-ratelimit-reset": String(retryAt / 1000),
+      },
+    });
+    await fetchSourceHead({ type: "main" }, repository);
+    const before = octokitMocks.getContent.mock.calls.length;
+    await expect(
+      fetchFileContent("file", "head", repository)
+    ).rejects.toBeInstanceOf(GitHubRateLimitError);
+    expect(octokitMocks.getContent.mock.calls.length).toBe(before);
+  });
+
+  it("honors Retry-After and reset without retrying a failed request", async () => {
+    setGitHubUserToken("rate-error");
+    const repository = { owner: "owner", repo: "repo" };
+    octokitMocks.getBranch.mockRejectedValue({
+      status: 429,
+      response: { headers: { "retry-after": "180" } },
+    });
+    await expect(
+      fetchSourceHead({ type: "main" }, repository)
+    ).rejects.toBeInstanceOf(GitHubRateLimitError);
+    const before = octokitMocks.getBranch.mock.calls.length;
+    await expect(
+      fetchSourceHead({ type: "main" }, repository)
+    ).rejects.toBeInstanceOf(GitHubRateLimitError);
+    expect(octokitMocks.getBranch.mock.calls.length).toBe(before);
+    setGitHubUserToken(null);
   });
 });

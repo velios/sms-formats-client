@@ -21,6 +21,21 @@ export interface BankInfo {
   hasSenders: boolean;
 }
 
+export interface MainSource {
+  type: "main";
+  name: "main";
+  sha: string;
+}
+
+export type SourceRef = MainSource | PullRequestSource;
+export type SourceTarget = { type: "main" } | { type: "pr"; prNumber: number };
+
+export interface CheckedSourceHead {
+  sourceRef: SourceRef;
+  checkedAt: number;
+  prState?: "open" | "closed" | "merged";
+}
+
 export interface PullRequestSource {
   type: "pr";
   name: string;

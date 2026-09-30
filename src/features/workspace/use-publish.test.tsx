@@ -203,7 +203,10 @@ describe("publish a validated document snapshot", () => {
     });
     expect(useDraftStore.getState().getDraft(a)?.content).toBe(later);
     expect(useDraftStore.getState().getStoredDraftsForScope(scope)).toEqual([]);
-    expect(useSourceStore.getState().sourceRef?.prNumber).toBe(2);
+    expect(useSourceStore.getState().sourceRef).toMatchObject({
+      type: "pr",
+      prNumber: 2,
+    });
   });
   it("closes the obsolete publication dialog when authorization reopens the session during a write", async () => {
     const { result, controller } = await setup();

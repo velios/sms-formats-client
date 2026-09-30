@@ -2,24 +2,19 @@ import { createTravels, type Travels } from "travels";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { config } from "@/config";
-import type {
-  BankInfo,
-  FileEntry,
-  PullRequestSource,
-  RepoRef,
-} from "@/domain/types";
+import type { BankInfo, FileEntry, RepoRef, SourceRef } from "@/domain/types";
 import { DRAFT_STORE_STORAGE_KEY, draftStoreStateStorage } from "./persistence";
 import type { SavedWorkspaceSession } from "./workspace-session";
 
 interface SourceState {
   repository: RepoRef;
-  sourceRef: PullRequestSource | null;
+  sourceRef: SourceRef | null;
   tree: FileEntry[];
   banks: BankInfo[];
   loading: boolean;
   error: string | null;
   setRepository: (repository: RepoRef) => void;
-  setSource: (ref: PullRequestSource | null) => void;
+  setSource: (ref: SourceRef | null) => void;
   setTree: (tree: FileEntry[]) => void;
   setBanks: (banks: BankInfo[]) => void;
   setLoading: (v: boolean) => void;

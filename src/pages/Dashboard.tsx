@@ -142,7 +142,7 @@ export function Dashboard() {
   }, [
     activePullRequestHasLocalDrafts,
     persistedDraftPullRequests,
-    sourceRef?.prNumber,
+    sourceRef?.type === "pr" ? sourceRef.prNumber : null,
     sourceRef?.type,
   ]);
   const normalizedQuery = query.trim().toLowerCase();

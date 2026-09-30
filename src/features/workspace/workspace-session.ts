@@ -104,7 +104,8 @@ export class WorkspaceSessionController {
       saved &&
       source.repository.owner === repository.owner &&
       source.repository.repo === repository.repo &&
-      source.sourceRef?.prNumber === prNumber &&
+      source.sourceRef?.type === "pr" &&
+      source.sourceRef.prNumber === prNumber &&
       source.sourceRef.sha === saved.session.headSha &&
       source.tree.length > 0;
     this.state = {
@@ -170,7 +171,8 @@ export class WorkspaceSessionController {
     const canReuse =
       source.repository.owner === this.repository.owner &&
       source.repository.repo === this.repository.repo &&
-      source.sourceRef?.prNumber === this.prNumber &&
+      source.sourceRef?.type === "pr" &&
+      source.sourceRef.prNumber === this.prNumber &&
       source.sourceRef.sha === session.headSha &&
       source.tree.length > 0;
     const tree = canReuse

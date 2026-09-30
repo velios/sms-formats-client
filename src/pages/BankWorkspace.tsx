@@ -396,7 +396,7 @@ export function BankWorkspace() {
   ]);
   const canApprovePullRequest = usePullRequestApprovalPermission({
     repository,
-    sourceRef,
+    sourceRef: sourceRef?.type === "pr" ? sourceRef : null,
   });
   const {
     showApprovePullRequestButton,
@@ -409,7 +409,7 @@ export function BankWorkspace() {
   } = usePullRequestApproval({
     canApprovePullRequest,
     repository,
-    sourceRef,
+    sourceRef: sourceRef?.type === "pr" ? sourceRef : null,
     t,
   });
   const {
