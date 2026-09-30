@@ -80,7 +80,7 @@ function PasteView({
           value={text}
         />
       </div>
-      <div className="ui-dialog-actions border-border border-t pt-4">
+      <div className="ui-dialog-actions border-border border-t pt-3">
         <Button
           disabled={text.trim() === ""}
           onClick={onShowChanges}
@@ -220,7 +220,7 @@ export function ImportAnswerModal({
 
   return (
     <ModalDialog
-      className="flex h-[calc(100vh-64px)] max-h-[860px] flex-col gap-0 sm:max-w-[1080px]"
+      className="flex h-[calc(100vh-64px)] max-h-[860px] flex-col sm:max-w-[1080px]"
       onClose={onClose}
       onOpenAutoFocus={showingText ? undefined : focusList}
       title={t("importAnswer.title", { bank: bankName })}
@@ -262,7 +262,10 @@ export function ImportAnswerModal({
           )}
 
           {importAnswer.loadError !== null && (
-            <div className="flex items-center gap-3 rounded-md border border-destructive bg-destructive-soft p-3">
+            <div
+              className="ui-notice flex items-center gap-2"
+              data-tone="error"
+            >
               <StatusBadge variant="error">
                 {t(`importAnswer.error.${importAnswer.loadError}`)}
               </StatusBadge>
@@ -293,7 +296,7 @@ export function ImportAnswerModal({
             />
 
             <div
-              className="min-w-0 flex-1 overflow-y-auto rounded-md border border-border p-4"
+              className="ui-panel ui-panel-body min-w-0 flex-1 overflow-y-auto"
               ref={detailRef}
             >
               {(() => {
@@ -308,7 +311,7 @@ export function ImportAnswerModal({
                 }
                 if (importAnswer.isLoadingBodies) {
                   return (
-                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <div className="ui-state">
                       <Spinner />
                       {t("importAnswer.loading")}
                     </div>

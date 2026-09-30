@@ -22,7 +22,9 @@ export function App() {
       <div className="flex h-screen min-w-[1200px] flex-col max-[1199px]:hidden">
         <AppHeader />
         <main className="ui-panel-body flex-1 overflow-hidden">
-          <Suspense fallback={<div>{t("app.loading")}</div>}>
+          <Suspense
+            fallback={<div className="ui-state">{t("app.loading")}</div>}
+          >
             <Routes>
               <Route element={<Dashboard />} path="/" />
               <Route element={<Navigate replace to="/" />} path="/workspace" />

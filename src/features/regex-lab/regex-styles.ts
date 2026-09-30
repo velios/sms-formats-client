@@ -1,12 +1,5 @@
 import { cn } from "@/lib/utils";
 
-const highlightModeSegmentClassName = (isActive: boolean) =>
-  cn(
-    "cursor-pointer border-none px-2.5 py-1 font-medium text-xs normal-case tracking-normal transition-[color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-[-2px]",
-    isActive
-      ? "bg-primary text-card"
-      : "bg-card text-muted-foreground hover:bg-accent hover:text-primary"
-  );
 const regexTokenToneClassMap: Record<string, string> = {
   anchor:
     "border-[color:var(--c-tone-anchor-border)] bg-[color:var(--c-tone-anchor-bg)] text-[color:var(--c-tone-anchor-text)]",
@@ -83,7 +76,6 @@ function getPatternBlockToneClass(type: string): string {
 export {
   getPatternBlockToneClass,
   getRegexTokenClass,
-  highlightModeSegmentClassName,
   matchHighlightBaseClass,
   matchHighlightGroupClassMap,
   matchHighlightHoverClass,

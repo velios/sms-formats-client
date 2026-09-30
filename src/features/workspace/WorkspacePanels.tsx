@@ -88,7 +88,7 @@ export function renderWorkspaceContent(params: {
     );
   }
   return (
-    <div className="flex h-full items-center justify-center text-muted-foreground">
+    <div className="ui-panel ui-panel-body flex h-full items-center justify-center text-muted-foreground">
       {t("bank.files")}: {t("bank.noResults")}
     </div>
   );
@@ -469,7 +469,7 @@ export function FormatsPanel(params: {
           </button>
         )}
       </div>
-      <div className="border-border border-b p-2">
+      <div className="ui-panel-inset border-border border-b py-2">
         <Input
           aria-label={t("bank.searchFile")}
           onChange={(e) => setFormatSearch(e.target.value)}
@@ -642,7 +642,7 @@ export function FormatsPanel(params: {
           );
         })}
         {showNoResults && (
-          <div className="p-4 text-muted-foreground text-xs">
+          <div className="ui-panel-body text-muted-foreground text-xs">
             {t("bank.noResults")}
           </div>
         )}

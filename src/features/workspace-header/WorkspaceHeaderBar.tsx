@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
 import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
-import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
 export type WorkspaceEditorMode = "structured" | "raw";
@@ -24,14 +23,6 @@ interface Props {
 
 const headerExternalLinkClassName =
   "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-muted-foreground no-underline hover:bg-primary-soft hover:text-primary hover:no-underline";
-
-const headerModeTabClassName = (isActive: boolean) =>
-  cn(
-    "inline-flex h-7 cursor-pointer items-center whitespace-nowrap rounded-md border px-3 font-medium text-xs transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    isActive
-      ? "border-border bg-white text-primary"
-      : "border-transparent bg-transparent text-muted-foreground hover:bg-card hover:text-primary"
-  );
 
 const headerActionButtonClassName = "gap-1 whitespace-nowrap";
 
@@ -54,7 +45,7 @@ export function WorkspaceHeaderBar({
   const showModeToggle = !showSenders && Boolean(selectedFile);
 
   return (
-    <div className="ui-panel flex h-11 shrink-0 items-center px-3">
+    <div className="ui-panel ui-panel-inset flex h-11 shrink-0 items-center">
       <div className="flex w-[calc(clamp(264px,19vw,340px)+2px)] min-w-0 shrink-0 items-center gap-2 pr-4">
         <h2 className="m-0 truncate font-semibold text-base">{bankName}</h2>
         <a
@@ -69,16 +60,18 @@ export function WorkspaceHeaderBar({
         </a>
       </div>
       {showModeToggle && (
-        <div className="flex shrink-0 gap-1 rounded-lg border border-border bg-muted p-1">
+        <div className="ui-segmented" role="group">
           <button
-            className={headerModeTabClassName(mode === "structured")}
+            aria-pressed={mode === "structured"}
+            className="ui-segment"
             onClick={() => onModeChange("structured")}
             type="button"
           >
             {t("editor.structured")}
           </button>
           <button
-            className={headerModeTabClassName(mode === "raw")}
+            aria-pressed={mode === "raw"}
+            className="ui-segment"
             onClick={() => onModeChange("raw")}
             type="button"
           >

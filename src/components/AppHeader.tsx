@@ -138,7 +138,7 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="flex h-[52px] shrink-0 items-center gap-4 border-border border-b bg-card px-6 py-2">
+      <header className="ui-panel-inset flex h-[52px] shrink-0 items-center gap-3 border-border border-b bg-card py-2">
         <button
           className="cursor-pointer whitespace-nowrap font-semibold text-base"
           onClick={() => navigate("/")}
@@ -189,7 +189,7 @@ export function AppHeader() {
           onClose={() => setGithubTokenModalOpen(false)}
           title={t("githubAuth.title")}
         >
-          <div className="ui-field mb-4">
+          <div className="ui-field">
             <label className="ui-field-label" htmlFor={githubTokenInputId}>
               {t("githubAuth.tokenLabel")}
             </label>
@@ -214,7 +214,7 @@ export function AppHeader() {
               <StatusBadge variant="error">{githubTokenError}</StatusBadge>
             )}
           </div>
-          <div className="ui-dialog-actions mt-6 justify-end">
+          <div className="ui-dialog-actions justify-end">
             <Button
               className="mr-auto"
               disabled={isSavingGitHubToken || isHardResetting}

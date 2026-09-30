@@ -388,6 +388,27 @@
   .ui-card {
     @apply rounded-md border border-border bg-card p-2 text-xs leading-[18px];
   }
+  .ui-notice {
+    @apply rounded-md border border-border bg-muted p-2 text-xs leading-[18px];
+  }
+  .ui-notice[data-tone="error"] {
+    @apply border-destructive/20 bg-destructive-soft text-destructive;
+  }
+  .ui-notice[data-tone="warning"] {
+    @apply border-warning/20 bg-warning-soft text-warning;
+  }
+  .ui-state {
+    @apply flex items-center gap-2 text-muted-foreground text-sm;
+  }
+  .ui-segmented {
+    @apply inline-flex shrink-0 items-stretch overflow-hidden rounded-md border border-border;
+  }
+  .ui-segment {
+    @apply min-h-7 cursor-pointer whitespace-nowrap border-0 bg-card px-2 py-1 font-medium text-muted-foreground text-xs normal-case tracking-normal outline-none transition-colors hover:bg-accent hover:text-primary focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px];
+  }
+  .ui-segment[aria-pressed="true"] {
+    @apply bg-primary text-primary-foreground;
+  }
   .ui-field {
     @apply flex flex-col gap-1;
   }

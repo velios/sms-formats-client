@@ -164,7 +164,7 @@ function FileName({ row }: { row: ManifestRow }) {
       <span className="min-w-0 truncate">{head}</span>
       {tail !== "" && (
         <span
-          className={`shrink-0 font-mono text-[11.5px] tabular-nums ${
+          className={`shrink-0 font-mono text-xs tabular-nums ${
             row.supersededBelow
               ? "text-muted-foreground"
               : "text-muted-foreground"
@@ -245,7 +245,7 @@ function ParseSummary({
   t: Translate;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-md border border-border bg-muted px-3 py-2 text-sm">
+    <div className="ui-notice flex items-center gap-2">
       {broken && (
         <span className="text-destructive">
           {t("importAnswer.status.broken")}
@@ -295,7 +295,7 @@ function RefusalBanner({
   t: Translate;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-destructive bg-destructive-soft p-3">
+    <div className="ui-notice flex flex-col gap-2" data-tone="error">
       <StatusBadge variant="error">
         {t(
           broken
@@ -341,7 +341,7 @@ function LossNotice({
   t: Translate;
 }) {
   return (
-    <div className="flex flex-col gap-1 border-warning border-l-2 py-1 pl-3 text-xs">
+    <div className="ui-notice flex flex-col gap-1" data-tone="warning">
       <span className="font-medium text-warning">
         {t("importAnswer.loss.title")}
       </span>
@@ -360,7 +360,7 @@ function ProsePanel({ text, t }: { text: string; t: Translate }) {
         {t("importAnswer.prosePanelTitle")}
       </div>
       <div
-        className={`max-w-[68ch] whitespace-pre-wrap text-[13.5px] leading-[1.7] ${
+        className={`max-w-[68ch] whitespace-pre-wrap text-sm leading-normal ${
           empty ? "text-muted-foreground" : "text-foreground"
         }`}
       >
@@ -397,13 +397,13 @@ function RowPanel({ row, t }: { row: ManifestRow; t: Translate }) {
       )}
 
       {row.supersededBelow && (
-        <div className="border-warning border-l-2 py-1 pl-3 text-muted-foreground text-xs">
+        <div className="ui-notice" data-tone="warning">
           {t("importAnswer.supersededNote")}
         </div>
       )}
 
       {row.overwritesManualEdit && (
-        <div className="flex items-start gap-2 rounded-md border border-warning bg-warning-soft p-2 text-warning text-xs">
+        <div className="ui-notice flex items-start gap-2" data-tone="warning">
           <PenLine aria-hidden="true" className="mt-px size-3.5 shrink-0" />
           {t("importAnswer.overwriteNote")}
         </div>
@@ -484,7 +484,7 @@ function Manifest({
   t: Translate;
 }) {
   const rowClassName = (isSelected: boolean) =>
-    `flex w-full items-center gap-2 border-border border-b border-l-2 px-3 py-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${
+    `ui-panel-inset flex w-full items-center gap-2 border-border border-b border-l-2 py-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${
       isSelected
         ? "border-l-[color:var(--primary)] bg-accent font-medium"
         : "border-l-transparent hover:bg-muted"
@@ -493,7 +493,7 @@ function Manifest({
   return (
     <div
       aria-label={t("importAnswer.manifestLabel")}
-      className={`flex w-[384px] shrink-0 flex-col overflow-y-auto rounded-md border border-border ${
+      className={`ui-panel flex w-[384px] shrink-0 flex-col overflow-y-auto ${
         frozen ? "pointer-events-none opacity-55" : ""
       }`}
       onKeyDown={onKeyDown}
@@ -561,7 +561,7 @@ function Manifest({
       ))}
 
       {rows.length === 0 && (
-        <div className="px-3 py-4 text-muted-foreground text-xs">
+        <div className="ui-panel-body text-muted-foreground text-xs">
           {t(broken ? "importAnswer.emptyBroken" : "importAnswer.emptyParsed")}
         </div>
       )}

@@ -390,10 +390,7 @@ export function MatchInfoPanel({
       {issues.length > 0 ? (
         <div className="flex flex-col gap-1">
           {issues.map((issue, i) => (
-            <div
-              className="rounded-md bg-destructive-soft px-3 py-2 text-destructive text-xs"
-              key={i}
-            >
+            <div className="ui-notice" data-tone="error" key={i}>
               {issue}
             </div>
           ))}
@@ -428,7 +425,7 @@ export function MatchInfoPanel({
           {captureGroups.length > 0 && (
             <>
               {hasMissingColumnMappings && (
-                <div className="rounded-md bg-destructive-soft px-3 py-2 text-destructive text-xs">
+                <div className="ui-notice" data-tone="error">
                   {t("columns.missingMappings")}
                 </div>
               )}

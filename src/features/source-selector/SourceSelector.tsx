@@ -30,7 +30,7 @@ const sourceNavDropdownClassName =
 
 const sourceNavOptionClassName = (isActive: boolean) =>
   cn(
-    "flex w-full items-center gap-2 bg-transparent px-3 py-2 text-left transition-colors",
+    "ui-panel-inset flex w-full items-center gap-2 bg-transparent py-2 text-left transition-colors",
     isActive
       ? "bg-accent text-primary"
       : "outline-none hover:bg-accent data-highlighted:bg-accent"
@@ -129,7 +129,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
               style={{ minWidth: 320 }}
             >
               {isReposFetching && (
-                <div className="px-3 py-2 text-muted-foreground text-sm">
+                <div className="ui-panel-inset py-2 text-muted-foreground text-sm">
                   {t("app.loading")}
                 </div>
               )}
@@ -195,7 +195,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                 style={{ minWidth: 420 }}
               >
                 {isPRsFetching && (
-                  <div className="px-3 py-2 text-muted-foreground text-sm">
+                  <div className="ui-panel-inset py-2 text-muted-foreground text-sm">
                     {t("app.loading")}
                   </div>
                 )}
@@ -227,7 +227,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                     </DropdownMenu.Item>
                   ))}
                 {!isPRsFetching && sortedPRs.length === 0 && (
-                  <div className="px-3 py-2 text-muted-foreground text-sm">
+                  <div className="ui-panel-inset py-2 text-muted-foreground text-sm">
                     {t("bank.noResults")}
                   </div>
                 )}

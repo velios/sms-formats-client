@@ -59,7 +59,6 @@ type ExampleSourceMode = "examples" | "intersections";
 
 import { ColumnPickerModal } from "./ColumnPickerModal";
 import { PatternExplanationPane } from "./PatternExplanationPane";
-import { highlightModeSegmentClassName } from "./regex-styles";
 import { MatchInfoPanel, MatchOverlayTextarea } from "./SmsMatchView";
 
 function WhitespacePlusToggle() {
@@ -486,14 +485,12 @@ export function RegexLab({
                 <span>{t("editor.regex")}</span>
                 <div
                   aria-label={t("editor.highlightModeLabel")}
-                  className="flex items-center overflow-hidden rounded-md border border-border"
+                  className="ui-segmented"
                   role="group"
                 >
                   <button
                     aria-pressed={highlightMode === "groups"}
-                    className={highlightModeSegmentClassName(
-                      highlightMode === "groups"
-                    )}
+                    className="ui-segment"
                     onClick={() => {
                       setHighlightMode("groups");
                       setRightPaneTab("snippets");
@@ -505,9 +502,7 @@ export function RegexLab({
                   </button>
                   <button
                     aria-pressed={highlightMode === "parts"}
-                    className={highlightModeSegmentClassName(
-                      highlightMode === "parts"
-                    )}
+                    className="ui-segment"
                     onClick={() => {
                       setHighlightMode("parts");
                       setRightPaneTab("explanation");

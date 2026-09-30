@@ -184,7 +184,7 @@ export function Dashboard() {
 
         <div className="min-h-0 overflow-y-auto">
           {isLoading ? (
-            <div className="ui-panel-body flex items-center gap-2 text-muted-foreground text-sm">
+            <div className="ui-panel-body ui-state">
               <Spinner />
               <span>{t("app.loading")}</span>
             </div>

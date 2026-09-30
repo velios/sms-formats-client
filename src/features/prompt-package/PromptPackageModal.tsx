@@ -162,7 +162,7 @@ export function PromptPackageModal({
       onClose={onClose}
       title={t("promptPackage.title", { bank: bankName })}
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+      <div className="ui-panel-stack flex-1 overflow-y-auto">
         <div className="ui-field">
           <label className="ui-field-label font-medium" htmlFor={taskId}>
             {t("promptPackage.taskLabel")}
@@ -215,7 +215,7 @@ export function PromptPackageModal({
           ))}
         </fieldset>
 
-        <div className="flex flex-col gap-2 rounded-md border border-border bg-muted p-3">
+        <div className="ui-card flex flex-col gap-2 bg-muted">
           <div className="font-semibold text-muted-foreground text-xs uppercase tracking-[0.5px]">
             {t("promptPackage.previewTitle")}
           </div>
@@ -241,7 +241,7 @@ export function PromptPackageModal({
             </div>
           )}
           {promptPackage.isBuilding && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <div className="ui-state">
               <Spinner />
               {t("promptPackage.building")}
             </div>
@@ -252,7 +252,7 @@ export function PromptPackageModal({
         </div>
       </div>
 
-      <div className="ui-dialog-actions mt-4 border-border border-t pt-4">
+      <div className="ui-dialog-actions border-border border-t pt-3">
         <Button
           disabled={!result || promptPackage.isBuilding}
           onClick={() => void handleCopy()}

@@ -175,12 +175,7 @@ export function QuickReference() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div
-        style={{
-          padding: "6px 10px",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
+      <div className="ui-panel-inset border-border border-b py-2">
         <Input
           aria-label={t("quickRef.searchLabel")}
           className="h-7 px-2 py-1 text-xs"
@@ -189,7 +184,7 @@ export function QuickReference() {
           value={search}
         />
       </div>
-      <div className="grid h-full min-h-0 flex-1 overflow-hidden border-border border-t [grid-template-columns:140px_1fr]">
+      <div className="grid h-full min-h-0 flex-1 overflow-hidden [grid-template-columns:140px_1fr]">
         <div className="overflow-y-auto border-border border-r">
           {CATEGORIES.map((cat) => (
             <button
@@ -210,7 +205,7 @@ export function QuickReference() {
             </button>
           ))}
         </div>
-        <div className="overflow-y-auto p-1">
+        <div className="ui-panel-body overflow-y-auto">
           {filteredItems.map((it, i) => (
             <div
               className="flex gap-2 rounded-md px-2 py-1 text-xs hover:bg-accent"
@@ -225,7 +220,7 @@ export function QuickReference() {
             </div>
           ))}
           {filteredItems.length === 0 && (
-            <div className="p-4 text-muted-foreground text-xs">—</div>
+            <div className="ui-panel-body text-muted-foreground text-xs">—</div>
           )}
         </div>
       </div>

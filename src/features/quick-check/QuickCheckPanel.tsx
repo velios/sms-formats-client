@@ -417,7 +417,7 @@ export function QuickCheckPanel({
       onClose={onClose}
       title={t("quickCheck.title", { bank: bankName })}
     >
-      <div className="ui-tabs mb-3" role="tablist">
+      <div className="ui-tabs" role="tablist">
         <button
           aria-selected={mode === "template-by-sms"}
           className="ui-tab"
@@ -492,7 +492,8 @@ export function QuickCheckPanel({
       {errorMessage && (
         <div
           aria-live="assertive"
-          className="mt-2 rounded-md bg-destructive-soft px-3 py-2 text-destructive text-xs"
+          className="ui-notice"
+          data-tone="error"
           role="alert"
         >
           {errorMessage}
@@ -500,11 +501,7 @@ export function QuickCheckPanel({
       )}
 
       {templateBySmsState && (
-        <div
-          aria-live="polite"
-          className="mt-4 flex flex-wrap gap-1"
-          role="status"
-        >
+        <div aria-live="polite" className="flex flex-wrap gap-1" role="status">
           <StatusBadge variant="info">
             {t("quickCheck.summaryChecked", {
               checked: templateBySmsState.summary.checkedRegexes,
@@ -541,11 +538,7 @@ export function QuickCheckPanel({
       )}
 
       {smsByTemplateState && (
-        <div
-          aria-live="polite"
-          className="mt-4 flex flex-wrap gap-1"
-          role="status"
-        >
+        <div aria-live="polite" className="flex flex-wrap gap-1" role="status">
           <StatusBadge variant="info">
             {t("quickCheck.summaryCheckedSms", {
               checked: smsByTemplateState.summary.checkedSmsCount,
@@ -581,7 +574,7 @@ export function QuickCheckPanel({
         </div>
       )}
 
-      <div className="mt-4 flex max-h-[420px] flex-col gap-2 overflow-y-auto">
+      <div className="flex max-h-[420px] flex-col gap-2 overflow-y-auto">
         {templateBySmsState && templateBySmsState.results.length === 0 && (
           <div className="text-muted-foreground text-sm">
             {t("quickCheck.noRegexes")}
@@ -589,10 +582,7 @@ export function QuickCheckPanel({
         )}
 
         {templateBySmsState?.results.map((result) => (
-          <div
-            className="rounded-md border border-border bg-muted p-2"
-            key={result.filePath}
-          >
+          <div className="ui-card bg-muted" key={result.filePath}>
             <div className="mb-1 flex items-center gap-1">
               <span className="font-mono text-sm">{result.fileName}</span>
               <StatusBadge
@@ -657,10 +647,7 @@ export function QuickCheckPanel({
         )}
 
         {smsByTemplateState?.results.map((result) => (
-          <div
-            className="rounded-md border border-border bg-muted p-2"
-            key={result.filePath}
-          >
+          <div className="ui-card bg-muted" key={result.filePath}>
             <div className="mb-1 flex items-center gap-1">
               <span className="font-mono text-sm">{result.fileName}</span>
               <StatusBadge
@@ -714,7 +701,7 @@ export function QuickCheckPanel({
         ))}
       </div>
 
-      <div className="ui-dialog-actions mt-6 justify-end">
+      <div className="ui-dialog-actions justify-end">
         <Button onClick={onClose} type="button" variant="default">
           {t("app.close")}
         </Button>

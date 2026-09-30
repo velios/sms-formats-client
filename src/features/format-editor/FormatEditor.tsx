@@ -171,7 +171,7 @@ export function FormatEditor({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="ui-panel ui-panel-body ui-state">
         <Spinner />
         <span>{t("app.loading")}</span>
       </div>
@@ -187,10 +187,7 @@ export function FormatEditor({
       {mode === "raw" && parseErrors.length > 0 && (
         <div className="flex flex-col gap-1">
           {parseErrors.map((err, i) => (
-            <div
-              className="rounded-md bg-warning-soft px-3 py-2 text-warning text-xs"
-              key={i}
-            >
+            <div className="ui-notice" data-tone="warning" key={i}>
               {err}
             </div>
           ))}

@@ -41,7 +41,7 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
 
   return (
     <ModalDialog onClose={onClose} title={t("publish.updateDialogTitle")}>
-      <div className="flex flex-col gap-4">
+      <div className="ui-panel-stack">
         <div className="ui-field">
           <label className="ui-field-label" htmlFor={commitTitleInputId}>
             {t("publish.commitTitleLabel")}
@@ -67,7 +67,7 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
         </div>
       </div>
 
-      <div className="ui-dialog-actions mt-6 justify-end">
+      <div className="ui-dialog-actions justify-end">
         <Button disabled={isBusy} onClick={onClose} type="button">
           {t("publish.cancel")}
         </Button>

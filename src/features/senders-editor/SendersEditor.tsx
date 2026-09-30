@@ -52,7 +52,7 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="ui-panel ui-panel-body ui-state">
         <Spinner />
         <span>{t("app.loading")}</span>
       </div>

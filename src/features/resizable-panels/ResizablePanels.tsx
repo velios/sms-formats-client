@@ -79,7 +79,7 @@ export function ResizablePanels({
       {collapsed && (
         <button
           aria-label={t("panels.expand", { panel: label })}
-          className="flex flex-col items-center gap-4 rounded-md border border-border bg-card py-3 text-primary"
+          className="ui-panel flex flex-col items-center gap-3 py-3 text-primary"
           onClick={() => resize(expandedWidth.current)}
           title={t("panels.expand", { panel: label })}
           type="button"

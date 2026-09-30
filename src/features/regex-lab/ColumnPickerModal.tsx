@@ -64,7 +64,7 @@ export function ColumnPickerModal({
         placeholder={t("columns.search")}
         value={search}
       />
-      <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
+      <div className="ui-panel min-h-0 flex-1 overflow-y-auto">
         {filteredColumns.map((column) => {
           const isUsedByOtherGroup = usedBaseNames.has(column.name);
           const isCurrent = currentBaseName === column.name;
@@ -72,7 +72,7 @@ export function ColumnPickerModal({
           return (
             <button
               className={cn(
-                "flex w-full items-center gap-2 border-border border-b bg-card px-3 py-2 text-left last:border-b-0",
+                "ui-panel-inset flex w-full items-center gap-2 border-border border-b bg-card py-2 text-left last:border-b-0",
                 isCurrent && "bg-primary-soft",
                 !isDisabled && "hover:bg-accent",
                 isDisabled && "cursor-not-allowed opacity-55"
@@ -106,10 +106,10 @@ export function ColumnPickerModal({
           );
         })}
         {filteredColumns.length === 0 && (
-          <div className="p-4 text-muted-foreground text-sm">—</div>
+          <div className="ui-panel-body text-muted-foreground text-xs">—</div>
         )}
       </div>
-      <div className="ui-dialog-actions mt-6 justify-end">
+      <div className="ui-dialog-actions justify-end">
         <Button onClick={onClose} type="button">
           {t("app.cancel")}
         </Button>

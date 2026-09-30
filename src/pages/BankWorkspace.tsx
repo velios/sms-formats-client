@@ -448,7 +448,7 @@ export function BankWorkspace() {
 
   if (!activeSession) {
     return routeInitState.operation === "opening" ? (
-      <div className="flex items-center gap-2">
+      <div className="ui-panel ui-panel-body ui-state">
         <Spinner />
         <span>{t("app.loading")}</span>
       </div>
@@ -462,7 +462,7 @@ export function BankWorkspace() {
 
   if (!bank && inventory.formatFiles.length === 0) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="ui-panel ui-panel-body">
         <div className="text-muted-foreground">
           {t("bank.noResults")}: {bankPath}
         </div>

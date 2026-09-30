@@ -108,7 +108,7 @@ function ExplanationPanel({
   return (
     <div className="ui-panel-body flex h-full min-h-0 flex-col overflow-y-auto text-xs leading-[18px]">
       {errorMessage ? (
-        <div className="rounded-md bg-destructive-soft px-3 py-2 text-destructive text-xs">
+        <div className="ui-notice" data-tone="error">
           {cleanRegexErrorReason(errorMessage)}
         </div>
       ) : explanation.patternTokens.length === 0 ? (
@@ -121,7 +121,7 @@ function ExplanationPanel({
           {explanation.patternTokens.map((token, index) => (
             <div
               className={cn(
-                "flex cursor-pointer items-start gap-2 rounded-md border p-2 transition-colors",
+                "ui-card flex cursor-pointer items-start gap-2 transition-colors",
                 getPatternBlockToneClass(token.type),
                 index === activePatternTokenIndex &&
                   "outline outline-2 outline-primary outline-offset-[-1px]"

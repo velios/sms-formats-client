@@ -32,7 +32,7 @@ export function SnippetsPanel({ onInsert }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex shrink-0 flex-wrap items-center gap-1 border-border border-b px-2 py-2">
+      <div className="ui-panel-inset flex shrink-0 flex-wrap items-center gap-1 border-border border-b py-2">
         <button
           className={groupPillClassName(activeGroup === ALL_GROUPS)}
           onClick={() => setActiveGroup(ALL_GROUPS)}
@@ -51,9 +51,9 @@ export function SnippetsPanel({ onInsert }: Props) {
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="ui-panel-body min-h-0 flex-1 overflow-y-auto">
         {visibleSnippets.length === 0 ? (
-          <div className="p-2 text-muted-foreground text-sm">
+          <div className="text-muted-foreground text-xs">
             {t("snippets.empty")}
           </div>
         ) : (

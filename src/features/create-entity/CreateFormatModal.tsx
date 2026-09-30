@@ -55,7 +55,7 @@ export function CreateFormatModal({
 
   return (
     <ModalDialog onClose={onClose} title={t("bank.createFormat")}>
-      <div className="flex flex-col gap-4">
+      <div className="ui-panel-stack">
         <div className="ui-field">
           <label className="ui-field-label" htmlFor={formatNameInputId}>
             {t("bank.formatName")} *
@@ -82,8 +82,12 @@ export function CreateFormatModal({
         </div>
       </div>
 
-      {error && <div role="alert">{error}</div>}
-      <div className="ui-dialog-actions mt-6 justify-end">
+      {error && (
+        <div className="ui-notice" data-tone="error" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="ui-dialog-actions justify-end">
         <Button onClick={onClose} type="button">
           {t("app.cancel")}
         </Button>

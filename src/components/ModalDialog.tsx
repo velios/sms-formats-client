@@ -30,7 +30,7 @@ export function ModalDialog({
         onOpenAutoFocus={onOpenAutoFocus}
         showCloseButton={false}
       >
-        <DialogHeader className="mb-4 border-border border-b pb-4 text-left">
+        <DialogHeader className="border-border border-b pb-3 text-left">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {children}
