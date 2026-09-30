@@ -35,6 +35,7 @@ export interface BankInventoryInput {
   bankPath: string;
   sendersPath: string;
   remoteFormatFiles: string[];
+  remoteFilePaths?: string[];
   draftPaths: string[];
   localChanges: LocalDraftChange[];
   sourceChanges: SourceChangeRecord[];
@@ -124,6 +125,7 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
     bankPath,
     sendersPath,
     remoteFormatFiles,
+    remoteFilePaths = [],
     draftPaths,
     localChanges,
     sourceChanges,
@@ -186,13 +188,15 @@ export function buildBankInventory(input: BankInventoryInput): BankInventory {
   const unsupportedFiles = sortFilePathsByDisplayName(
     Array.from(
       new Set(
-        sourceChangesInBank
-          .filter(
-            (change) =>
-              change.path !== sendersPath &&
-              !isBankFormatFilePath(change.path, bankPath)
-          )
-          .map((change) => change.path)
+        [
+          ...remoteFilePaths,
+          ...sourceChangesInBank.map((change) => change.path),
+        ].filter(
+          (path) =>
+            isInBank(path, bankPath) &&
+            path !== sendersPath &&
+            !isBankFormatFilePath(path, bankPath)
+        )
       )
     )
   );

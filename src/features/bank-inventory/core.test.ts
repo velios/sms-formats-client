@@ -35,6 +35,25 @@ function localChange(params: {
 }
 
 describe("buildBankInventory records", () => {
+  it("classifies main tree paths without inventing source changes", () => {
+    const inventory = buildInventory({
+      remoteFormatFiles: ["banks/pumb/formats/a.txt"],
+      remoteFilePaths: [
+        "banks/pumb/formats/a.txt",
+        SENDERS_PATH,
+        "banks/pumb/notes.md",
+        "banks/other/notes.md",
+      ],
+    });
+    expect(inventory.unsupportedFiles).toEqual(["banks/pumb/notes.md"]);
+    expect(inventory.changedFormatFiles.size).toBe(0);
+    expect(
+      inventory.recordsByPath.get("banks/pumb/formats/a.txt")
+    ).toMatchObject({
+      local: "unchanged",
+      source: "unchanged",
+    });
+  });
   it("classifies every bank file: unsupported and senders alongside formats", () => {
     const inventory = buildInventory({
       remoteFormatFiles: ["banks/pumb/formats/existing.txt"],

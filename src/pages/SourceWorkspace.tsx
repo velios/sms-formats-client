@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { indexBanksFromTree } from "@/domain/bank-index";
+import { buildBankInventory } from "@/features/bank-inventory/core";
 import { FormatEditor } from "@/features/format-editor/FormatEditor";
 import { ResizablePanels } from "@/features/resizable-panels/ResizablePanels";
 import { SendersEditor } from "@/features/senders-editor/SendersEditor";
@@ -77,6 +78,21 @@ export function SourceWorkspace() {
   const banks = useMemo(() => indexBanksFromTree(state.tree), [state.tree]);
   const bankPath = state.filePath?.split("/").slice(0, 2).join("/") ?? "";
   const bank = banks.find((item) => item.folderPath === bankPath);
+  const inventory = useMemo(
+    () =>
+      buildBankInventory({
+        bankPath,
+        sendersPath: `${bankPath}/senders.txt`,
+        remoteFormatFiles: bank?.formatFiles ?? [],
+        remoteFilePaths: state.tree
+          .filter((entry) => entry.type === "blob")
+          .map((entry) => entry.path),
+        draftPaths: [...drafts.keys()],
+        localChanges: useDraftStore.getState().getChangedFiles(),
+        sourceChanges: [],
+      }),
+    [bankPath, bank, state.tree, drafts]
+  );
   const file = state.filePath;
   const showSenders = file === `${bankPath}/senders.txt`;
   const draft = file ? drafts.get(file) : undefined;
@@ -192,7 +208,7 @@ export function SourceWorkspace() {
   return (
     <div className="ui-panel-stack h-full">
       <WorkspaceHeaderBar
-        allFormatFiles={bank?.formatFiles ?? []}
+        allFormatFiles={inventory.formatFiles}
         bankName={bank?.displayName ?? bankPath}
         bankRepoUrl={`https://github.com/${controller.repository.owner}/${controller.repository.repo}/tree/${state.head?.sourceRef.sha ?? "main"}/${bankPath}`}
         localOnly
@@ -212,7 +228,7 @@ export function SourceWorkspace() {
             <div className="ui-panel-body overflow-auto">
               <select
                 aria-label={t("experiment.bank")}
-                className="mb-2 w-full"
+                className="mb-2 h-8 w-full rounded-md border border-input bg-card px-2 text-foreground text-xs outline-none focus-visible:border-ring disabled:opacity-50"
                 disabled={busy}
                 onChange={(event) => {
                   const next = banks.find(
@@ -240,36 +256,27 @@ export function SourceWorkspace() {
                   senders.txt
                 </button>
               )}
-              {state.tree
-                .filter(
-                  (entry) =>
-                    entry.type === "blob" &&
-                    entry.path.startsWith(`${bankPath}/`) &&
-                    !bank?.formatFiles.includes(entry.path) &&
-                    entry.path !== `${bankPath}/senders.txt`
-                )
-                .map((entry) => (
-                  <a
-                    className="ui-list-row block"
-                    href={`https://github.com/${controller.repository.owner}/${controller.repository.repo}/blob/${state.head?.sourceRef.sha}/${entry.path}`}
-                    key={entry.path}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {entry.path.slice(bankPath.length + 1)}
-                  </a>
-                ))}
-              {bank?.formatFiles.map((path) => (
+              {inventory.unsupportedFiles.map((path) => (
+                <a
+                  className="ui-list-row block text-xs"
+                  href={`https://github.com/${controller.repository.owner}/${controller.repository.repo}/blob/${state.head?.sourceRef.sha}/${path}`}
+                  key={path}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {path.slice(bankPath.length + 1)}
+                </a>
+              ))}
+              {inventory.formatFiles.map((path) => (
                 <button
-                  className="ui-list-row w-full text-left"
+                  className="ui-list-row w-full text-left text-xs"
                   disabled={state.operation === "refreshing"}
                   key={path}
                   onClick={() => select(path)}
                   type="button"
                 >
                   {path.split("/").pop()}
-                  {drafts.get(path)?.content !==
-                    drafts.get(path)?.headContent && drafts.has(path)
+                  {inventory.recordsByPath.get(path)?.local === "changed"
                     ? " *"
                     : ""}
                 </button>
