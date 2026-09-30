@@ -12,7 +12,6 @@
 ## Writing
 
 - Keep project instructions in AGENTS.md; CLAUDE.md contains only `@AGENTS.md`.
-
 - Use the shortest complete text. Comments explain only non-obvious reasons.
 - README contains purpose, quickstart and essential links. Put lasting technical guidance in `docs/`, linked from README or relevant agent instructions. Remove duplicates and obsolete material.
 - Keep decisions and validation in the PR or existing documentation.

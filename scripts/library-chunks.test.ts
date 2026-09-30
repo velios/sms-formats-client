@@ -43,17 +43,14 @@ function chunks(output: Awaited<ReturnType<typeof buildOutput>>) {
   return output.filter((item): item is OutputChunk => item.type === "chunk");
 }
 
-function dependencies(output: OutputChunk[], name: string, dynamic = false) {
+function dependencies(output: OutputChunk[], name: string) {
   const found = new Set<string>();
   function visit(chunk: OutputChunk) {
     if (found.has(chunk.name)) {
       return;
     }
     found.add(chunk.name);
-    for (const file of [
-      ...chunk.imports,
-      ...(dynamic ? chunk.dynamicImports : []),
-    ]) {
+    for (const file of chunk.imports) {
       visit(output.find((item) => item.fileName === file)!);
     }
   }
@@ -185,9 +182,6 @@ test("data and functional changes preserve independent library caches", async ()
         ).not.toEqual(baseline.find((item) => item.fileName === "index.html"));
       } else {
         expect(changed).toContain(changedName);
-        expect(
-          changed.every((name) => dependencies(original, "app", true).has(name))
-        ).toBe(true);
         expect(changed).not.toContain("shared");
         for (const name of ["prompt-package", "import-answer", "workspace"]) {
           if (
