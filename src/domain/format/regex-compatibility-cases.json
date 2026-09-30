@@ -1,0 +1,92 @@
+[
+  {
+    "id": "ascii-alternatives",
+    "pattern": "(?i)^(?:payment|transfer)\\s+(USD)$",
+    "sms": "PAYMENT usd",
+    "upstream": {
+      "match": "PAYMENT usd",
+      "groups": ["usd"]
+    }
+  },
+  {
+    "id": "cyrillic-capture",
+    "pattern": "(?i)^(код)\\s*(\\d+)$",
+    "sms": "КОД 1234",
+    "upstream": {
+      "match": "КОД 1234",
+      "groups": ["КОД", "1234"]
+    }
+  },
+  {
+    "id": "diacritics",
+    "pattern": "(?i)autoriza(?:[țt]i)?\\s+plata",
+    "sms": "AUTORIZAȚI PLATA",
+    "upstream": {
+      "match": "AUTORIZAȚI PLATA",
+      "groups": []
+    }
+  },
+  {
+    "id": "backreference",
+    "pattern": "(?i)^(код)\\s+\\1$",
+    "sms": "КОД код",
+    "upstream": {
+      "match": "КОД код",
+      "groups": ["КОД"]
+    }
+  },
+  {
+    "id": "optional-nested-groups",
+    "pattern": "(?i)^((код))(?:\\s+(otp))?$",
+    "sms": "КОД",
+    "upstream": {
+      "match": "КОД",
+      "groups": ["КОД", "КОД", null]
+    }
+  },
+  {
+    "id": "negative-example",
+    "pattern": "(?i)^код$",
+    "sms": "покупка",
+    "upstream": null
+  },
+  {
+    "id": "case-sensitive-default",
+    "pattern": "^код$",
+    "sms": "КОД",
+    "upstream": null
+  },
+  {
+    "id": "cyrillic-word-boundary",
+    "pattern": "(?i)^.*\\bкод\\b.*",
+    "sms": "Никому не говорите код: 1234",
+    "upstream": {
+      "match": "Никому не говорите код: 1234",
+      "groups": []
+    },
+    "local": null,
+    "reason": "JavaScript word boundaries use ASCII word characters."
+  },
+  {
+    "id": "cyrillic-word-class",
+    "pattern": "(?i)мобильн\\w*\\s*банк",
+    "sms": "МОБИЛЬНЫЙ БАНК",
+    "upstream": {
+      "match": "МОБИЛЬНЫЙ БАНК",
+      "groups": []
+    },
+    "local": null,
+    "reason": "JavaScript word classes exclude Cyrillic letters."
+  },
+  {
+    "id": "unicode-dotted-i",
+    "pattern": "(?i)^[a-z]+$",
+    "sms": "İ",
+    "upstream": {
+      "match": "İ",
+      "groups": []
+    },
+    "local": null,
+    "reason": "Python IGNORECASE additionally matches dotted I in ASCII ranges."
+  }
+]

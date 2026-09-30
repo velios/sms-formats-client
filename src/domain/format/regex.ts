@@ -1,5 +1,6 @@
 import type { RegexPatternToken } from "./pattern-analysis";
 import { tokenizeRegexPattern } from "./pattern-analysis";
+import { tryCompile } from "./regex-compiler";
 
 export interface RegexMatchResult {
   matched: boolean;
@@ -72,34 +73,6 @@ function emptyMatchResult(error: string | null = null): RegexMatchResult {
     groups: [],
     error,
   };
-}
-
-export function tryCompile(pattern: string): {
-  regex: RegExp | null;
-  supportsIndices: boolean;
-  error: string | null;
-} {
-  try {
-    return {
-      regex: new RegExp(pattern, "d"),
-      supportsIndices: true,
-      error: null,
-    };
-  } catch {
-    try {
-      return {
-        regex: new RegExp(pattern),
-        supportsIndices: false,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        regex: null,
-        supportsIndices: false,
-        error: error instanceof Error ? error.message : "Invalid regex",
-      };
-    }
-  }
 }
 
 function findGroupBounds(
@@ -213,8 +186,9 @@ function depthZeroBoundaryTokenIndices(tokens: RegexPatternToken[]): number[] {
   const indices: number[] = [];
   let depth = 0;
   for (let i = 0; i < tokens.length; i++) {
-    const raw = tokens[i]!.raw;
-    if (raw.startsWith("(")) {
+    const token = tokens[i]!;
+    const raw = token.raw;
+    if (token.type === "group" && raw.startsWith("(")) {
       depth++;
     } else if (raw === ")") {
       depth = Math.max(0, depth - 1);
@@ -301,10 +275,10 @@ export function recognitionProgress(
 }
 
 export function countCaptureGroups(pattern: string): number | null {
-  try {
-    const result = new RegExp(`${pattern}|`).exec("");
-    return result ? result.length - 1 : 0;
-  } catch {
+  const compiled = tryCompile(pattern);
+  if (!compiled.regex) {
     return null;
   }
+  const result = tryCompile(`${pattern}|`).regex?.exec("");
+  return result ? result.length - 1 : null;
 }

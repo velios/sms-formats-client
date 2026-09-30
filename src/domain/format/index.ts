@@ -31,8 +31,8 @@ export {
   normalizeSmsText,
   recognitionProgress,
   testRegex,
-  tryCompile,
 } from "./regex";
+export { tryCompile } from "./regex-compiler";
 export { buildRegex101Url } from "./regex101";
 export {
   buildTokenToCaptureGroupMap,
