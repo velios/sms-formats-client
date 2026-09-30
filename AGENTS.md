@@ -1,90 +1,29 @@
-# AGENTS.md
+# Agent instructions
 
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+## Work
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+- Use Russian with users and in documentation; English in code, comments and instructions.
+- State assumptions and resolve blocking ambiguity before editing.
+- Implement only requested work with the smallest working solution; match existing style.
+- Remove artifacts made obsolete by your changes; leave unrelated code alone.
+- After an agreed redesign, replace old paths completely; code compatibility is unnecessary.
+- Define checks before editing and run them before finishing. Verify changed screens/interactions in a browser.
 
-## 1. Think Before Coding
+## Writing
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+- Keep project instructions in AGENTS.md; CLAUDE.md contains only `@AGENTS.md`.
+- Use the shortest complete text. Comments explain only non-obvious reasons.
+- README contains purpose, quickstart and essential links. Put lasting technical guidance in `docs/`, linked from README or relevant agent instructions. Remove duplicates and obsolete material.
+- Keep decisions and validation in the PR or existing documentation.
 
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+## References
 
-## 2. Simplicity First
+- Issues/PRDs: use `gh`; read [tracker conventions](docs/agents/issue-tracker.md). For triage, read [labels](docs/agents/triage-labels.md).
+- Domain exploration: read [domain instructions](docs/agents/domain.md), then the glossary and relevant ADRs.
+- Before creating, changing or reviewing UI/styles, read [UI conventions](docs/ui-design.md).
+- For tests, content, caching or bot setup, read [development notes](docs/development.md).
 
-**Minimum code that solves the problem. Nothing speculative.**
+## Project identity
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
-
-## Project-Specific Guidelines
-
-- Speak with user in Russian
-- This project does not require preserving backward compatibility at the code level. After aligning the solution with the user, breaking changes are allowed. Do not leave code paths, compatibility layers, or other artifacts that imply the old solution still exists. Rewrite code as if the new behavior had always been the intended one, and bring the surrounding codebase to a consistent state.
-
-- Verify UI behavior in a browser after changing screens or interactions.
-
-## Agent skills
-
-### Issue tracker
-
-Issues and PRDs live as GitHub issues in `velios/sms-formats-client` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Canonical label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
-
-### UI composition
-
-Before creating, changing, or reviewing screens, UI components, or styles, read [docs/ui-design.md](docs/ui-design.md) for composition conventions.
+- project: sms-formats
+- registry: https://github.com/velios/zen-hub/blob/main/docs/registry.md

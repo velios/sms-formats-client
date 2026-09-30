@@ -99,7 +99,7 @@ beforeAll(async () => {
     clear: () => stored.clear(),
   });
   // i18n reads localStorage while being evaluated, so it is loaded late.
-  await import("@/i18n");
+  await (await import("@/i18n")).i18nReady;
 });
 
 beforeEach(() => {

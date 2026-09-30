@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { REGEX_SNIPPETS } from "@/content/snippets.generated";
+import { REGEX_SNIPPETS } from "@/content/reference.generated";
 import { cn } from "@/lib/utils";
 import { SnippetCard } from "./SnippetCard";
 import { groupSnippets, type SnippetGroup } from "./schema";

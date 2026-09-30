@@ -6,10 +6,11 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-
-import { COOKBOOK_MARKDOWN } from "@/content/cookbook.generated";
-import { FORMAT_RULES_MARKDOWN } from "@/content/format-rules.generated";
-import { SNIPPETS_TOML } from "@/content/snippets.generated";
+import {
+  COOKBOOK_MARKDOWN,
+  FORMAT_RULES_MARKDOWN,
+  SNIPPETS_TOML,
+} from "@/content/reference.generated";
 import type { RepoRef } from "@/domain/types";
 import type {
   BankFileRecord,

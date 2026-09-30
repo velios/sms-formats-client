@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
-import { FORMAT_RULES_HTML } from "@/content/format-rules.generated";
+import { FORMAT_RULES_HTML } from "@/content/reference.generated";
 
 interface Props {
   onClose: () => void;
