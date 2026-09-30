@@ -80,6 +80,7 @@ export function createCorpusSync(
       prsMoved = true;
     }
 
+    // Retry unfinished refs even after a 304.
     const pendingRefs = openPrs.some(
       (pr) => fetchedHeads.get(pr.number) !== pr.headSha
     );

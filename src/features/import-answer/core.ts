@@ -17,6 +17,7 @@ export interface AnswerProblem {
   excerpt: string;
 }
 
+// A lost block may contain moved examples.
 const BLOCK_LOST: ReadonlySet<AnswerProblemKind> = new Set([
   "unclosed",
   "orphan-close",
@@ -37,6 +38,7 @@ export type ParsedAnswer =
       problems: AnswerProblem[];
     };
 
+// Whole-line tags keep regex bodies unescaped.
 const OPEN_FILE = /^<file\s+path="(.*)">\s*$/;
 const OPEN_DELETE = /^<delete\s+path="(.*)">\s*$/;
 const OPEN_RENAME = /^<rename\s+from="(.*)"\s+to="(.*)">\s*$/;

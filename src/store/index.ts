@@ -209,8 +209,20 @@ function rebasePublishedDrafts(
   for (const published of files) {
     const current = drafts.get(published.filePath);
     if (!current) {
+      // Removing a captured change means reverting it after the commit.
+      drafts.set(
+        published.filePath,
+        createDraftEntry({
+          filePath: published.filePath,
+          content: published.headContent ?? published.content,
+          baselineHeadSha: headSha,
+          headContent: published.isDeleted ? null : published.content,
+          isDeleted: published.headContent === null,
+        })
+      );
       continue;
     }
+    // Clear only the captured draft; keep later edits.
     if (current === published) {
       drafts.delete(published.filePath);
       removed.push(published.filePath);

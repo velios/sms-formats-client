@@ -25,18 +25,15 @@ function collectRegex(
       level: "error",
       filePath,
     });
-    return lines[0]?.trim() ?? "";
+    return lines[0] ?? "";
   }
 
-  const regexLines: string[] = [];
-  for (let i = 0; i < columnsIdx; i++) {
-    const line = lines[i] ?? "";
-    if (line.trim() === "") {
-      break;
-    }
-    regexLines.push(line);
+  const regexLines = lines.slice(0, columnsIdx);
+  // Remove the format separator, not whitespace typed into the pattern.
+  if (regexLines.at(-1) === "") {
+    regexLines.pop();
   }
-  return regexLines.join("\n").trim();
+  return regexLines.join("\n");
 }
 
 function collectColumns(lines: string[], columnsIdx: number): string[] {
@@ -51,32 +48,17 @@ function collectColumns(lines: string[], columnsIdx: number): string[] {
     .filter(Boolean);
 }
 
-function trimBlankLines(lines: string[]): string[] {
-  const trimmed = [...lines];
-  while (trimmed.length > 0 && trimmed.at(-1)?.trim() === "") {
-    trimmed.pop();
-  }
-  while (trimmed.length > 0 && trimmed[0]?.trim() === "") {
-    trimmed.shift();
-  }
-  return trimmed;
-}
-
 function collectExamplesBetween(
   lines: string[],
   start: number,
   end: number
 ): string {
-  const exLines: string[] = [];
-  for (let i = start; i < end; i++) {
-    const line = lines[i] ?? "";
-    const normalized = line.trim();
-    if (normalized === COLUMNS_MARKER || normalized === EXAMPLE_MARKER) {
-      break;
-    }
-    exLines.push(line);
+  const exLines = lines.slice(start, end);
+  // One blank line separates sections; the final newline terminates the file.
+  if (exLines.at(-1) === "") {
+    exLines.pop();
   }
-  return trimBlankLines(exLines).join("\n");
+  return exLines.join("\n");
 }
 
 function collectExamples(
@@ -111,7 +93,7 @@ export function parseFormatFile(raw: string, filePath = ""): ParsedFormat {
   const exampleIndices = findExampleIndices(lines);
   const regex = collectRegex(lines, columnsIdx, filePath, issues);
 
-  if (!regex) {
+  if (!regex.trim()) {
     issues.push({
       code: "MISSING_REGEX",
       level: "error",

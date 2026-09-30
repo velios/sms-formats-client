@@ -54,7 +54,7 @@ import { useBankPublishAction } from "@/features/workspace/use-publish";
 import {
   usePullRequestApproval,
   usePullRequestApprovalPermission,
-} from "@/features/workspace/use-pull-request-rights";
+} from "@/features/workspace/use-pull-request-approval";
 import {
   type ActiveRouteSession,
   resolveWorkspaceRefresh,
@@ -180,15 +180,6 @@ export function BankWorkspace() {
         })),
     [bankPath, draftStore, draftStore.drafts]
   );
-  const allChangedFilesForPublish = useMemo(
-    () =>
-      draftStore.getChangedFiles().map((entry) => ({
-        filePath: entry.filePath,
-        content: entry.content,
-        isDeleted: entry.isDeleted,
-      })),
-    [draftStore, draftStore.drafts]
-  );
   const inventory = useBankInventory({
     bankPath,
     sendersPath,
@@ -293,7 +284,7 @@ export function BankWorkspace() {
           repository,
           filePath: shownFilePath,
           content: primedContent,
-          refName: session.headSha,
+          commitSha: session.headSha,
         });
       }
       setStaleWorkspaceSession(null);
@@ -612,8 +603,6 @@ export function BankWorkspace() {
   } = useBankPublishAction({
     bank,
     bankPath,
-    changedFiles: changedFilesForPublish,
-    allChangedFiles: allChangedFilesForPublish,
     draftStore,
     onWorkspaceReadOnly: handleWorkspaceReadOnly,
     onWorkspaceStale: handleWorkspaceStale,
@@ -909,7 +898,6 @@ export function BankWorkspace() {
         <ValidationPanel
           bank={bank ?? null}
           bankPath={bankPath}
-          formatPaths={inventory.liveFormatPaths}
           onClose={() => setShowValidation(false)}
         />
       )}
@@ -936,15 +924,15 @@ export function BankWorkspace() {
           <PromptPackageModal
             bankName={displayName}
             bankPath={bankPath}
+            baseSha={activeSession?.baseSha}
             draftStore={draftStore}
+            headSha={sourceRefNameForContent}
             inventory={inventory}
-            mainRefName={activeSession?.baseSha}
             onClose={() => setShowPromptPackage(false)}
             prNumber={
               sourceRef?.type === "pr" ? (sourceRef.prNumber ?? null) : null
             }
             repository={repository}
-            sourceRefName={sourceRefNameForContent}
           />
         </Suspense>
       )}

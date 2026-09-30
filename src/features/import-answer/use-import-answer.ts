@@ -65,8 +65,9 @@ async function loadBodiesFromCache(
   params: LoadBodiesParams
 ): Promise<Map<string, string>> {
   const { paths, repository, refName } = params;
-  return (await loadFileContents({ repository, refName, filePaths: paths }))
-    .contents;
+  return (
+    await loadFileContents({ repository, commitSha: refName, filePaths: paths })
+  ).contents;
 }
 
 export interface UseImportAnswerParams {
@@ -315,6 +316,7 @@ export function useImportAnswer(
     }
     setIsWriting(true);
 
+    // The last block wins for each path.
     const finalKind = new Map<string, AnswerChange["kind"]>();
     for (const row of rows) {
       const { change, headContent } = row;

@@ -81,6 +81,9 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
                 event.key.toLowerCase() === "z"
               ) {
                 event.preventDefault();
+                if (readOnly) {
+                  return;
+                }
                 if (event.shiftKey) {
                   useDraftStore.getState().redo(filePath);
                 } else {

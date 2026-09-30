@@ -71,7 +71,7 @@ describe("useWorkspaceFileContent", () => {
       repository: { owner: "zenmoney", repo: "sms-formats" },
       filePath: "src/TBank_123/formats/a.txt",
       content: "CACHED CONTENT",
-      refName: "head-sha",
+      commitSha: "head-sha",
     });
 
     const { result } = renderHook(() =>

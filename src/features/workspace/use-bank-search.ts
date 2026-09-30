@@ -131,30 +131,22 @@ export function useBankFormatSearch(params: {
     repository,
     sourceHeadSha,
   } = params;
-  const [searchDocsByPath, setSearchDocsByPath] = useState<
-    Map<string, FormatSearchDoc>
-  >(new Map());
+  const searchSessionId = `${repository.owner}/${repository.repo}:${sourceHeadSha ?? ""}:${bankPath}`;
+  const [searchIndex, setSearchIndex] = useState({
+    sessionId: searchSessionId,
+    docs: new Map<string, FormatSearchDoc>(),
+  });
+  const searchDocsByPath = useMemo(
+    () =>
+      searchIndex.sessionId === searchSessionId
+        ? searchIndex.docs
+        : new Map<string, FormatSearchDoc>(),
+    [searchIndex, searchSessionId]
+  );
   const [indexingInFlight, setIndexingInFlight] = useState(0);
   const [indexingErrors, setIndexingErrors] = useState(0);
   const indexingSessionRef = useRef("");
   const inFlightSearchPathsRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    setSearchDocsByPath((prev) =>
-      syncSearchDocs({
-        previousDocs: prev,
-        formatPaths: allFormatFiles,
-        draftStore,
-      })
-    );
-  }, [allFormatFiles, draftStore, draftStore.drafts]);
-
-  const activeSearchScope = allFormatFiles;
-  const shouldIndexExamples = shouldStartExampleIndexing(
-    formatSearch,
-    formatTab
-  );
-  const searchSessionId = `${repository.owner}/${repository.repo}:${sourceHeadSha ?? ""}:${bankPath}`;
 
   useEffect(() => {
     indexingSessionRef.current = searchSessionId;
@@ -162,6 +154,24 @@ export function useBankFormatSearch(params: {
     setIndexingInFlight(0);
     setIndexingErrors(0);
   }, [searchSessionId]);
+
+  useEffect(() => {
+    setSearchIndex((prev) => ({
+      sessionId: searchSessionId,
+      docs: syncSearchDocs({
+        previousDocs:
+          prev.sessionId === searchSessionId ? prev.docs : new Map(),
+        formatPaths: allFormatFiles,
+        draftStore,
+      }),
+    }));
+  }, [allFormatFiles, draftStore, draftStore.drafts, searchSessionId]);
+
+  const activeSearchScope = allFormatFiles;
+  const shouldIndexExamples = shouldStartExampleIndexing(
+    formatSearch,
+    formatTab
+  );
 
   const loadRemoteSearchDoc = useCallback(
     async (path: string, sessionId: string) => {
@@ -172,24 +182,35 @@ export function useBankFormatSearch(params: {
         const headContent = await loadFileContent({
           repository,
           filePath: path,
-          refName: sourceHeadSha,
+          commitSha: sourceHeadSha,
         });
         if (indexingSessionRef.current !== sessionId) {
           return;
         }
         const exampleText = extractExamplesForSearch(headContent, path);
-        setSearchDocsByPath((prev) =>
-          upsertRemoteSearchDoc(prev, path, exampleText)
+        setSearchIndex((prev) =>
+          prev.sessionId === sessionId &&
+          prev.docs.get(path)?.source !== "draft"
+            ? {
+                ...prev,
+                docs: upsertRemoteSearchDoc(prev.docs, path, exampleText),
+              }
+            : prev
         );
       } catch {
         if (indexingSessionRef.current !== sessionId) {
           return;
         }
-        setSearchDocsByPath((prev) => upsertRemoteErrorDoc(prev, path));
+        setSearchIndex((prev) =>
+          prev.sessionId === sessionId &&
+          prev.docs.get(path)?.source !== "draft"
+            ? { ...prev, docs: upsertRemoteErrorDoc(prev.docs, path) }
+            : prev
+        );
         setIndexingErrors((prev) => prev + 1);
       } finally {
-        inFlightSearchPathsRef.current.delete(path);
         if (indexingSessionRef.current === sessionId) {
+          inFlightSearchPathsRef.current.delete(path);
           setIndexingInFlight((prev) => Math.max(prev - 1, 0));
         }
       }

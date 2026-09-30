@@ -70,8 +70,6 @@ function setup() {
       repository,
       sourceRef: useSourceStore.getState().sourceRef,
       draftStore: drafts,
-      changedFiles: drafts.getChangedFiles(),
-      allChangedFiles: drafts.getChangedFiles(),
       writable: true,
       onWorkspaceSynced,
       onWorkspaceStale,

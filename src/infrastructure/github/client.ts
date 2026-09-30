@@ -811,13 +811,22 @@ export async function resolvePullRequestWorkspace(
           }
         : null;
 
+    const headSha = options?.headShaOverride ?? pullRequest.data.head.sha;
+    const comparison = await publicOctokit.repos.compareCommitsWithBasehead({
+      owner: repo.owner,
+      repo: repo.repo,
+      basehead: `${pullRequest.data.base.sha}...${headSha}`,
+      per_page: 1,
+    });
+
     return resolvePullRequestWorkspaceSnapshot({
       repository: repo,
       prNumber,
       state: pullRequest.data.state === "open" ? "open" : "closed",
       merged: pullRequest.data.merged === true,
-      headSha: options?.headShaOverride ?? pullRequest.data.head.sha,
-      baseSha: pullRequest.data.base.sha,
+      headSha,
+      // PR files describe the diff from the merge base, not current main.
+      baseSha: comparison.data.merge_base_commit.sha,
       canWriteRepository,
       maintainerCanModify: pullRequest.data.maintainer_can_modify ?? null,
       headRepository,
@@ -908,7 +917,7 @@ export async function fetchFileContent(
     ref,
   });
   const data = res.data as { content?: string; encoding?: string };
-  if (data.content && data.encoding === "base64") {
+  if (typeof data.content === "string" && data.encoding === "base64") {
     return decodeBase64Utf8(data.content.replace(/\n/g, ""));
   }
   throw new Error(`Unexpected content format for ${path}`);

@@ -6,6 +6,8 @@ import type { RepoRef } from "@/domain/types";
 const octokitMocks = vi.hoisted(() => {
   const createReview = vi.fn(() => Promise.resolve({}));
   const getPullRequest = vi.fn();
+  const getContent = vi.fn();
+  const compareCommitsWithBasehead = vi.fn();
   const getAuthenticated = vi.fn(() =>
     Promise.resolve({ data: { login: "current-user" } })
   );
@@ -24,11 +26,14 @@ const octokitMocks = vi.hoisted(() => {
 
   return {
     createReview,
+    getContent,
+    compareCommitsWithBasehead,
     getAuthenticated,
     getPullRequest,
     graphql,
     paginate,
     Octokit: class MockOctokit {
+      repos = { getContent, compareCommitsWithBasehead };
       pulls = {
         createReview,
         get: getPullRequest,
@@ -55,10 +60,12 @@ import {
   classifyPullRequestResolverError,
   describeGraphqlBlobError,
   fetchBlobsByRef,
+  fetchFileContent,
   fetchPullRequestApprovalByCurrentUser,
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
   resolveCommitAuthorLabel,
+  resolvePullRequestWorkspace,
   setCachedPullRequestApprovalPermission,
   setGitHubUserToken,
   subscribeGitHubAuthChange,
@@ -571,5 +578,70 @@ describe("describeGraphqlBlobError", () => {
       "network down"
     );
     expect(describeGraphqlBlobError(null)).toBe("Unknown GraphQL error");
+  });
+});
+
+describe("revision REST reads", () => {
+  it("loads an existing empty blob", async () => {
+    octokitMocks.getContent.mockResolvedValue({
+      data: { content: "", encoding: "base64" },
+    });
+    await expect(fetchFileContent("empty.txt", "head")).resolves.toBe("");
+  });
+
+  it.each([
+    undefined,
+    null,
+    0,
+  ])("rejects missing or invalid content: %s", async (content) => {
+    octokitMocks.getContent.mockResolvedValue({
+      data: { content, encoding: "base64" },
+    });
+    await expect(fetchFileContent("broken.txt", "head")).rejects.toThrow(
+      "Unexpected content format"
+    );
+  });
+
+  it.each([
+    undefined,
+    "published-head",
+  ])("pins the sparse PR layer to the merge base (override=%s)", async (headShaOverride) => {
+    setCachedPullRequestApprovalPermission(false, {
+      owner: "owner",
+      repo: "repo",
+    });
+    octokitMocks.getPullRequest.mockResolvedValue({
+      data: {
+        state: "open",
+        merged: false,
+        base: { sha: "advanced-main" },
+        head: {
+          sha: "pr-head",
+          repo: { owner: { login: "owner" }, name: "repo" },
+        },
+      },
+    });
+    octokitMocks.paginate.mockResolvedValue([
+      { filename: "src/Bank/formats/b.txt", status: "modified" },
+    ] as never);
+    octokitMocks.compareCommitsWithBasehead.mockResolvedValue({
+      data: { merge_base_commit: { sha: "fork-point" } },
+    });
+    const result = await resolvePullRequestWorkspace(
+      1,
+      { owner: "owner", repo: "repo" },
+      { headShaOverride }
+    );
+    expect(result).toMatchObject({
+      status: "supported",
+      baseSha: "fork-point",
+      headSha: headShaOverride ?? "pr-head",
+    });
+    expect(octokitMocks.compareCommitsWithBasehead).toHaveBeenLastCalledWith({
+      owner: "owner",
+      repo: "repo",
+      basehead: `advanced-main...${headShaOverride ?? "pr-head"}`,
+      per_page: 1,
+    });
   });
 });

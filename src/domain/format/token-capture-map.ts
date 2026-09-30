@@ -65,6 +65,7 @@ export function resolveTokenCaptureGroup(
   return map[tokenIndex] ?? null;
 }
 
+// Exclude the quantifier to preserve repetition.
 export function resolveCaptureGroupRange(
   tokens: RegexPatternToken[],
   groupIndex: number

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { isBankFormatFilePath } from "@/domain/format";
 import type { BankInfo, RepoRef } from "@/domain/types";
-import { validateBankLevel } from "@/domain/validation";
 import { resolvePublishPreflightState } from "@/features/publish-panel/preflight";
 import type { CommitMessageInput } from "@/features/publish-panel/UpdatePullRequestDialog";
-import { loadBankSnapshot } from "@/features/workspace/bank-snapshot";
+import { validateBankSnapshot } from "@/features/workspace/bank-snapshot";
 import type { ActiveRouteSession } from "@/features/workspace/use-workspace-session";
 import {
   getGitHubUserToken,
@@ -24,27 +22,13 @@ async function countBlockingPublishValidationIssues(params: {
   if (!bank) {
     throw new Error("Bank not found");
   }
-  const paths = [
-    ...new Set(
-      [...bank.formatFiles, ...draftStore.drafts.keys()].filter((path) =>
-        isBankFormatFilePath(path, bankPath)
-      )
-    ),
-  ];
-  const snapshot = await loadBankSnapshot({
-    filePaths: paths,
+  const issues = await validateBankSnapshot({
+    bank,
+    bankPath,
     draftStore,
     repository,
     sourceRefName: headSha,
   });
-  const sendersDraft = draftStore.getDraft(`${bankPath}/senders.txt`);
-  const issues = validateBankLevel(
-    {
-      ...bank,
-      hasSenders: sendersDraft ? !sendersDraft.isDeleted : bank.hasSenders,
-    },
-    snapshot.contents
-  );
   return issues.filter((issue) => issue.level === "error").length;
 }
 
@@ -68,6 +52,7 @@ function isDraftSnapshotCurrent(
   >,
   scopeKey: string | null
 ): boolean {
+  // Draft identity detects edits during validation.
   const current = useDraftStore.getState();
   return (
     current.draftScopeKey === scopeKey &&
@@ -76,20 +61,10 @@ function isDraftSnapshotCurrent(
   );
 }
 
-function useQuickPullRequestUpdate(params: {
+export function useBankPublishAction(params: {
   bank: BankInfo | undefined;
   bankPath: string;
-  allChangedFiles: Array<{
-    filePath: string;
-    content: string;
-    isDeleted: boolean;
-  }>;
   writable: boolean;
-  changedFiles: Array<{
-    filePath: string;
-    content: string;
-    isDeleted: boolean;
-  }>;
   draftStore: ReturnType<typeof useDraftStore.getState>;
   onWorkspaceReadOnly: (session: ActiveRouteSession) => void;
   onWorkspaceStale: (session: ActiveRouteSession) => void;
@@ -104,9 +79,7 @@ function useQuickPullRequestUpdate(params: {
   const {
     bank,
     bankPath,
-    allChangedFiles,
     writable,
-    changedFiles,
     draftStore,
     onWorkspaceReadOnly,
     onWorkspaceStale,
@@ -160,8 +133,10 @@ function useQuickPullRequestUpdate(params: {
       resolverHeadSha: resolution.headSha,
       sessionHeadSha: sourceRef.sha,
       writable: resolution.writable,
-      localChangesCount: changedFiles.length,
-      hasInvalidScopeChanges: allChangedFiles.some(
+      localChangesCount: files.filter((file) =>
+        file.filePath.startsWith(`${bankPath}/`)
+      ).length,
+      hasInvalidScopeChanges: files.some(
         (file) => !file.filePath.startsWith(`${bankPath}/`)
       ),
       validationErrorsCount: 0,
@@ -212,10 +187,8 @@ function useQuickPullRequestUpdate(params: {
       scopeKey,
     };
   }, [
-    allChangedFiles,
     bank,
     bankPath,
-    changedFiles,
     draftStore,
     onWorkspaceReadOnly,
     onWorkspaceStale,
@@ -331,84 +304,7 @@ function useQuickPullRequestUpdate(params: {
     setIsUpdateDialogOpen(false);
   }, []);
 
-  return {
-    isPublishing,
-    publishError,
-    isUpdateDialogOpen,
-    beginUpdate,
-    submitUpdate,
-    closeUpdateDialog,
-  };
-}
-
-export function useBankPublishAction(params: {
-  bank: BankInfo | undefined;
-  bankPath: string;
-  changedFiles: Array<{
-    filePath: string;
-    content: string;
-    isDeleted: boolean;
-  }>;
-  allChangedFiles: Array<{
-    filePath: string;
-    content: string;
-    isDeleted: boolean;
-  }>;
-  draftStore: ReturnType<typeof useDraftStore.getState>;
-  onWorkspaceReadOnly: (session: ActiveRouteSession) => void;
-  onWorkspaceStale: (session: ActiveRouteSession) => void;
-  onWorkspaceSynced: (
-    session: ActiveRouteSession,
-    preserveDrafts?: boolean
-  ) => Promise<void>;
-  repository: { owner: string; repo: string };
-  sourceRef: {
-    type: "pr";
-    name: string;
-    prNumber: number;
-    sha: string;
-  } | null;
-  t: (key: string, options?: Record<string, unknown>) => string;
-  writable: boolean;
-}) {
-  const {
-    bank,
-    bankPath,
-    changedFiles,
-    allChangedFiles,
-    draftStore,
-    onWorkspaceReadOnly,
-    onWorkspaceStale,
-    onWorkspaceSynced,
-    repository,
-    sourceRef,
-    t,
-    writable,
-  } = params;
-  const canUpdateCurrentPullRequest = Boolean(
-    sourceRef?.type === "pr" && sourceRef.prNumber && writable
-  );
-  const {
-    isPublishing,
-    publishError,
-    isUpdateDialogOpen,
-    beginUpdate,
-    submitUpdate,
-    closeUpdateDialog,
-  } = useQuickPullRequestUpdate({
-    bank,
-    bankPath,
-    allChangedFiles,
-    writable: canUpdateCurrentPullRequest,
-    changedFiles,
-    draftStore,
-    onWorkspaceReadOnly,
-    onWorkspaceStale,
-    onWorkspaceSynced,
-    repository,
-    sourceRef,
-    t,
-  });
+  const canUpdateCurrentPullRequest = Boolean(sourceRef && writable);
   const publishActionLabel = isPublishing
     ? t("publish.publishing")
     : t("publish.updatePR");

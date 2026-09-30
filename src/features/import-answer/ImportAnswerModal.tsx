@@ -25,7 +25,7 @@ import {
   RowPanel,
   type Translate,
   toManifestRow,
-} from "./AnswerManifest";
+} from "./AnswerImportViews";
 import {
   type ImportAnswerDraftStore,
   useImportAnswer,

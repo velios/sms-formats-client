@@ -25,8 +25,8 @@ interface Props {
   bankName: string;
   bankPath: string;
   repository: RepoRef;
-  sourceRefName: string | undefined;
-  mainRefName: string | undefined;
+  headSha: string | undefined;
+  baseSha: string | undefined;
   prNumber: number | null;
   inventory: Pick<
     BankInventory,
@@ -107,8 +107,8 @@ export function PromptPackageModal({
   bankName,
   bankPath,
   repository,
-  sourceRefName,
-  mainRefName,
+  headSha,
+  baseSha,
   prNumber,
   inventory,
   draftStore,
@@ -123,8 +123,8 @@ export function PromptPackageModal({
     bankName,
     bankPath,
     repository,
-    sourceRefName,
-    mainRefName,
+    headSha,
+    baseSha,
     inventory,
     draftStore,
   });

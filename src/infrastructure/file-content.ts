@@ -6,23 +6,24 @@ import { queryClient } from "@/lib/query-client";
 export interface FileRevision {
   repository: RepoRef;
   filePath: string;
-  refName: string;
+  commitSha: string;
 }
 
+// Cache only immutable commit SHAs.
 export function fileContentOptions({
   repository,
   filePath,
-  refName,
+  commitSha,
 }: FileRevision) {
   return queryOptions({
     queryKey: [
       "file-content",
       repository.owner,
       repository.repo,
-      refName,
+      commitSha,
       filePath,
     ],
-    queryFn: () => fetchFileContent(filePath, refName, repository),
+    queryFn: () => fetchFileContent(filePath, commitSha, repository),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 30 * 60_000,
     retry: false,
@@ -68,7 +69,7 @@ export async function loadFileContents(
 }
 
 export async function loadRevisionBlobs(
-  refName: string,
+  commitSha: string,
   filePaths: string[],
   repository: RepoRef,
   fetchBlobs: typeof import("./github").fetchBlobsByRef
@@ -76,19 +77,19 @@ export async function loadRevisionBlobs(
   const paths = [...new Set(filePaths)];
   const pendingPaths = paths.filter((filePath) => {
     const state = queryClient.getQueryState(
-      fileContentOptions({ repository, filePath, refName }).queryKey
+      fileContentOptions({ repository, filePath, commitSha }).queryKey
     );
     return state?.data === undefined && state?.fetchStatus !== "fetching";
   });
   let batch: ReturnType<typeof fetchBlobs> | undefined;
   const loadBatch = () =>
-    (batch ??= fetchBlobs(refName, pendingPaths, repository));
+    (batch ??= fetchBlobs(commitSha, pendingPaths, repository));
   return Promise.all(
     paths.map(async (filePath) => {
       let skipped: import("./github").BlobFetchResult | undefined;
       try {
         const text = await queryClient.fetchQuery({
-          ...fileContentOptions({ repository, filePath, refName }),
+          ...fileContentOptions({ repository, filePath, commitSha }),
           queryFn: async () => {
             const result = (await loadBatch()).find(
               (item) => item.path === filePath

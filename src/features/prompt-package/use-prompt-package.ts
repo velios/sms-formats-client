@@ -119,8 +119,8 @@ export interface UsePromptPackageParams {
   bankName: string;
   bankPath: string;
   repository: RepoRef;
-  sourceRefName: string | undefined;
-  mainRefName: string | undefined;
+  headSha: string | undefined;
+  baseSha: string | undefined;
   inventory: Pick<
     BankInventory,
     "mainLayerPaths" | "prLayerPaths" | "recordsByPath"
@@ -202,8 +202,8 @@ export function usePromptPackage(
     bankName,
     bankPath,
     repository,
-    sourceRefName,
-    mainRefName,
+    headSha,
+    baseSha,
     inventory,
     draftStore,
     fetchBlobs = fetchBlobsByRef,
@@ -267,7 +267,7 @@ export function usePromptPackage(
       setIsBuilding(false);
       return;
     }
-    if (!(sourceRefName && mainRefName)) {
+    if (!(headSha && baseSha)) {
       setMaterials(null);
       setErrorDetail(null);
       setError("no-source");
@@ -286,26 +286,23 @@ export function usePromptPackage(
       inventory,
       draftStore,
     });
-    const freePrContents = new Map(
+    const draftHeadContents = new Map(
       draftStore
         .getChangedFiles()
         .filter((change) => change.headContent !== null)
         .map((change) => [change.filePath, change.headContent])
     );
-    const prPathsToFetch = prPaths.filter((path) => !freePrContents.has(path));
+    const prPathsToFetch = prPaths.filter(
+      (path) => !draftHeadContents.has(path)
+    );
 
     try {
       const [mainResults, prResults] = await Promise.all([
         mainPaths.length > 0
-          ? loadRevisionBlobs(mainRefName, mainPaths, repository, fetchBlobs)
+          ? loadRevisionBlobs(baseSha, mainPaths, repository, fetchBlobs)
           : Promise.resolve<BlobFetchResult[]>([]),
         prPathsToFetch.length > 0
-          ? loadRevisionBlobs(
-              sourceRefName,
-              prPathsToFetch,
-              repository,
-              fetchBlobs
-            )
+          ? loadRevisionBlobs(headSha, prPathsToFetch, repository, fetchBlobs)
           : Promise.resolve<BlobFetchResult[]>([]),
       ]);
       if (buildIdRef.current !== buildId) {
@@ -317,10 +314,10 @@ export function usePromptPackage(
       const prFiles = [
         ...fetchedPrLayer.files,
         ...prPaths
-          .filter((path) => freePrContents.has(path))
+          .filter((path) => draftHeadContents.has(path))
           .map((path) => ({
             path,
-            content: freePrContents.get(path) ?? "",
+            content: draftHeadContents.get(path) ?? "",
           })),
       ].sort((a, b) => a.path.localeCompare(b.path));
 
@@ -362,8 +359,8 @@ export function usePromptPackage(
     hasToken,
     inventory,
     repository,
-    sourceRefName,
-    mainRefName,
+    headSha,
+    baseSha,
   ]);
 
   const result = useMemo<PromptPackage | null>(

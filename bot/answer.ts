@@ -51,6 +51,7 @@ async function answer(
   try {
     await send.deliver(body);
   } catch (error) {
+    // Acknowledge the webhook to avoid duplicate replies.
     process.stderr.write(`${send.label} failed for one update: ${error}\n`);
   }
 }

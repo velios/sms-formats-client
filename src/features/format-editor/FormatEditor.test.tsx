@@ -19,6 +19,9 @@ const fixture = vi.hoisted(() => {
     props: null as null | {
       regex: string;
       columns: string[];
+      examples: string[];
+      onRegexChange: (regex: string) => void;
+      onExampleChange: (index: number, text: string) => void;
       onColumnsChange: (columns: string[]) => void;
       onUndo: () => void;
       onRedo: () => void;
@@ -85,5 +88,39 @@ describe("one document across editor views", () => {
       screen.getByText("editor.structuredUnavailable")
     ).toBeInTheDocument();
     expect(useDraftStore.getState().getDraft(path)?.content).toBe("unfinished");
+  });
+  it("preserves sequential multiline example input and regex whitespace", () => {
+    render(<FormatEditor filePath={path} mode="structured" />);
+    act(() => fixture.props?.onExampleChange(0, "A\n"));
+    expect(fixture.props?.examples).toEqual(["A\n"]);
+    act(() => fixture.props?.onExampleChange(0, "A\nB"));
+    act(() => fixture.props?.onRegexChange("A "));
+    expect(fixture.props?.regex).toBe("A ");
+    expect(fixture.props?.examples).toEqual(["A\nB"]);
+  });
+
+  it.each([
+    false,
+    true,
+  ])("blocks raw history shortcuts when read-only (redo=%s)", (redo) => {
+    const view = render(<FormatEditor filePath={path} mode="raw" />);
+    const edited = serializeFormat("B", ["comment"], ["B"]);
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: edited },
+    });
+    if (redo) {
+      act(() => useDraftStore.getState().undo(path));
+    }
+    const before = useDraftStore.getState().getDraft(path)?.content;
+    view.rerender(<FormatEditor filePath={path} mode="raw" readOnly />);
+    fireEvent.keyDown(screen.getByRole("textbox"), {
+      key: "z",
+      ctrlKey: true,
+      shiftKey: redo,
+    });
+    expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
+    view.rerender(<FormatEditor filePath={path} mode="structured" readOnly />);
+    act(() => (redo ? fixture.props?.onRedo() : fixture.props?.onUndo()));
+    expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
   });
 });

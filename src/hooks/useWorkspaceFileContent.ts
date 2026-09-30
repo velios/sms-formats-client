@@ -16,7 +16,7 @@ export function useWorkspaceFileContent(params: {
       ...fileContentOptions({
         repository,
         filePath: params.filePath,
-        refName: refName ?? "",
+        commitSha: refName ?? "",
       }),
       enabled: Boolean(refName) && params.enabled !== false,
     },

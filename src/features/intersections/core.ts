@@ -37,7 +37,7 @@ export function buildLoadedFormatFromEditorContext(params: {
   return {
     filePath,
     fileName: extractFormatFileName(filePath),
-    regex: regex.trim(),
+    regex,
     examples: examples.map(normalizeIntersectionExample).filter(Boolean),
     source: "draft",
   };

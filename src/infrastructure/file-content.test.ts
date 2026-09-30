@@ -9,7 +9,7 @@ vi.mock("@/infrastructure/github", () => ({
 const revision = {
   repository: { owner: "zenmoney", repo: "sms-formats" },
   filePath: "src/Bank/formats/a.txt",
-  refName: "head-sha",
+  commitSha: "head-sha",
 };
 
 describe("file revision cache", () => {
@@ -31,7 +31,7 @@ describe("file revision cache", () => {
     fetchFileContentMock.mockImplementation((_path, ref) =>
       Promise.resolve(ref)
     );
-    const base = { ...revision, refName: "base-sha" };
+    const base = { ...revision, commitSha: "base-sha" };
     await Promise.all([loadFileContent(base), loadFileContent(revision)]);
     expect(getFileContent(base)).toBe("base-sha");
     expect(getFileContent(revision)).toBe("head-sha");
@@ -59,7 +59,7 @@ it("shares cached and in-flight contents with the GraphQL package loader", async
   const editor = loadFileContent(revision);
   const extraPath = "src/Bank/formats/b.txt";
   const blobs = await loadRevisionBlobs(
-    revision.refName,
+    revision.commitSha,
     [revision.filePath, extraPath],
     revision.repository,
     fetchBlobs
@@ -69,7 +69,7 @@ it("shares cached and in-flight contents with the GraphQL package loader", async
     blobs.map((blob) => (blob.status === "loaded" ? blob.text : null))
   ).toEqual(["EDITOR", "PACKAGE"]);
   expect(fetchBlobs).toHaveBeenCalledWith(
-    revision.refName,
+    revision.commitSha,
     [extraPath],
     revision.repository
   );

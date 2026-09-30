@@ -170,8 +170,16 @@ export function FormatEditor({
       );
     }
   };
-  const undo = () => useDraftStore.getState().undo(filePath);
-  const redo = () => useDraftStore.getState().redo(filePath);
+  const undo = () => {
+    if (!isMutationBlocked) {
+      useDraftStore.getState().undo(filePath);
+    }
+  };
+  const redo = () => {
+    if (!isMutationBlocked) {
+      useDraftStore.getState().redo(filePath);
+    }
+  };
 
   useEffect(() => {
     onSearchContextChange?.({ filePath, regex, examples, activeExampleIndex });

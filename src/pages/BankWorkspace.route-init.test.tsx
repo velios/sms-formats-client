@@ -678,7 +678,7 @@ describe("BankWorkspace route init", () => {
       expect(mocks.cacheFileContent).toHaveBeenCalledWith(
         expect.objectContaining({
           repository: { owner: "zenmoney", repo: "sms-formats" },
-          refName: "new-head-sha",
+          commitSha: "new-head-sha",
         })
       )
     );
@@ -853,7 +853,7 @@ describe("BankWorkspace route init", () => {
       expect(mocks.cacheFileContent).toHaveBeenCalledWith(
         expect.objectContaining({
           repository: { owner: "zenmoney", repo: "sms-formats" },
-          refName: "new-head-sha",
+          commitSha: "new-head-sha",
         })
       )
     );
@@ -965,7 +965,7 @@ describe("BankWorkspace route init", () => {
     expect(mocks.cacheFileContent).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: "src/TBank_123/formats/current.txt",
-        refName: "new-head-sha",
+        commitSha: "new-head-sha",
         content: "primed content",
       })
     );

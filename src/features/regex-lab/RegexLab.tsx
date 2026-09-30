@@ -373,7 +373,7 @@ export function RegexLab({
     setHoveredGroup(groupIndex);
   }, []);
 
-  const setColumnsForGroupCount = useCallback(
+  const buildColumnsForGroupCount = useCallback(
     (nextCount: number) => {
       const prepared = Array.from(
         { length: nextCount },
@@ -386,26 +386,26 @@ export function RegexLab({
 
   const handleSelectColumn = useCallback(
     (groupIndex: number, columnName: string) => {
-      const newColumns = setColumnsForGroupCount(captureGroupCount);
+      const newColumns = buildColumnsForGroupCount(captureGroupCount);
       newColumns[groupIndex - 1] = columnName;
       onColumnsChange(newColumns);
       setColumnPickerGroupIndex(null);
     },
-    [captureGroupCount, onColumnsChange, setColumnsForGroupCount]
+    [captureGroupCount, onColumnsChange, buildColumnsForGroupCount]
   );
 
   const handleClearColumn = useCallback(
     (groupIndex: number) => {
-      const newColumns = setColumnsForGroupCount(captureGroupCount);
+      const newColumns = buildColumnsForGroupCount(captureGroupCount);
       newColumns[groupIndex - 1] = "";
       onColumnsChange(newColumns);
     },
-    [captureGroupCount, onColumnsChange, setColumnsForGroupCount]
+    [captureGroupCount, onColumnsChange, buildColumnsForGroupCount]
   );
 
   const handleColumnParamChange = useCallback(
     (groupIndex: number, param: string) => {
-      const newColumns = setColumnsForGroupCount(captureGroupCount);
+      const newColumns = buildColumnsForGroupCount(captureGroupCount);
       const current = newColumns[groupIndex - 1] ?? "";
       const base = current.split("#")[0];
       if (!base) {
@@ -414,7 +414,7 @@ export function RegexLab({
       newColumns[groupIndex - 1] = param ? `${base}#${param}` : base;
       onColumnsChange(newColumns);
     },
-    [captureGroupCount, onColumnsChange, setColumnsForGroupCount]
+    [captureGroupCount, onColumnsChange, buildColumnsForGroupCount]
   );
 
   const handlePatternSelectionChange = useCallback(

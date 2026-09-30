@@ -50,7 +50,7 @@ describe("shouldAcceptRunResult", () => {
 });
 
 describe("buildLoadedFormatFromEditorContext", () => {
-  it("trims the regex and drops blank examples", () => {
+  it("preserves literal regex whitespace and drops blank examples", () => {
     const entry = buildLoadedFormatFromEditorContext({
       filePath: "src/Bank_1/formats/current.txt",
       regex: " ^PAY (\\d+)$ ",
@@ -58,7 +58,7 @@ describe("buildLoadedFormatFromEditorContext", () => {
     });
 
     expect(entry.fileName).toBe("current.txt");
-    expect(entry.regex).toBe("^PAY (\\d+)$");
+    expect(entry.regex).toBe(" ^PAY (\\d+)$ ");
     expect(entry.examples).toEqual(["PAY 100", "PAY 200"]);
     expect(entry.source).toBe("draft");
   });

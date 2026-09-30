@@ -11,6 +11,7 @@ import {
   getLegacyRouteRedirectPath,
   parsePullRequestRouteParams,
 } from "@/domain/bank-route";
+import type { PullRequestWorkspaceResolution } from "@/domain/pull-request-workspace";
 import type { PullRequestSource, RepoRef } from "@/domain/types";
 import {
   fetchRepoTree,
@@ -47,13 +48,13 @@ export function saveActiveRouteSession(
 }
 
 export type ActiveRouteSession = Extract<
-  Awaited<ReturnType<typeof resolvePullRequestWorkspace>>,
+  PullRequestWorkspaceResolution,
   { status: "supported" }
 >;
 
 export function resolveWorkspaceRefresh(
   current: ActiveRouteSession,
-  next: Awaited<ReturnType<typeof resolvePullRequestWorkspace>>,
+  next: PullRequestWorkspaceResolution,
   hasDrafts: boolean
 ) {
   if (next.status !== "supported") {

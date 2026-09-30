@@ -5,23 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { BankInfo, ValidationIssue } from "@/domain/types";
-import { validateBankLevel } from "@/domain/validation";
-import { loadBankSnapshot } from "@/features/workspace/bank-snapshot";
+import { validateBankSnapshot } from "@/features/workspace/bank-snapshot";
 import { useDraftStore, useSourceStore } from "@/store";
 
 interface Props {
   bankPath: string;
   bank: BankInfo | null;
-  formatPaths: string[];
   onClose: () => void;
 }
 
-export function ValidationPanel({
-  bankPath,
-  bank,
-  formatPaths,
-  onClose,
-}: Props) {
+export function ValidationPanel({ bankPath, bank, onClose }: Props) {
   const { t } = useTranslation();
   const draftStore = useDraftStore();
   const sourceRef = useSourceStore((s) => s.sourceRef);
@@ -52,23 +45,14 @@ export function ValidationPanel({
       if (!(prNumber && sourceRefName)) {
         throw new Error("No workspace revision");
       }
-      const snapshot = await loadBankSnapshot({
-        filePaths: formatPaths,
-        draftStore,
-        sourceRefName,
-        repository,
-      });
-      const sendersDraft = draftStore.getDraft(`${bankPath}/senders.txt`);
       setIssues(
-        validateBankLevel(
-          {
-            ...bank,
-            hasSenders: sendersDraft
-              ? !sendersDraft.isDeleted
-              : bank.hasSenders,
-          },
-          snapshot.contents
-        )
+        await validateBankSnapshot({
+          bank,
+          bankPath,
+          draftStore,
+          sourceRefName,
+          repository,
+        })
       );
     } catch (error) {
       setIssues([
@@ -85,7 +69,7 @@ export function ValidationPanel({
       setRan(true);
       setRunning(false);
     }
-  }, [bank, bankPath, formatPaths, draftStore, repository, sourceRef]);
+  }, [bank, bankPath, draftStore, repository, sourceRef]);
 
   useEffect(() => {
     if (hasAutoRun.current) {

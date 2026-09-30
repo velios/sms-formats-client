@@ -20,7 +20,7 @@ describe("loadBankSnapshot", () => {
       filePath: "src/Bank/formats/cached.txt",
       content:
         "^(PAY .*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nPAY 100",
-      refName: "head-sha",
+      commitSha: "head-sha",
     });
 
     const result = await loadBankSnapshot({

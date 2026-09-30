@@ -19,6 +19,8 @@ import type {
   RegexPatternToken,
 } from "@/domain/format";
 
+import { getRegexTokenClass } from "./regex-styles";
+
 interface GroupRange {
   start: number;
   end: number;
@@ -224,7 +226,7 @@ function buildDecorations(
         return;
       }
       decorations.push(
-        Decoration.mark({ class: getTokenTypeClass(token.type) }).range(
+        Decoration.mark({ class: getRegexTokenClass(token.type) }).range(
           token.start,
           token.end
         )
@@ -353,24 +355,6 @@ const whitespacePlusAtomicRanges = EditorView.atomicRanges.of((view) => {
   return RangeSet.of(ranges, true);
 });
 
-const regexTokenDecorationClassMap: Record<string, string> = {
-  anchor:
-    "rounded-[2px] border border-[color:var(--c-tone-anchor-border)] bg-[color:var(--c-tone-anchor-bg)] px-[1px] font-semibold text-[color:var(--c-tone-anchor-text)]",
-  group:
-    "rounded-[2px] border border-[color:var(--c-tone-group-border)] bg-[color:var(--c-tone-group-bg)] px-[1px] font-semibold text-[color:var(--c-tone-group-text)]",
-  quantifier:
-    "rounded-[2px] border border-[color:var(--c-tone-quantifier-border)] bg-[color:var(--c-tone-quantifier-bg)] px-[1px] font-semibold text-[color:var(--c-tone-quantifier-text)]",
-  alternation:
-    "rounded-[2px] border border-[color:var(--c-tone-alternation-border)] bg-[color:var(--c-tone-alternation-bg)] px-[1px] font-semibold text-[color:var(--c-tone-alternation-text)]",
-  escape:
-    "rounded-[2px] border border-[color:var(--c-tone-escape-border)] bg-[color:var(--c-tone-escape-bg)] px-[1px] font-semibold text-[color:var(--c-tone-escape-text)]",
-  charclass:
-    "rounded-[2px] border border-[color:var(--c-tone-charclass-border)] bg-[color:var(--c-tone-charclass-bg)] px-[1px] font-semibold text-[color:var(--c-tone-charclass-text)]",
-  meta: "rounded-[2px] border border-[color:var(--c-tone-meta-border)] bg-[color:var(--c-tone-meta-bg)] px-[1px] font-semibold text-[color:var(--c-tone-meta-text)]",
-  literal:
-    "rounded-[2px] border border-[color:var(--c-tone-literal-border)] bg-[color:var(--c-tone-literal-bg)] px-[1px] font-semibold text-[color:var(--c-tone-literal-text)]",
-};
-
 const groupBandClassMap = [
   "rounded-[2px] bg-[color:var(--c-group-1)] shadow-[inset_0_-2px_0_var(--c-group-border-1)] font-semibold",
   "rounded-[2px] bg-[color:var(--c-group-2)] shadow-[inset_0_-2px_0_var(--c-group-border-2)] font-semibold",
@@ -383,12 +367,6 @@ const fullMatchBandClass =
 const activeTokenOutlineClass =
   "rounded-[2px] outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]";
 const selectedGroupFontClass = "text-[16px]";
-
-function getTokenTypeClass(type: string): string {
-  return (
-    regexTokenDecorationClassMap[type] ?? regexTokenDecorationClassMap.literal!
-  );
-}
 
 function getGroupBandClass(group: number): string {
   if (group <= 0) {

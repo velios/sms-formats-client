@@ -1,5 +1,10 @@
-import { normalizeSmsText, parseFormatFile } from "@/domain/format";
-import type { RepoRef } from "@/domain/types";
+import {
+  isBankFormatFilePath,
+  normalizeSmsText,
+  parseFormatFile,
+} from "@/domain/format";
+import type { BankInfo, RepoRef } from "@/domain/types";
+import { validateBankLevel } from "@/domain/validation";
 import { loadFileContents } from "@/infrastructure/file-content";
 
 export interface LoadedFormat {
@@ -25,12 +30,13 @@ export async function loadBankSnapshot(params: {
   repository: RepoRef;
 }) {
   const { filePaths, draftStore, sourceRefName, repository } = params;
+  // Capture drafts before awaiting remote files.
   const drafts = new Map(
     filePaths.map((path) => [path, draftStore.getDraft(path)])
   );
   const remote = await loadFileContents({
     repository,
-    refName: sourceRefName,
+    commitSha: sourceRefName,
     filePaths: [...new Set(filePaths)].filter((path) => !drafts.get(path)),
   });
   const contents = new Map(remote.contents);
@@ -50,7 +56,7 @@ export async function loadBankSnapshot(params: {
       filePath,
       fileName: filePath.split("/").pop() ?? filePath,
       content,
-      regex: parsed.regex.trim(),
+      regex: parsed.regex,
       examples: parsed.examples.filter(
         (example) => normalizeSmsText(example) !== ""
       ),
@@ -64,4 +70,21 @@ export async function loadBankSnapshot(params: {
     cachedCount: remote.cachedCount,
     remoteFetchedCount: remote.remoteFetchedCount,
   };
+}
+
+export async function validateBankSnapshot(params: {
+  bank: BankInfo;
+  bankPath: string;
+  draftStore: DraftStoreLike & { drafts: Map<string, unknown> };
+  sourceRefName: string;
+  repository: RepoRef;
+}) {
+  const { bank, bankPath, draftStore } = params;
+  const filePaths = [
+    ...new Set([...bank.formatFiles, ...draftStore.drafts.keys()]),
+  ].filter((path) => isBankFormatFilePath(path, bankPath));
+  const sendersDraft = draftStore.getDraft(`${bankPath}/senders.txt`);
+  const hasSenders = sendersDraft ? !sendersDraft.isDeleted : bank.hasSenders;
+  const snapshot = await loadBankSnapshot({ ...params, filePaths });
+  return validateBankLevel({ ...bank, hasSenders }, snapshot.contents);
 }

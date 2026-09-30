@@ -91,8 +91,8 @@ function makeParams(
     bankName: "Т-Банк",
     bankPath: BANK_PATH,
     repository: { owner: "zenmoney", repo: "sms-formats" },
-    sourceRefName: "head-sha",
-    mainRefName: "main",
+    headSha: "head-sha",
+    baseSha: "base-sha",
     inventory: buildInventory(),
     draftStore: { getChangedFiles: () => DRAFT_CHANGES },
     fetchBlobs: vi.fn(async (ref: string, paths: string[]) =>
@@ -124,7 +124,7 @@ afterEach(() => {
 });
 
 describe("usePromptPackage layers", () => {
-  it("fetches main from the default branch and only the unfree part of pr, drafts stay free", async () => {
+  it("fetches the merge-base layer and reuses captured draft head bodies", async () => {
     const fetchBlobs = vi.fn(async (ref: string, paths: string[]) =>
       loadedBlobs(ref, paths)
     ) as unknown as typeof fetchBlobsByRef;
@@ -142,7 +142,7 @@ describe("usePromptPackage layers", () => {
     // pr: only the changed files, and b.txt is free from `headContent`.
     expect(calls).toEqual([
       [
-        "main",
+        "base-sha",
         [FORMAT_A, FORMAT_B, SENDERS],
         { owner: "zenmoney", repo: "sms-formats" },
       ],
@@ -151,7 +151,7 @@ describe("usePromptPackage layers", () => {
 
     const text = result.current.result?.text ?? "";
     expect(text).toContain(`<files layer="main">`);
-    expect(text).toContain(`main body of ${FORMAT_A}`);
+    expect(text).toContain(`base-sha body of ${FORMAT_A}`);
     expect(text).toContain("head b");
     expect(text).toContain(`head-sha body of ${FORMAT_C}`);
     expect(text).toContain("draft b");
@@ -167,6 +167,65 @@ describe("usePromptPackage layers", () => {
     ]);
   });
 
+  it("keeps untouched head files when main has advanced beyond the fork point", async () => {
+    const inventory = buildBankInventory({
+      bankPath: BANK_PATH,
+      sendersPath: SENDERS,
+      remoteFormatFiles: [FORMAT_A, FORMAT_B],
+      draftPaths: [],
+      localChanges: [],
+      sourceChanges: [{ path: FORMAT_B, kind: "modify" }],
+    });
+    const fetchBlobs = vi.fn(
+      async (sha: string, paths: string[]): Promise<BlobFetchResult[]> =>
+        paths.map((path) => ({
+          path,
+          status: "loaded",
+          text:
+            path === SENDERS
+              ? "BANK"
+              : formatFile(
+                  path === FORMAT_A
+                    ? sha === "advanced-main"
+                      ? "^beta$"
+                      : "^alpha$"
+                    : sha === "head-sha"
+                      ? "^alpha$"
+                      : "^old$",
+                  [
+                    path === FORMAT_A
+                      ? sha === "advanced-main"
+                        ? "beta"
+                        : "alpha"
+                      : sha === "head-sha"
+                        ? "alpha"
+                        : "old",
+                  ]
+                ),
+        }))
+    );
+    const { result } = renderHook(() =>
+      usePromptPackage(
+        makeParams({
+          inventory,
+          baseSha: "fork-point",
+          draftStore: { getChangedFiles: () => [] },
+          fetchBlobs,
+        })
+      )
+    );
+    await act(async () => result.current.build());
+    expect(result.current.result?.text).toContain(`${FORMAT_A} → ${FORMAT_B}`);
+    expect(fetchBlobs.mock.calls.map(([sha]) => sha)).toEqual([
+      "fork-point",
+      "head-sha",
+    ]);
+    expect(result.current.result?.summary.layers).toEqual([
+      { layer: "main", fileCount: 3 },
+      { layer: "pr", fileCount: 1 },
+      { layer: "draft", fileCount: 0 },
+    ]);
+  });
   it("counts intersections over the effective versions of the format files", async () => {
     // a.txt is harmless in `main` and reaches over into b.txt in `draft`: the
     // block must judge the version that actually applies.
@@ -422,6 +481,8 @@ describe("usePromptPackage sticky state", () => {
       "format-rules.md",
       "regex-snippets.toml",
     ]);
-    expect(result.current.result?.text).toContain(`main body of ${FORMAT_A}`);
+    expect(result.current.result?.text).toContain(
+      `base-sha body of ${FORMAT_A}`
+    );
   });
 });
