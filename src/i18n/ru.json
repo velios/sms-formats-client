@@ -508,6 +508,11 @@
     "captureValue": "Значение"
   },
   "experiment": {
+    "prState": {
+      "open": "PR открыт",
+      "closed": "PR закрыт",
+      "merged": "PR слит"
+    },
     "localOnly": "Локальный эксперимент — публикация недоступна",
     "baseline": "База: {{sha}}",
     "sourceUpdated": "Источник обновился.",

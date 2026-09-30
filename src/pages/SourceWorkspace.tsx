@@ -87,6 +87,11 @@ export function SourceWorkspace() {
   const notices = (
     <div className="flex shrink-0 flex-wrap items-center gap-2">
       <StatusBadge variant="info">{t("experiment.localOnly")}</StatusBadge>
+      {(state.nextHead ?? state.head)?.prState && (
+        <StatusBadge variant="info">
+          {t(`experiment.prState.${(state.nextHead ?? state.head)?.prState}`)}
+        </StatusBadge>
+      )}
       {draft && (
         <span className="font-mono text-xs">
           {t("experiment.baseline", { sha: draft.baselineHeadSha })}

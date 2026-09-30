@@ -509,6 +509,11 @@
     "captureValue": "Value"
   },
   "experiment": {
+    "prState": {
+      "open": "PR open",
+      "closed": "PR closed",
+      "merged": "PR merged"
+    },
     "localOnly": "Local experiment — publishing unavailable",
     "baseline": "Baseline: {{sha}}",
     "sourceUpdated": "Source has changed.",
