@@ -27,7 +27,7 @@ async function buildChunks(changeText = false) {
   );
 }
 
-test("library chunks stay isolated, lazy and stable across UI text changes", async () => {
+test("three application groups stay isolated and stable across UI text changes", async () => {
   const chunks = await buildChunks();
   const updated = await buildChunks(true);
   const entry = chunks.find((chunk) => chunk.isEntry);
@@ -59,26 +59,13 @@ test("library chunks stay isolated, lazy and stable across UI text changes", asy
     ).toHaveLength(1);
   }
 
-  const initial = new Set<string>();
-  function visit(fileName: string) {
-    if (initial.has(fileName)) {
-      return;
-    }
-    initial.add(fileName);
-    for (const dependency of chunks.find((chunk) => chunk.fileName === fileName)
-      ?.imports ?? []) {
-      visit(dependency);
-    }
-  }
-  visit(entry!.fileName);
-  for (const name of [
-    "BankWorkspace",
+  expect(chunks.map((chunk) => chunk.name).sort()).toEqual([
     "codemirror",
-    "ImportAnswerModal",
-    "PromptPackageModal",
-  ]) {
-    const chunk = chunks.find((item) => item.name === name);
-    expect(chunk).toBeDefined();
-    expect(initial.has(chunk!.fileName)).toBe(false);
-  }
+    "index",
+    "react",
+    "rolldown-runtime",
+  ]);
+  expect(
+    chunks.find((chunk) => chunk.name === "rolldown-runtime")!.code.length
+  ).toBeLessThan(1000);
 }, 30_000);

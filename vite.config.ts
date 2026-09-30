@@ -29,11 +29,18 @@ export default defineConfig(({ mode }) => {
             groups: [
               {
                 name: "codemirror",
+                priority: 20,
                 test: /[\\/]node_modules[\\/](?:@codemirror[\\/]|@lezer[\\/]|(?:crelt|style-mod|w3c-keyname)[\\/])/,
               },
               {
                 name: "react",
+                priority: 20,
                 test: /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+              },
+              {
+                name: "app",
+                priority: 0,
+                test: () => true,
               },
             ],
           },
