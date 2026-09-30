@@ -22,6 +22,24 @@ export default defineConfig(({ mode }) => {
 
   return {
     base,
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              {
+                name: "codemirror",
+                test: /[\\/]node_modules[\\/](?:@codemirror[\\/]|@lezer[\\/]|(?:crelt|style-mod|w3c-keyname)[\\/])/,
+              },
+              {
+                name: "react",
+                test: /[\\/]node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+              },
+            ],
+          },
+        },
+      },
+    },
     plugins: [tailwindcss(), react()],
     resolve: {
       tsconfigPaths: true,
