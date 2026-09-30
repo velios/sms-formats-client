@@ -1,46 +1,20 @@
-import { afterAll, afterEach, expect, mock } from "bun:test";
-import { JSDOM } from "jsdom";
+import { afterEach, mock } from "bun:test";
 import { restoreTestGlobals } from "./test-globals";
 
-const dom = new JSDOM("<!doctype html><html><body></body></html>", {
-  url: "http://localhost/",
-  pretendToBeVisual: true,
-});
+const domHooks = [
+  "/src/features/intersections/use-intersections.test.ts",
+  "/src/features/regex-lab/use-group-selection.test.ts",
+];
 
-for (const key of Object.getOwnPropertyNames(dom.window)) {
-  if (!(key in globalThis)) {
-    Object.defineProperty(globalThis, key, {
-      ...Object.getOwnPropertyDescriptor(dom.window, key)!,
-      configurable: true,
-    });
-  }
+// With --isolate, Bun.main identifies the test file being loaded.
+if (
+  Bun.main.endsWith(".test.tsx") ||
+  domHooks.some((path) => Bun.main.endsWith(path))
+) {
+  await import("./test-dom");
 }
-
-const storage = dom.window.localStorage;
-Object.defineProperty(globalThis, "localStorage", {
-  get: () => dom.window.localStorage,
-  configurable: true,
-});
-
-for (const key of ["Event", "CustomEvent", "EventTarget"]) {
-  Object.defineProperty(globalThis, key, {
-    value: Reflect.get(dom.window, key),
-    configurable: true,
-    writable: true,
-  });
-}
-
-// Matchers also import Testing Library; load them only after installing the DOM.
-const { default: _default, ...matchers } = await import(
-  "@testing-library/jest-dom/matchers"
-);
-expect.extend(matchers);
-const { cleanup } = await import("@testing-library/react/pure");
 
 afterEach(() => {
-  cleanup();
   mock.restore();
   restoreTestGlobals();
-  storage.clear();
 });
-afterAll(() => dom.window.close());

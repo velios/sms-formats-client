@@ -24,25 +24,25 @@ async function loadStores() {
   return mod;
 }
 
+beforeEach(() => {
+  idbStorage.clear();
+  const localStorageState = new Map<string, string>();
+  setTestGlobal("localStorage", {
+    getItem: (key: string) => localStorageState.get(key) ?? null,
+    removeItem: (key: string) => {
+      localStorageState.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      localStorageState.set(key, value);
+    },
+  });
+});
+
+afterEach(() => {
+  restoreTestGlobals();
+});
+
 describe("draft store persist", () => {
-  beforeEach(() => {
-    idbStorage.clear();
-    const localStorageState = new Map<string, string>();
-    setTestGlobal("localStorage", {
-      getItem: (key: string) => localStorageState.get(key) ?? null,
-      removeItem: (key: string) => {
-        localStorageState.delete(key);
-      },
-      setItem: (key: string, value: string) => {
-        localStorageState.set(key, value);
-      },
-    });
-  });
-
-  afterEach(() => {
-    restoreTestGlobals();
-  });
-
   it("persists scoped drafts and restores them after module reload", async () => {
     const firstLoad = await loadStores();
     firstLoad.useSourceStore.getState().setSource({
