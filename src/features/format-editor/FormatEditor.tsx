@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useInRouterContext, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   type ExamplePositions,
   initialExamplePositions,
   parseFormatFile,
+  type RawEditRange,
   reconcileExamplePositions,
   serializeFormat,
   tryCompile,
@@ -141,6 +142,30 @@ function FormatEditorCore({
   );
   const [activeExampleIndex, setActiveExampleIndex] = useState(0);
   const hasPendingRegexBlurRef = useRef(false);
+  const rawTextarea = useRef<HTMLTextAreaElement>(null);
+  const rawInput = useRef<RawInputSnapshot | null>(null);
+  const rawContext = `${filePath}:${scopeKey}:${baseSha}:${getGitHubAuthChangeVersion()}`;
+  useLayoutEffect(() => {
+    const textarea = rawTextarea.current;
+    if (!textarea) {
+      return;
+    }
+    const capture = (event: InputEvent) => {
+      rawInput.current = {
+        value: textarea.value,
+        start: textarea.selectionStart,
+        end: textarea.selectionEnd,
+        inputType: event.inputType,
+        content: currentContent,
+        context: rawContext,
+      };
+    };
+    // React's compatibility event omits native paste and deletion beforeinput.
+    textarea.addEventListener("beforeinput", capture);
+    return () => {
+      textarea.removeEventListener("beforeinput", capture);
+    };
+  }, [mode, currentContent, rawContext]);
 
   useEffect(() => {
     if (!navigation) {
@@ -181,7 +206,22 @@ function FormatEditorCore({
       serializeFormat(nextRegex, nextColumns, nextExamples),
       nextPositions
     );
-  const handleRawChange = (value: string) => writeDocument(value);
+  const handleRawChange = (value: string) => {
+    const input = rawInput.current;
+    rawInput.current = null;
+    if (
+      input &&
+      (input.context !== rawContext || input.content !== currentContent)
+    ) {
+      return;
+    }
+    const edit = input ? rawDocumentEdit(input, value) : null;
+    const content = edit?.content ?? value;
+    writeDocument(
+      content,
+      reconcileExamplePositions(currentContent, content, positions, edit?.range)
+    );
+  };
   const handleRegexChange = (value: string) => {
     hasPendingRegexBlurRef.current = true;
     syncStructuredDraft(value, columns, examples);
@@ -426,6 +466,7 @@ function FormatEditorCore({
                 }
               }}
               readOnly={readOnly || isDeleted}
+              ref={rawTextarea}
               rows={20}
               spellCheck={false}
               value={currentContent}
@@ -435,4 +476,62 @@ function FormatEditorCore({
       )}
     </div>
   );
+}
+
+interface RawInputSnapshot {
+  value: string;
+  start: number;
+  end: number;
+  inputType: string;
+  content: string;
+  context: string;
+}
+
+function rawOffset(content: string, domOffset: number): number {
+  let raw = 0;
+  for (let dom = 0; dom < domOffset && raw < content.length; dom++, raw++) {
+    if (content[raw] === "\r" && content[raw + 1] === "\n") {
+      raw++;
+    }
+  }
+  return raw;
+}
+
+function rawDocumentEdit(
+  input: RawInputSnapshot,
+  next: string
+): { content: string; range: RawEditRange } | null {
+  if (input.content.replace(/\r\n?/g, "\n") !== input.value) {
+    return null;
+  }
+  let { start, end } = input;
+  if (start === end && input.inputType.startsWith("delete")) {
+    const removed = input.value.length - next.length;
+    if (input.inputType.endsWith("Backward")) {
+      start -= removed;
+    } else if (input.inputType.endsWith("Forward")) {
+      end += removed;
+    }
+  }
+  const nextEnd = end + next.length - input.value.length;
+  if (
+    start < 0 ||
+    nextEnd < start ||
+    input.value.slice(0, start) !== next.slice(0, start) ||
+    input.value.slice(end) !== next.slice(nextEnd)
+  ) {
+    return null;
+  }
+  const range = {
+    start: rawOffset(input.content, start),
+    end: rawOffset(input.content, end),
+  };
+  const inserted = next.slice(start, nextEnd);
+  return {
+    content:
+      input.content.slice(0, range.start) +
+      inserted +
+      input.content.slice(range.end),
+    range,
+  };
 }

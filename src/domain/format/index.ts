@@ -1,6 +1,7 @@
 export {
   type ExamplePositions,
   initialExamplePositions,
+  type RawEditRange,
   reconcileExamplePositions,
 } from "./example-positions";
 export { isBankFormatFilePath, validateNewFormatPath } from "./file-path";

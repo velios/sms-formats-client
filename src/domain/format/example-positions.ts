@@ -2,6 +2,11 @@ import { parseFormatFile } from "./parser";
 
 export type ExamplePositions = Array<number | null>;
 
+export interface RawEditRange {
+  start: number;
+  end: number;
+}
+
 export function initialExamplePositions(
   content: string | null
 ): ExamplePositions {
@@ -62,15 +67,38 @@ function alignChangedSections(
   return result;
 }
 
-// Preserve unchanged section boundaries around a raw replacement. Match duplicate
-// sections from the end so an insertion before an original stays local.
+// Known edit ranges preserve unchanged section boundaries exactly. Whole-document
+// replacements and operations without a range fall back to content alignment.
 export function reconcileExamplePositions(
   previous: string,
   next: string,
-  positions: ExamplePositions
+  positions: ExamplePositions,
+  edit?: RawEditRange
 ): ExamplePositions {
   if (previous === next) {
     return [...positions];
+  }
+  const nextEnd = edit ? edit.end + next.length - previous.length : -1;
+  if (
+    edit &&
+    !(edit.start === 0 && edit.end === previous.length) &&
+    edit.start >= 0 &&
+    edit.end >= edit.start &&
+    edit.end <= previous.length &&
+    nextEnd >= edit.start &&
+    previous.slice(0, edit.start) === next.slice(0, edit.start) &&
+    previous.slice(edit.end) === next.slice(nextEnd)
+  ) {
+    const previousMarkers = markerOffsets(previous);
+    return markerOffsets(next).map((offset) => {
+      const oldOffset =
+        offset < edit.start
+          ? offset
+          : offset >= nextEnd
+            ? offset + previous.length - next.length
+            : -1;
+      return positions[previousMarkers.indexOf(oldOffset)] ?? null;
+    });
   }
   const { start, end } = changedRange(previous, next);
   const oldMarkers = markerOffsets(previous);

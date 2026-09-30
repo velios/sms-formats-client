@@ -50,6 +50,28 @@ const { useDraftStore, useSourceStore, waitForDraftStoreHydration } =
   await import("@/store");
 const { FormatEditor } = await import("./FormatEditor");
 const path = "src/Bank/formats/a.txt";
+function editRaw(
+  textarea: HTMLTextAreaElement,
+  start: number,
+  end: number,
+  inserted: string,
+  inputType = "insertFromPaste"
+) {
+  const value = textarea.value;
+  textarea.setSelectionRange(start, end);
+  fireEvent(
+    textarea,
+    new textarea.ownerDocument.defaultView!.InputEvent("beforeinput", {
+      bubbles: true,
+      inputType,
+      data: inserted,
+    })
+  );
+  fireEvent.change(textarea, {
+    target: { value: value.slice(0, start) + inserted + value.slice(end) },
+  });
+}
+
 describe("one document across editor views", () => {
   beforeEach(async () => {
     await waitForDraftStoreHydration();
@@ -59,6 +81,154 @@ describe("one document across editor views", () => {
       .getState()
       .setSource({ type: "pr", name: "pr-1", prNumber: 1, sha: "head" });
     fixture.content = serializeFormat("^(A)$", ["comment"], ["A"]);
+  });
+  it.each([1, 2])(
+    "preserves raw original positions with native duplicate insertion at boundary %s",
+    (boundary) => {
+      fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B", "C"]);
+      render(<FormatEditor filePath={path} mode="raw" />);
+      const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+      const markers = Array.from(
+        textarea.value.matchAll(/^-----EXAMPLE-----$/gm),
+        (match) => match.index
+      );
+      editRaw(
+        textarea,
+        markers[boundary]!,
+        markers[boundary]!,
+        "-----EXAMPLE-----\nB\n\n"
+      );
+      const expected = boundary === 1 ? [1, null, 2, 3] : [1, 2, null, 3];
+      expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual(
+        expected
+      );
+      act(() => useDraftStore.getState().undo(path));
+      expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual(
+        [1, 2, 3]
+      );
+      act(() => useDraftStore.getState().redo(path));
+      expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual(
+        expected
+      );
+    }
+  );
+  it.each([1, 2])(
+    "uses native selected deletion to distinguish duplicate section %s",
+    (removed) => {
+      fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B", "C"]);
+      render(<FormatEditor filePath={path} mode="raw" />);
+      act(() =>
+        useDraftStore
+          .getState()
+          .applyUserEdit(
+            path,
+            serializeFormat("^(.*)$", ["comment"], ["A", "B", "B", "C"]),
+            "head",
+            fixture.content,
+            [1, 2, null, 3]
+          )
+      );
+      const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+      const markers = Array.from(
+        textarea.value.matchAll(/^-----EXAMPLE-----$/gm),
+        (match) => match.index
+      );
+      editRaw(
+        textarea,
+        markers[removed]!,
+        markers[removed + 1]!,
+        "",
+        "deleteContentBackward"
+      );
+      expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual(
+        removed === 1 ? [1, null, 3] : [1, 2, 3]
+      );
+    }
+  );
+  it.each(["\r\n", "\r"])(
+    "preserves untouched original %j line endings when raw regex changes",
+    (newline) => {
+      fixture.content = serializeFormat(
+        "^(.*)$",
+        ["comment"],
+        ["SMS\rA", "SMS B"]
+      ).replaceAll("\n", newline === "\r" ? "\n" : newline);
+      render(<FormatEditor filePath={path} mode="raw" />);
+      const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+      editRaw(textarea, 0, 6, "^(.+)$", "insertText");
+      expect(useDraftStore.getState().getDraft(path)?.content).toBe(
+        `^(.+)$${fixture.content.slice(6)}`
+      );
+      expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual(
+        [1, 2]
+      );
+    }
+  );
+  it("preserves raw text edits becoming duplicates and native collapsed deletion", () => {
+    fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B", "C"]);
+    render(<FormatEditor filePath={path} mode="raw" />);
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    const offset = textarea.value.indexOf("\nB\n") + 1;
+    editRaw(textarea, offset, offset + 1, "A", "insertText");
+    expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual([
+      1, 2, 3,
+    ]);
+    textarea.setSelectionRange(offset + 1, offset + 1);
+    fireEvent(
+      textarea,
+      new textarea.ownerDocument.defaultView!.InputEvent("beforeinput", {
+        bubbles: true,
+        inputType: "deleteContentBackward",
+      })
+    );
+    fireEvent.change(textarea, {
+      target: {
+        value:
+          textarea.value.slice(0, offset) + textarea.value.slice(offset + 1),
+      },
+    });
+    expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual([
+      1, 2, 3,
+    ]);
+  });
+  it("maps raw edits after CRLF and standalone CR without changing untouched SMS", () => {
+    fixture.content = serializeFormat(
+      "^(.*)$",
+      ["comment"],
+      ["SMS\rA", "SMS B"]
+    ).replaceAll("\n", "\r\n");
+    render(<FormatEditor filePath={path} mode="raw" />);
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    const offset = textarea.value.indexOf("SMS B") + 4;
+    editRaw(textarea, offset, offset + 1, "A", "insertText");
+    expect(useDraftStore.getState().getDraft(path)?.content).toBe(
+      fixture.content.replace("SMS B", "SMS A")
+    );
+    expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual([
+      1, 2,
+    ]);
+  });
+  it("does not apply a pending native edit after switching the document context", () => {
+    const view = render(<FormatEditor filePath={path} mode="raw" />);
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    textarea.setSelectionRange(0, 1);
+    fireEvent(
+      textarea,
+      new textarea.ownerDocument.defaultView!.InputEvent("beforeinput", {
+        bubbles: true,
+        inputType: "insertText",
+        data: "X",
+      })
+    );
+    fixture.content = serializeFormat("NEXT", ["comment"], ["new document"]);
+    const nextPath = "src/Bank/formats/next.txt";
+    view.rerender(<FormatEditor filePath={nextPath} mode="raw" />);
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "obsolete document" },
+    });
+    expect(useDraftStore.getState().getDraft(nextPath)?.content).toBe(
+      fixture.content
+    );
   });
   it("accepts the inline execution flag without rewriting the document", () => {
     fixture.content = serializeFormat("(?i)^(код)$", ["comment"], ["КОД"]);
