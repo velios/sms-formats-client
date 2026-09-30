@@ -64,7 +64,7 @@ describe("WorkspaceSessionNotice", () => {
   ])("preserves the $action recovery action", ({ state, label, action }) => {
     render(<WorkspaceSessionNotice controller={controller} state={state} />);
     fireEvent.click(screen.getByRole("button", { name: label }));
-    expect(actions[action]).toHaveBeenCalledOnce();
+    expect(actions[action]).toHaveBeenCalledTimes(1);
     expect(actions.checkUpdates).not.toHaveBeenCalled();
   });
 });
