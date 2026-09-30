@@ -475,6 +475,7 @@ const whitespacePlusInputFilter: Extension = EditorState.transactionFilter.of(
   }
 );
 
+export type { GroupRange, TokenDecoState };
 export {
   baseTheme,
   emptyPlan,
@@ -487,4 +488,3 @@ export {
   whitespacePlusAtomicRanges,
   whitespacePlusInputFilter,
 };
-export type { GroupRange, TokenDecoState };

@@ -1,4 +1,4 @@
-import { DropdownMenu } from "radix-ui";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";

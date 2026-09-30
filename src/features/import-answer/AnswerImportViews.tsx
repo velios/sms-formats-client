@@ -571,6 +571,7 @@ function Manifest({
   );
 }
 
+export type { KindCounts, Translate };
 export {
   LossNotice,
   Manifest,
@@ -582,4 +583,3 @@ export {
   RowPanel,
   toManifestRow,
 };
-export type { KindCounts, Translate };

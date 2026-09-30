@@ -99,28 +99,30 @@ describe("one document across editor views", () => {
     expect(fixture.props?.examples).toEqual(["A\nB"]);
   });
 
-  it.each([
-    false,
-    true,
-  ])("blocks raw history shortcuts when read-only (redo=%s)", (redo) => {
-    const view = render(<FormatEditor filePath={path} mode="raw" />);
-    const edited = serializeFormat("B", ["comment"], ["B"]);
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: edited },
-    });
-    if (redo) {
-      act(() => useDraftStore.getState().undo(path));
+  it.each([false, true])(
+    "blocks raw history shortcuts when read-only (redo=%s)",
+    (redo) => {
+      const view = render(<FormatEditor filePath={path} mode="raw" />);
+      const edited = serializeFormat("B", ["comment"], ["B"]);
+      fireEvent.change(screen.getByRole("textbox"), {
+        target: { value: edited },
+      });
+      if (redo) {
+        act(() => useDraftStore.getState().undo(path));
+      }
+      const before = useDraftStore.getState().getDraft(path)?.content;
+      view.rerender(<FormatEditor filePath={path} mode="raw" readOnly />);
+      fireEvent.keyDown(screen.getByRole("textbox"), {
+        key: "z",
+        ctrlKey: true,
+        shiftKey: redo,
+      });
+      expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
+      view.rerender(
+        <FormatEditor filePath={path} mode="structured" readOnly />
+      );
+      act(() => (redo ? fixture.props?.onRedo() : fixture.props?.onUndo()));
+      expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
     }
-    const before = useDraftStore.getState().getDraft(path)?.content;
-    view.rerender(<FormatEditor filePath={path} mode="raw" readOnly />);
-    fireEvent.keyDown(screen.getByRole("textbox"), {
-      key: "z",
-      ctrlKey: true,
-      shiftKey: redo,
-    });
-    expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
-    view.rerender(<FormatEditor filePath={path} mode="structured" readOnly />);
-    act(() => (redo ? fixture.props?.onRedo() : fixture.props?.onUndo()));
-    expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
-  });
+  );
 });

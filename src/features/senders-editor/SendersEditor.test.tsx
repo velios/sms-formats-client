@@ -34,21 +34,23 @@ beforeEach(async () => {
     .setSource({ type: "pr", name: "pr-1", prNumber: 1, sha: "head" });
 });
 
-it.each([
-  false,
-  true,
-])("blocks history shortcuts when read-only (redo=%s)", (redo) => {
-  const view = render(<SendersEditor bankPath="src/Bank" />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "OTHER" } });
-  if (redo) {
-    act(() => useDraftStore.getState().undo(path));
+it.each([false, true])(
+  "blocks history shortcuts when read-only (redo=%s)",
+  (redo) => {
+    const view = render(<SendersEditor bankPath="src/Bank" />);
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "OTHER" },
+    });
+    if (redo) {
+      act(() => useDraftStore.getState().undo(path));
+    }
+    const before = useDraftStore.getState().getDraft(path)?.content;
+    view.rerender(<SendersEditor bankPath="src/Bank" readOnly />);
+    fireEvent.keyDown(screen.getByRole("textbox"), {
+      key: "z",
+      ctrlKey: true,
+      shiftKey: redo,
+    });
+    expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
   }
-  const before = useDraftStore.getState().getDraft(path)?.content;
-  view.rerender(<SendersEditor bankPath="src/Bank" readOnly />);
-  fireEvent.keyDown(screen.getByRole("textbox"), {
-    key: "z",
-    ctrlKey: true,
-    shiftKey: redo,
-  });
-  expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
-});
+);
