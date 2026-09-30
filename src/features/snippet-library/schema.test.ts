@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { REGEX_SNIPPETS } from "@/content/snippets.generated";
+import { REGEX_SNIPPETS } from "@/content/reference.generated";
 import {
   filterSnippets,
   groupSnippets,

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
 import { config } from "@/config";
-import { COOKBOOK_HTML } from "@/content/cookbook.generated";
+import { COOKBOOK_HTML } from "@/content/reference.generated";
 
 const COOKBOOK_GITHUB_URL = `https://github.com/${config.sourceOwner}/${config.sourceRepo}/blob/${config.defaultBranch}/docs/transaction_sms_regex_cookbook.md`;
 
