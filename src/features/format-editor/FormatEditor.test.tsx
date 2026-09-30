@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { setTestGlobal } from "@/test-globals";
 
 const fixture = (() => {
@@ -152,4 +153,212 @@ describe("one document across editor views", () => {
     });
     expect(screen.getByRole("textbox")).toHaveValue(later);
   });
+});
+
+it("applies source anchors after restored raw edits, and never restores a deleted Example", () => {
+  fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B", "C"]);
+  useDraftStore.getState().discardAll();
+  useDraftStore.getState().activateScope("anchor-test", false);
+  const edited = serializeFormat(
+    "^(.*)$",
+    ["comment"],
+    ["A", "local", "edited B", "C"]
+  );
+  useDraftStore
+    .getState()
+    .applyUserEdit(path, edited, "head", fixture.content, [1, null, 2, 3]);
+  const select = mock();
+  const view = render(
+    <FormatEditor
+      filePath={path}
+      mode="structured"
+      navigation={{ key: "first", hash: "#show-example=2", select }}
+    />
+  );
+  expect(fixture.props).toMatchObject({ activeExampleIndex: 2 });
+  act(() =>
+    useDraftStore
+      .getState()
+      .applyUserEdit(
+        path,
+        serializeFormat("^(.*)$", ["comment"], ["A", "local", "C"]),
+        "head",
+        fixture.content,
+        [1, null, 3]
+      )
+  );
+  view.rerender(
+    <FormatEditor
+      filePath={path}
+      mode="structured"
+      navigation={{ key: "deleted", hash: "#show-example=2", select }}
+    />
+  );
+  expect(fixture.props).toMatchObject({ activeExampleIndex: 0 });
+  expect(screen.getByText("editor.exampleDeleted")).toBeInTheDocument();
+  expect(fixture.props?.examples).toEqual(["A", "local", "C"]);
+});
+
+it("imports exact SMS once per entry, allows reimport after edits, and follows payload priority", () => {
+  fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B"]);
+  useDraftStore.getState().discardAll();
+  useDraftStore.getState().activateScope("import-test", false);
+  const sms = " \nКод 😀\r\n ";
+  const payload = btoa(
+    Array.from(new TextEncoder().encode(sms), (byte) =>
+      String.fromCharCode(byte)
+    ).join("")
+  )
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/[=]+$/, "");
+  const select = mock();
+  const props = (key: string) => ({
+    filePath: path,
+    mode: "structured" as const,
+    navigation: { key, hash: `#show-example=1&add-sms=${payload}`, select },
+  });
+  const view = render(<FormatEditor {...props("first")} />);
+  expect(fixture.props?.examples).toEqual(["A", "B", sms]);
+  expect(fixture.props).toMatchObject({ activeExampleIndex: 2 });
+  view.rerender(<FormatEditor {...props("again")} />);
+  expect(fixture.props?.examples).toEqual(["A", "B", sms]);
+  act(() => fixture.props?.onExampleChange(2, "edited SMS"));
+  view.rerender(<FormatEditor {...props("reimport")} />);
+  expect(fixture.props?.examples).toEqual(["A", "B", "edited SMS", sms]);
+  expect(useDraftStore.getState().getDraft(path)?.examplePositions).toEqual([
+    1,
+    2,
+    null,
+    null,
+  ]);
+});
+
+it("reports malformed anchors, falls back to first Example and keeps an empty list empty", () => {
+  useDraftStore.getState().discardAll();
+  useDraftStore.getState().activateScope("invalid-test", false);
+  fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B"]);
+  const select = mock();
+  const view = render(
+    <FormatEditor
+      filePath={path}
+      mode="structured"
+      navigation={{
+        key: "invalid",
+        hash: "#show-example=2&add-sms=_w",
+        select,
+      }}
+    />
+  );
+  expect(fixture.props).toMatchObject({ activeExampleIndex: 1 });
+  expect(screen.getByText("editor.invalidSmsPayload")).toBeInTheDocument();
+  for (const value of ["", "0", "-1", "1.5", "abc"]) {
+    view.rerender(
+      <FormatEditor
+        filePath={path}
+        mode="structured"
+        navigation={{ key: value, hash: `#show-example=${value}`, select }}
+      />
+    );
+    expect(fixture.props).toMatchObject({ activeExampleIndex: 0 });
+    expect(screen.getByText("editor.invalidExampleNumber")).toBeInTheDocument();
+  }
+  act(() =>
+    useDraftStore
+      .getState()
+      .setDraft(
+        path,
+        serializeFormat("^(.*)$", ["comment"], []),
+        "head",
+        fixture.content
+      )
+  );
+  view.rerender(
+    <FormatEditor
+      filePath={path}
+      mode="structured"
+      navigation={{ key: "empty", hash: "", select }}
+    />
+  );
+  expect(fixture.props?.examples).toEqual([]);
+  expect(fixture.props).toMatchObject({ activeExampleIndex: -1 });
+});
+
+it("waits for the target file and protects an existing PR document from imports", () => {
+  fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B"]);
+  useDraftStore.getState().discardAll();
+  useDraftStore.getState().activateScope("protected-test", false);
+  const select = mock();
+  const view = render(
+    <FormatEditor
+      filePath={path}
+      mode="structured"
+      navigation={{
+        key: "late",
+        hash: "#add-sms=TkVX",
+        targetFile: "other.txt",
+        select,
+      }}
+    />
+  );
+  expect(fixture.props?.examples).toEqual(["A", "B"]);
+  view.rerender(
+    <FormatEditor
+      filePath={path}
+      mode="structured"
+      navigation={{
+        key: "protected",
+        hash: "#add-sms=TkVX",
+        targetFile: path,
+        select,
+      }}
+      readOnly
+    />
+  );
+  expect(fixture.props?.examples).toEqual(["A", "B"]);
+  expect(screen.getByText("editor.importReadOnly")).toBeInTheDocument();
+});
+
+it("waits for PR session readiness before importing into a temporarily protected document", () => {
+  fixture.content = serializeFormat("^(.*)$", ["comment"], ["A"]);
+  useDraftStore.getState().discardAll();
+  useDraftStore.getState().activateScope("ready-test", false);
+  const navigation = { key: "ready", hash: "#add-sms=TkVX", select: mock() };
+  const view = render(
+    <FormatEditor
+      anchorReady={false}
+      filePath={path}
+      mode="structured"
+      navigation={navigation}
+      readOnly
+    />
+  );
+  expect(fixture.props?.examples).toEqual(["A"]);
+  view.rerender(
+    <FormatEditor
+      anchorReady
+      filePath={path}
+      mode="structured"
+      navigation={navigation}
+    />
+  );
+  expect(fixture.props?.examples).toEqual(["A", "NEW"]);
+  expect(fixture.props).toMatchObject({ activeExampleIndex: 1 });
+});
+
+it("selects the imported Example on the first StrictMode mount without duplicating it", () => {
+  fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B", "C"]);
+  useDraftStore.getState().discardAll();
+  useDraftStore.getState().activateScope("strict-test", false);
+  render(
+    <StrictMode>
+      <FormatEditor
+        filePath={path}
+        mode="structured"
+        navigation={{ key: "first", hash: "#add-sms=TkVX", select: mock() }}
+      />
+    </StrictMode>
+  );
+  expect(fixture.props?.examples).toEqual(["A", "B", "C", "NEW"]);
+  expect(fixture.props).toMatchObject({ activeExampleIndex: 3 });
 });

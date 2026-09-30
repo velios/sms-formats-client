@@ -198,6 +198,7 @@ export function SourceWorkspace() {
       <SendersEditor bankPath={bankPath} />
     ) : file && draft ? (
       <FormatEditor
+        anchorReady={!busy}
         filePath={file}
         key={`${controller.scope}:${file}`}
         mode={mode}

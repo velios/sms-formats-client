@@ -1,15 +1,7 @@
 export function decodeRequestedFileValue(
   searchParams: URLSearchParams
 ): string | null {
-  const rawValue = searchParams.get("file");
-  if (!rawValue) {
-    return null;
-  }
-  try {
-    return decodeURIComponent(rawValue);
-  } catch {
-    return rawValue;
-  }
+  return searchParams.get("file") || null;
 }
 
 export function buildSelectionSearch(

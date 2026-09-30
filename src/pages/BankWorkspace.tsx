@@ -636,6 +636,11 @@ export function PullRequestBankWorkspace() {
 
         <div className="ui-panel-stack min-w-0 overflow-hidden">
           {renderWorkspaceContent({
+            anchorReady:
+              Boolean(activeSession) &&
+              routeInitState.operation !== "opening" &&
+              routeInitState.operation !== "discarding" &&
+              routeInitState.operation !== "syncing",
             showSenders,
             bankPath,
             readOnly: workspaceReadOnly,

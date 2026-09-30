@@ -304,3 +304,97 @@ it("persists experiment baseline even without edits and keeps publish scopes sep
     "experiment"
   );
 });
+
+it("persists Example source positions and restores them through undo, redo, and scope reload", async () => {
+  const { useDraftStore } = await loadStores();
+  const store = useDraftStore.getState();
+  const baseline =
+    "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nA\n\n-----EXAMPLE-----\nB\n";
+  store.activateScope("experiment:owner/repo:main", false);
+  store.ensureDraft("examples.txt", baseline, "head", baseline);
+  const edit = baseline.replace("\nB\n", "\nlocal\n\n-----EXAMPLE-----\nB\n");
+  store.applyUserEdit("examples.txt", edit, "head", baseline);
+  expect(
+    useDraftStore.getState().getDraft("examples.txt")?.examplePositions
+  ).toEqual([1, null, 2]);
+  store.undo("examples.txt");
+  expect(
+    useDraftStore.getState().getDraft("examples.txt")?.examplePositions
+  ).toEqual([1, 2]);
+  store.redo("examples.txt");
+  store.activateScope(null);
+  store.activateScope("experiment:owner/repo:main");
+  expect(
+    useDraftStore.getState().getDraft("examples.txt")?.examplePositions
+  ).toEqual([1, null, 2]);
+  store.resetFileToRemote("examples.txt");
+  expect(
+    useDraftStore.getState().getDraft("examples.txt")?.examplePositions
+  ).toEqual([1, 2]);
+});
+
+it("restores a legacy document without Example metadata and preserves its raw-edit history", async () => {
+  const baseline =
+    "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nA\n\n-----EXAMPLE-----\nB\n";
+  const content = baseline.replace(
+    "\nB\n",
+    "\nlocal\n\n-----EXAMPLE-----\nB\n"
+  );
+  const scope = "experiment:owner/repo:main";
+  idbStorage.set(
+    "sms-formats-draft-store",
+    JSON.stringify({
+      version: 1,
+      state: {
+        storedDraftsByScope: {
+          [scope]: {
+            "legacy.txt": {
+              filePath: "legacy.txt",
+              content,
+              headContent: baseline,
+              baselineHeadSha: "head",
+              isDeleted: false,
+              timestamp: 1,
+            },
+          },
+        },
+        workspaceSessionsByScope: {},
+      },
+    })
+  );
+  const { useDraftStore } = await loadStores();
+  const store = useDraftStore.getState();
+  store.activateScope(scope);
+  expect(
+    useDraftStore.getState().getDraft("legacy.txt")?.examplePositions
+  ).toEqual([1, null, 2]);
+  store.applyUserEdit(
+    "legacy.txt",
+    content.replace("\nB\n", "\nedited B\n"),
+    "head",
+    baseline
+  );
+  store.undo("legacy.txt");
+  expect(useDraftStore.getState().getDraft("legacy.txt")?.content).toBe(
+    content
+  );
+  expect(
+    useDraftStore.getState().getDraft("legacy.txt")?.examplePositions
+  ).toEqual([1, null, 2]);
+});
+
+it("retains a locally replaced duplicate's identity without adding it to publication", async () => {
+  const { useDraftStore } = await loadStores();
+  const store = useDraftStore.getState();
+  const baseline =
+    "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nA\n";
+  store.activateScope("owner/repo:pr:1", false);
+  store.ensureDraft("same.txt", baseline, "head", baseline);
+  store.applyUserEdit("same.txt", baseline, "head", baseline, [null]);
+  store.activateScope(null);
+  store.activateScope("owner/repo:pr:1");
+  expect(
+    useDraftStore.getState().getDraft("same.txt")?.examplePositions
+  ).toEqual([null]);
+  expect(useDraftStore.getState().getChangedFiles()).toEqual([]);
+});

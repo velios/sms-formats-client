@@ -154,7 +154,13 @@
     "regexUnified": "Regular expression",
     "deleted": "Deleted",
     "deleteFormatConfirmModified": "This format has local edits. Deleting it will discard those edits. Continue?",
-    "structuredUnavailable": "Fix section markers in the source text to open the structured editor."
+    "structuredUnavailable": "Fix section markers in the source text to open the structured editor.",
+    "invalidSmsPayload": "Invalid SMS payload",
+    "invalidExampleNumber": "Invalid Example number",
+    "exampleMissing": "Example #{{number}} is missing",
+    "exampleDeleted": "Example #{{number}} was deleted locally",
+    "importReadOnly": "Import is unavailable in a protected document",
+    "copyLink": "Copy link"
   },
   "columns": {
     "add": "Add column",

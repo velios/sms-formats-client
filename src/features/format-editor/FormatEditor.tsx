@@ -1,16 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useInRouterContext, useLocation, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { parseFormatFile, serializeFormat, tryCompile } from "@/domain/format";
+import {
+  buildFormatUrl,
+  type ExamplePositions,
+  initialExamplePositions,
+  parseFormatFile,
+  reconcileExamplePositions,
+  serializeFormat,
+  tryCompile,
+} from "@/domain/format";
 import { RegexLab } from "@/features/regex-lab/RegexLab";
 import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
+import { getGitHubAuthChangeVersion } from "@/infrastructure/github";
 import { useDraftStore, useSourceStore } from "@/store";
+
+import { resolveFormatAnchor } from "./format-anchor";
 
 type EditorMode = "structured" | "raw";
 
 interface Props {
+  anchorReady?: boolean;
+  navigation?: {
+    key: string;
+    hash: string;
+    targetFile?: string | null;
+    select: (position: number | null) => void;
+  };
   filePath: string;
   mode: EditorMode;
   intersectionExamples?: Array<{
@@ -35,7 +55,39 @@ interface Props {
   }) => void;
 }
 
-export function FormatEditor({
+export function FormatEditor(props: Props) {
+  const routed = useInRouterContext();
+  return routed ? (
+    <RoutedFormatEditor {...props} />
+  ) : (
+    <FormatEditorCore {...props} />
+  );
+}
+
+function RoutedFormatEditor(props: Props) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <FormatEditorCore
+      {...props}
+      navigation={{
+        key: location.key,
+        hash: location.hash,
+        targetFile: new URLSearchParams(location.search).get("file"),
+        select: (position) =>
+          navigate(
+            `${location.pathname}${location.search}${position ? `#show-example=${position}` : ""}`,
+            { replace: true }
+          ),
+      }}
+    />
+  );
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Editor composition and document mutations.
+function FormatEditorCore({
+  anchorReady = true,
+  navigation,
   filePath,
   mode,
   intersectionExamples = [],
@@ -47,6 +99,8 @@ export function FormatEditor({
   onSearchContextChange,
 }: Props) {
   const { t } = useTranslation();
+  const repository = useSourceStore((s) => s.repository);
+  const scopeKey = useDraftStore((s) => s.draftScopeKey);
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const draft = useDraftStore((state) => state.drafts.get(filePath));
   const {
@@ -67,10 +121,14 @@ export function FormatEditor({
     [currentContent, filePath]
   );
   const { regex, columns } = parsed;
-  const examples = useMemo(
-    () => (parsed.examples.length ? parsed.examples : [""]),
-    [parsed.examples]
-  );
+  const examples = parsed.examples;
+  const positions =
+    draft?.examplePositions ??
+    reconcileExamplePositions(
+      remoteBaseline ?? "",
+      currentContent,
+      initialExamplePositions(remoteBaseline)
+    );
   const structuralIssues = parsed.parseIssues.map((issue) =>
     t(`validation.issue.${issue.code}`, issue.params)
   );
@@ -79,19 +137,20 @@ export function FormatEditor({
     ...(regex && !tryCompile(regex).regex ? [t("editor.invalidRegex")] : []),
   ];
   const canEditStructured = !parsed.parseIssues.some(
-    (issue) =>
-      issue.code === "MISSING_COLUMNS" || issue.code === "MISSING_EXAMPLE"
+    (issue) => issue.code === "MISSING_COLUMNS"
   );
   const [activeExampleIndex, setActiveExampleIndex] = useState(0);
   const hasPendingRegexBlurRef = useRef(false);
 
   useEffect(() => {
-    setActiveExampleIndex(0);
+    if (!navigation) {
+      setActiveExampleIndex(0);
+    }
     hasPendingRegexBlurRef.current = false;
   }, [filePath]);
-  useEffect(() => {
-    setActiveExampleIndex((index) => Math.min(index, examples.length - 1));
-  }, [examples.length]);
+  const selectedExampleIndex = examples.length
+    ? Math.max(0, Math.min(activeExampleIndex, examples.length - 1))
+    : -1;
   useEffect(() => {
     if (
       !(draft || readOnly) &&
@@ -104,19 +163,24 @@ export function FormatEditor({
     }
   }, [baseSha, draft, filePath, readOnly, headContent, sourceRef?.sha]);
 
-  const writeDocument = (content: string) => {
+  const writeDocument = (content: string, nextPositions?: ExamplePositions) => {
     if (isMutationBlocked) {
       return;
     }
     useDraftStore
       .getState()
-      .applyUserEdit(filePath, content, baseSha, remoteBaseline);
+      .applyUserEdit(filePath, content, baseSha, remoteBaseline, nextPositions);
   };
   const syncStructuredDraft = (
     nextRegex: string,
     nextColumns: string[],
-    nextExamples: string[]
-  ) => writeDocument(serializeFormat(nextRegex, nextColumns, nextExamples));
+    nextExamples: string[],
+    nextPositions = positions
+  ) =>
+    writeDocument(
+      serializeFormat(nextRegex, nextColumns, nextExamples),
+      nextPositions
+    );
   const handleRawChange = (value: string) => writeDocument(value);
   const handleRegexChange = (value: string) => {
     hasPendingRegexBlurRef.current = true;
@@ -146,18 +210,111 @@ export function FormatEditor({
       examples.map((example, i) => (i === index ? value : example))
     );
   const handleAddExample = () => {
-    syncStructuredDraft(regex, columns, [...examples, ""]);
-    setActiveExampleIndex(examples.length);
+    syncStructuredDraft(
+      regex,
+      columns,
+      [...examples, ""],
+      [...positions, null]
+    );
+    selectExample(examples.length);
   };
   const handleRemoveExample = (index: number) => {
-    if (examples.length > 1) {
-      syncStructuredDraft(
-        regex,
-        columns,
-        examples.filter((_, i) => i !== index)
+    syncStructuredDraft(
+      regex,
+      columns,
+      examples.filter((_, i) => i !== index),
+      positions.filter((_, i) => i !== index)
+    );
+    setActiveExampleIndex((active) =>
+      active > index ? active - 1 : Math.min(active, examples.length - 2)
+    );
+  };
+  const [anchorNotice, setAnchorNotice] = useState<string | null>(null);
+  const appliedAnchor = useRef<string | null>(null);
+  const manualSelection = useRef<{
+    hash: string;
+    index: number;
+    context: string;
+  } | null>(null);
+  const selectionContext = `${filePath}:${scopeKey}`;
+  const anchorKey = `${navigation?.key ?? ""}:${navigation?.hash ?? ""}:${filePath}:${scopeKey}:${getGitHubAuthChangeVersion()}`;
+  useEffect(() => {
+    if (
+      !(navigation && anchorReady) ||
+      (navigation.targetFile && navigation.targetFile !== filePath) ||
+      isLoading ||
+      (!draft && headContent === undefined) ||
+      appliedAnchor.current === anchorKey
+    ) {
+      return;
+    }
+    appliedAnchor.current = anchorKey;
+    const selected = manualSelection.current;
+    manualSelection.current = null;
+    if (
+      selected?.hash === navigation.hash &&
+      selected.context === selectionContext
+    ) {
+      setActiveExampleIndex(selected.index);
+      setAnchorNotice(null);
+      return;
+    }
+    const result = resolveFormatAnchor(
+      navigation.hash,
+      examples,
+      positions,
+      initialExamplePositions(remoteBaseline).length,
+      isMutationBlocked
+    );
+    if (result.append !== undefined) {
+      writeDocument(
+        serializeFormat(regex, columns, [...examples, result.append]),
+        [...positions, null]
       );
     }
+    setActiveExampleIndex(result.index);
+    setAnchorNotice(
+      result.notices.length
+        ? result.notices.map(({ key, number }) => t(key, { number })).join(" ")
+        : null
+    );
+  }, [
+    anchorKey,
+    anchorReady,
+    selectionContext,
+    draft,
+    headContent,
+    isLoading,
+    navigation,
+    examples,
+    positions,
+    regex,
+    columns,
+    remoteBaseline,
+    isMutationBlocked,
+    t,
+  ]);
+  const selectExample = (index: number) => {
+    setActiveExampleIndex(index);
+    setAnchorNotice(null);
+    // Selection replaces the current history entry; local Examples have no URL position.
+    const position = positions[index] ?? null;
+    manualSelection.current = {
+      hash: position ? `#show-example=${position}` : "",
+      index,
+      context: selectionContext,
+    };
+    navigation?.select(position);
   };
+  const shareUrl = sourceRef
+    ? buildFormatUrl({
+        origin: window.location.origin,
+        repository,
+        source: sourceRef,
+        filePath,
+        showExample: positions[selectedExampleIndex] ?? null,
+      })
+    : null;
   const undo = () => {
     if (!isMutationBlocked) {
       useDraftStore.getState().undo(filePath);
@@ -170,8 +327,13 @@ export function FormatEditor({
   };
 
   useEffect(() => {
-    onSearchContextChange?.({ filePath, regex, examples, activeExampleIndex });
-  }, [activeExampleIndex, examples, filePath, onSearchContextChange, regex]);
+    onSearchContextChange?.({
+      filePath,
+      regex,
+      examples,
+      activeExampleIndex: selectedExampleIndex,
+    });
+  }, [selectedExampleIndex, examples, filePath, onSearchContextChange, regex]);
 
   if (isLoading) {
     return (
@@ -184,6 +346,22 @@ export function FormatEditor({
 
   return (
     <div className="ui-panel-stack h-full overflow-hidden">
+      {anchorNotice && (
+        <div className="ui-notice" data-tone="warning">
+          {anchorNotice}
+        </div>
+      )}
+      {shareUrl && navigation && (
+        <div className="flex shrink-0 justify-end">
+          <Button
+            onClick={() => navigator.clipboard.writeText(shareUrl)}
+            size="sm"
+            variant="ghost"
+          >
+            {t("editor.copyLink")}
+          </Button>
+        </div>
+      )}
       {headContentError && (
         <StatusBadge variant="error">{headContentError}</StatusBadge>
       )}
@@ -200,11 +378,11 @@ export function FormatEditor({
 
       {mode === "structured" && canEditStructured && (
         <RegexLab
-          activeExampleIndex={activeExampleIndex}
+          activeExampleIndex={selectedExampleIndex}
           columns={columns}
           examples={examples}
           intersectionExamples={intersectionExamples}
-          onActiveExampleChange={setActiveExampleIndex}
+          onActiveExampleChange={selectExample}
           onAddExample={handleAddExample}
           onColumnsChange={handleColumnsChange}
           onExampleChange={handleExampleChange}
