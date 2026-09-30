@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
 const domHooks = [
@@ -7,7 +6,7 @@ const domHooks = [
 ];
 
 export default defineConfig({
-  resolve: { alias: { "@": resolve(__dirname, "src") } },
+  resolve: { tsconfigPaths: true },
   test: {
     globals: true,
     projects: [

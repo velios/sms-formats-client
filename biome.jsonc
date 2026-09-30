@@ -1,6 +1,16 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["ultracite/biome/core"],
+  // Preserve existing conventions when upgrading the shared preset.
+  "assist": {
+    "actions": {
+      "source": {
+        "useSortedKeys": "off",
+        "useSortedInterfaceMembers": "off",
+        "useSortedProperties": "off"
+      }
+    }
+  },
   "files": {
     "includes": [
       "!src/content/*.generated.ts",
@@ -17,17 +27,25 @@
   "linter": {
     "rules": {
       "style": {
+        "noIncrementDecrement": "off",
+        "noNegationElse": "off",
         "noExportedImports": "off",
         "noNestedTernary": "off",
         "noNonNullAssertion": "off",
         "noParameterAssign": "off",
+        "useConsistentArrowReturn": "off",
+        "useConsistentMethodSignatures": "off",
+        "useDestructuring": "off",
+        "useErrorCause": "off",
         "useFilenamingConvention": "off"
       },
       "complexity": {
         "noForEach": "off",
+        "noUselessUndefined": "off",
         "noVoid": "off"
       },
       "correctness": {
+        "noUnusedInstantiation": "off",
         "noUnusedFunctionParameters": "off",
         "useExhaustiveDependencies": "off"
       },
@@ -37,11 +55,17 @@
         "noAssignInExpressions": "off",
         "noExplicitAny": "off",
         "noEvolvingTypes": "off",
+        "noEqualsToNull": "off",
+        "noReturnAssign": "off",
+        "noShadow": "off",
         "noTemplateCurlyInString": "off",
+        "noUnnecessaryConditions": "off",
         "useAwait": "off",
         "useIterableCallbackReturn": "off"
       },
       "performance": {
+        "noAwaitInLoops": "off",
+        "noJsxPropsBind": "off",
         "useTopLevelRegex": "off",
         "noBarrelFile": "off",
         "noNamespaceImport": "off"

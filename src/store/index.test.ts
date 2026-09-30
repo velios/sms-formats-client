@@ -162,49 +162,48 @@ describe("draft store persist", () => {
     expect(store.getDraft("b.txt")?.content).toBe("LATER");
   });
 
-  it.each([
-    "delete",
-    "rename",
-    "switch-scope",
-  ])("preserves a removed captured creation after %s during publication", async (operation) => {
-    const { useDraftStore } = await loadStores();
-    const store = useDraftStore.getState();
-    store.activateScope("publishing", false);
-    store.setDraft("new.txt", "NEW", "head", null);
-    const captured = store.getChangedFiles();
-    if (operation === "rename") {
-      store.renameDraft("new.txt", "renamed.txt");
-    } else {
-      store.markDeleted("new.txt");
-    }
-    if (operation === "switch-scope") {
-      store.activateScope("other", false);
-      store.setDraft("other.txt", "OTHER", "other-head", null);
-    }
-    store.acknowledgePublished(captured, "published", "publishing");
-    if (operation === "switch-scope") {
-      expect(store.getDraft("other.txt")?.content).toBe("OTHER");
-      store.activateScope("publishing", true);
-    }
-    expect(store.getDraft("new.txt")).toMatchObject({
-      isDeleted: true,
-      headContent: "NEW",
-      baselineHeadSha: "published",
-    });
-    if (operation === "rename") {
-      expect(store.getDraft("renamed.txt")).toMatchObject({
-        content: "NEW",
-        headContent: null,
+  it.each(["delete", "rename", "switch-scope"])(
+    "preserves a removed captured creation after %s during publication",
+    async (operation) => {
+      const { useDraftStore } = await loadStores();
+      const store = useDraftStore.getState();
+      store.activateScope("publishing", false);
+      store.setDraft("new.txt", "NEW", "head", null);
+      const captured = store.getChangedFiles();
+      if (operation === "rename") {
+        store.renameDraft("new.txt", "renamed.txt");
+      } else {
+        store.markDeleted("new.txt");
+      }
+      if (operation === "switch-scope") {
+        store.activateScope("other", false);
+        store.setDraft("other.txt", "OTHER", "other-head", null);
+      }
+      store.acknowledgePublished(captured, "published", "publishing");
+      if (operation === "switch-scope") {
+        expect(store.getDraft("other.txt")?.content).toBe("OTHER");
+        store.activateScope("publishing", true);
+      }
+      expect(store.getDraft("new.txt")).toMatchObject({
+        isDeleted: true,
+        headContent: "NEW",
         baselineHeadSha: "published",
       });
+      if (operation === "rename") {
+        expect(store.getDraft("renamed.txt")).toMatchObject({
+          content: "NEW",
+          headContent: null,
+          baselineHeadSha: "published",
+        });
+      }
+      vi.resetModules();
+      const reloaded = await loadStores();
+      reloaded.useDraftStore.getState().activateScope("publishing", true);
+      expect(
+        reloaded.useDraftStore.getState().getDraft("new.txt")?.isDeleted
+      ).toBe(true);
     }
-    vi.resetModules();
-    const reloaded = await loadStores();
-    reloaded.useDraftStore.getState().activateScope("publishing", true);
-    expect(
-      reloaded.useDraftStore.getState().getDraft("new.txt")?.isDeleted
-    ).toBe(true);
-  });
+  );
 
   it("preserves a reset of an existing captured write", async () => {
     const { useDraftStore } = await loadStores();

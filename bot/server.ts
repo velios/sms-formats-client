@@ -57,6 +57,7 @@ const DRY_RUN_BOT_INFO: UserFromGetMe = {
   can_read_all_group_messages: false,
   can_manage_bots: false,
   supports_inline_queries: false,
+  supports_join_request_queries: false,
   can_connect_to_business: false,
   has_main_web_app: false,
   has_topics_enabled: false,
