@@ -9,7 +9,6 @@ import {
   subscribeGitHubAuthChange,
 } from "@/infrastructure/github";
 import { useDraftStore, useSourceStore } from "@/store";
-import { clearWorkspaceSession } from "@/store/workspace-session";
 
 const SOURCE_CACHE_STALE_MS = 10 * 60_000;
 const SOURCE_CACHE_GC_MS = 30 * 60_000;
@@ -94,7 +93,6 @@ export function useSwitchRepository() {
     }
 
     clearDrafts();
-    clearWorkspaceSession();
     setRepository(nextRepository);
     setSource(null);
     setTree([]);

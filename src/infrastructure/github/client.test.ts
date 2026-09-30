@@ -7,6 +7,7 @@ const octokitMocks = vi.hoisted(() => {
   const createReview = vi.fn(() => Promise.resolve({}));
   const getPullRequest = vi.fn();
   const getContent = vi.fn();
+  const getRepository = vi.fn();
   const compareCommitsWithBasehead = vi.fn();
   const getAuthenticated = vi.fn(() =>
     Promise.resolve({ data: { login: "current-user" } })
@@ -27,13 +28,14 @@ const octokitMocks = vi.hoisted(() => {
   return {
     createReview,
     getContent,
+    getRepository,
     compareCommitsWithBasehead,
     getAuthenticated,
     getPullRequest,
     graphql,
     paginate,
     Octokit: class MockOctokit {
-      repos = { getContent, compareCommitsWithBasehead };
+      repos = { get: getRepository, getContent, compareCommitsWithBasehead };
       pulls = {
         createReview,
         get: getPullRequest,
@@ -64,6 +66,7 @@ import {
   fetchPullRequestApprovalByCurrentUser,
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
+  refreshPullRequestApprovalPermission,
   resolveCommitAuthorLabel,
   resolvePullRequestWorkspace,
   setCachedPullRequestApprovalPermission,
@@ -148,6 +151,20 @@ describe("pull request approval permission cache", () => {
         repo: "other-repo",
       })
     ).toBe(false);
+  });
+
+  it("checks changed permissions immediately when a fresh workspace check is requested", async () => {
+    setGitHubUserToken("fixture-token");
+    setCachedPullRequestApprovalPermission(true, repo);
+    octokitMocks.getRepository
+      .mockReset()
+      .mockResolvedValue({ data: { permissions: { push: false } } });
+    expect(await refreshPullRequestApprovalPermission(repo)).toBe(true);
+    expect(octokitMocks.getRepository).not.toHaveBeenCalled();
+    expect(
+      await refreshPullRequestApprovalPermission(repo, { forceFresh: true })
+    ).toBe(false);
+    expect(octokitMocks.getRepository).toHaveBeenCalledTimes(1);
   });
 
   it("clears cached approval permissions when user token changes", () => {
@@ -601,46 +618,42 @@ describe("revision REST reads", () => {
     }
   );
 
-  it.each([undefined, "published-head"])(
-    "pins the sparse PR layer to the merge base (override=%s)",
-    async (headShaOverride) => {
-      setCachedPullRequestApprovalPermission(false, {
-        owner: "owner",
-        repo: "repo",
-      });
-      octokitMocks.getPullRequest.mockResolvedValue({
-        data: {
-          state: "open",
-          merged: false,
-          base: { sha: "advanced-main" },
-          head: {
-            sha: "pr-head",
-            repo: { owner: { login: "owner" }, name: "repo" },
-          },
+  it("pins the sparse PR layer to the merge base", async () => {
+    setCachedPullRequestApprovalPermission(false, {
+      owner: "owner",
+      repo: "repo",
+    });
+    octokitMocks.getPullRequest.mockResolvedValue({
+      data: {
+        state: "open",
+        merged: false,
+        base: { sha: "advanced-main" },
+        head: {
+          sha: "pr-head",
+          repo: { owner: { login: "owner" }, name: "repo" },
         },
-      });
-      octokitMocks.paginate.mockResolvedValue([
-        { filename: "src/Bank/formats/b.txt", status: "modified" },
-      ] as never);
-      octokitMocks.compareCommitsWithBasehead.mockResolvedValue({
-        data: { merge_base_commit: { sha: "fork-point" } },
-      });
-      const result = await resolvePullRequestWorkspace(
-        1,
-        { owner: "owner", repo: "repo" },
-        { headShaOverride }
-      );
-      expect(result).toMatchObject({
-        status: "supported",
-        baseSha: "fork-point",
-        headSha: headShaOverride ?? "pr-head",
-      });
-      expect(octokitMocks.compareCommitsWithBasehead).toHaveBeenLastCalledWith({
-        owner: "owner",
-        repo: "repo",
-        basehead: `advanced-main...${headShaOverride ?? "pr-head"}`,
-        per_page: 1,
-      });
-    }
-  );
+      },
+    });
+    octokitMocks.paginate.mockResolvedValue([
+      { filename: "src/Bank/formats/b.txt", status: "modified" },
+    ] as never);
+    octokitMocks.compareCommitsWithBasehead.mockResolvedValue({
+      data: { merge_base_commit: { sha: "fork-point" } },
+    });
+    const result = await resolvePullRequestWorkspace(1, {
+      owner: "owner",
+      repo: "repo",
+    });
+    expect(result).toMatchObject({
+      status: "supported",
+      baseSha: "fork-point",
+      headSha: "pr-head",
+    });
+    expect(octokitMocks.compareCommitsWithBasehead).toHaveBeenLastCalledWith({
+      owner: "owner",
+      repo: "repo",
+      basehead: "advanced-main...pr-head",
+      per_page: 1,
+    });
+  });
 });

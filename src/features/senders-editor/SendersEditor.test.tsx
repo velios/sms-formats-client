@@ -54,3 +54,16 @@ it.each([false, true])(
     expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
   }
 );
+
+it("does not replace a published draft baseline with the previous revision body", () => {
+  const view = render(<SendersEditor bankPath="src/Bank" />);
+  act(() =>
+    useDraftStore.getState().setDraft(path, "LATER", "published", "COMMITTED")
+  );
+  view.rerender(<SendersEditor bankPath="src/Bank" readOnly />);
+  expect(useDraftStore.getState().getDraft(path)).toMatchObject({
+    content: "LATER",
+    baselineHeadSha: "published",
+    headContent: "COMMITTED",
+  });
+});

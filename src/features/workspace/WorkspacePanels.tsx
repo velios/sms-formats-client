@@ -58,7 +58,6 @@ export function renderWorkspaceContent(params: {
   readOnly: boolean;
   selectedFile: string | null;
   selectedFileIntersectionExamples: IntersectionExampleItem[];
-  selectedFileSourceDeletedBaseSha: string | null;
   editorMode: WorkspaceEditorMode;
   onFormatSearchContextChange: (context: ActiveFormatSearchContext) => void;
   onFormatRegexBlurAfterEdit: (context: {
@@ -77,7 +76,6 @@ export function renderWorkspaceContent(params: {
     readOnly,
     selectedFile,
     selectedFileIntersectionExamples,
-    selectedFileSourceDeletedBaseSha,
     editorMode,
     onFormatSearchContextChange,
     onFormatRegexBlurAfterEdit,
@@ -102,7 +100,6 @@ export function renderWorkspaceContent(params: {
         onRegexBlurAfterEdit={onFormatRegexBlurAfterEdit}
         onSearchContextChange={onFormatSearchContextChange}
         readOnly={readOnly}
-        sourceDeletedBaseSha={selectedFileSourceDeletedBaseSha}
       />
     );
   }
@@ -119,6 +116,7 @@ export function BankActionsPanel(params: {
   onOpenPromptPackage: () => void;
   onOpenImportAnswer: () => void;
   canImportAnswer: boolean;
+  revisionReady: boolean;
   hasGitHubUserToken: boolean;
   onOpenValidation: () => void;
   onPublish: () => void;
@@ -147,6 +145,7 @@ export function BankActionsPanel(params: {
     onOpenPromptPackage,
     onOpenImportAnswer,
     canImportAnswer,
+    revisionReady,
     hasGitHubUserToken,
     onOpenValidation,
     onPublish,
@@ -206,6 +205,7 @@ export function BankActionsPanel(params: {
       )}
       <Button
         className={workspaceActionButtonClassName}
+        disabled={!revisionReady}
         onClick={onOpenValidation}
         type="button"
         variant="ghost"
@@ -214,6 +214,7 @@ export function BankActionsPanel(params: {
       </Button>
       <Button
         className={workspaceActionButtonClassName}
+        disabled={!revisionReady}
         onClick={onOpenTemplateBySms}
         type="button"
         variant="ghost"
@@ -222,6 +223,7 @@ export function BankActionsPanel(params: {
       </Button>
       <Button
         className={workspaceActionButtonClassName}
+        disabled={!revisionReady}
         onClick={onOpenSmsByTemplate}
         type="button"
         variant="ghost"
@@ -230,7 +232,7 @@ export function BankActionsPanel(params: {
       </Button>
       <Button
         className={workspaceActionButtonClassName}
-        disabled={isCalculatingIntersections}
+        disabled={!revisionReady || isCalculatingIntersections}
         onClick={onCalculateIntersections}
         type="button"
         variant="ghost"
@@ -258,7 +260,7 @@ export function BankActionsPanel(params: {
       >
         <Button
           className={workspaceActionButtonClassName}
-          disabled={!hasGitHubUserToken}
+          disabled={!(revisionReady && hasGitHubUserToken)}
           onClick={onOpenPromptPackage}
           type="button"
           variant="ghost"

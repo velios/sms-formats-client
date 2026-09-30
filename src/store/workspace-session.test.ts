@@ -1,88 +1,106 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useDraftStore, waitForDraftStoreHydration } from "@/store";
 import {
-  clearWorkspaceSession,
   loadWorkspaceSession,
   saveWorkspaceSession,
+  type WorkspaceSession,
 } from "./workspace-session";
 
-describe("workspace-session", () => {
-  beforeEach(() => {
-    const storage = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => storage.get(key) ?? null,
-      setItem: (key: string, value: string) => {
-        storage.set(key, value);
-      },
-      removeItem: (key: string) => {
-        storage.delete(key);
-      },
+vi.hoisted(() => {
+  const values = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+  });
+});
+const storage = vi.hoisted(() => new Map<string, string>());
+vi.mock("idb-keyval", () => ({
+  get: vi.fn(async (key: string) => storage.get(key)),
+  set: vi.fn(async (key: string, value: string) => {
+    storage.set(key, value);
+  }),
+  del: vi.fn(),
+}));
+const repository = { owner: "zenmoney", repo: "sms-formats" };
+const session: WorkspaceSession = {
+  status: "supported",
+  repository,
+  prNumber: 123,
+  headSha: "head",
+  baseSha: "base",
+  bankPath: "src/Bank",
+  writable: true,
+  readOnlyReason: null,
+  changedFiles: [{ kind: "modify", path: "src/Bank/formats/a.txt" }],
+};
+
+describe("saved workspace revisions", () => {
+  beforeEach(async () => {
+    await waitForDraftStoreHydration();
+    useDraftStore.setState({
+      workspaceSessionsByScope: {},
+      storedDraftsByScope: {},
+      drafts: new Map(),
+      draftScopeKey: null,
     });
   });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("persists and restores the active PR session shape", () => {
+  it("retains independent sessions by repository and PR", () => {
+    saveWorkspaceSession({ session });
     saveWorkspaceSession({
-      repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
-      headSha: "abc123",
-      baseSha: "base456",
-      bankPath: "src/TBank_123",
-      writable: true,
-      readOnlyReason: null,
-      changedFiles: [
-        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
-        { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
-      ],
+      session: { ...session, prNumber: 456, headSha: "other-head" },
     });
-
-    expect(loadWorkspaceSession()).toEqual({
-      repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
-      headSha: "abc123",
-      baseSha: "base456",
-      bankPath: "src/TBank_123",
-      writable: true,
-      readOnlyReason: null,
-      changedFiles: [
-        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
-        { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
-      ],
+    saveWorkspaceSession({
+      session: {
+        ...session,
+        repository: { ...repository, owner: "other" },
+        headSha: "other-repo",
+      },
     });
-  });
-
-  it("rejects legacy generic source selections from storage", () => {
-    localStorage.setItem(
-      "sms-formats-workspace-session",
-      JSON.stringify({
-        repository: { owner: "zenmoney", repo: "sms-formats" },
-        sourceRef: {
-          type: "branch",
-          name: "main",
-          sha: "head-sha",
-        },
-      })
+    expect(loadWorkspaceSession(repository, 123)).toEqual({ session });
+    expect(loadWorkspaceSession(repository, 456)?.session.headSha).toBe(
+      "other-head"
     );
-
-    expect(loadWorkspaceSession()).toBeNull();
   });
-
-  it("drops the saved session after explicit clear", () => {
-    saveWorkspaceSession({
-      repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
-      headSha: "abc123",
-      baseSha: "base456",
-      bankPath: "src/TBank_123",
-      writable: false,
-      readOnlyReason: "no-write-access",
-      changedFiles: [],
+  it("restores committed SHA and late drafts together from persisted data", async () => {
+    useDraftStore.getState().activateScope("zenmoney/sms-formats:pr:123", true);
+    saveWorkspaceSession({ session, pendingPublishedHeadSha: "published" });
+    useDraftStore
+      .getState()
+      .setDraft("src/Bank/formats/a.txt", "later", "published", "committed");
+    const record = storage.get("sms-formats-draft-store");
+    expect(record).toBeDefined();
+    useDraftStore.setState({
+      workspaceSessionsByScope: {},
+      storedDraftsByScope: {},
     });
-
-    clearWorkspaceSession();
-
-    expect(loadWorkspaceSession()).toBeNull();
+    storage.set("sms-formats-draft-store", record ?? "");
+    await useDraftStore.persist.rehydrate();
+    expect(loadWorkspaceSession(repository, 123)?.pendingPublishedHeadSha).toBe(
+      "published"
+    );
+    expect(
+      useDraftStore
+        .getState()
+        .getStoredDraftsForScope("zenmoney/sms-formats:pr:123")[0]
+    ).toMatchObject({
+      content: "later",
+      baselineHeadSha: "published",
+      headContent: "committed",
+    });
+  });
+  it("rejects malformed or mismatched persisted metadata without removing drafts", () => {
+    useDraftStore.getState().activateScope("zenmoney/sms-formats:pr:123", true);
+    useDraftStore
+      .getState()
+      .setDraft("src/Bank/formats/a.txt", "edited", "head", "original");
+    useDraftStore
+      .getState()
+      .saveWorkspaceSession("zenmoney/sms-formats:pr:123", {
+        session: { ...session, prNumber: 456 },
+      });
+    expect(loadWorkspaceSession(repository, 123)).toBeNull();
+    expect(useDraftStore.getState().getChangedFiles()).toHaveLength(1);
   });
 });

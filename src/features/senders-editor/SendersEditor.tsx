@@ -35,12 +35,12 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
   const remoteBaseline = draft ? draft.headContent : (headContent ?? null);
 
   useEffect(() => {
-    if (!readOnly && headContent !== undefined) {
+    if (!readOnly && headContent !== undefined && baseSha === sourceRef?.sha) {
       useDraftStore
         .getState()
         .ensureDraft(filePath, headContent, baseSha, headContent);
     }
-  }, [baseSha, filePath, readOnly, headContent]);
+  }, [baseSha, filePath, readOnly, headContent, sourceRef?.sha]);
 
   const handleChange = (newValue: string) => {
     if (!readOnly) {

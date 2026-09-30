@@ -565,12 +565,17 @@ export function getCachedPullRequestApprovalPermission(
 }
 
 export async function refreshPullRequestApprovalPermission(
-  repoRef?: RepoRef
+  repoRef?: RepoRef,
+  options?: { forceFresh?: boolean }
 ): Promise<boolean> {
   const slug = getRepoSlug(repoRef);
   const cache = readPullRequestApprovalPermissionCache();
   const cached = cache[slug];
-  if (cached && Date.now() - cached.checkedAt < 60_000) {
+  if (
+    !options?.forceFresh &&
+    cached &&
+    Date.now() - cached.checkedAt < 60_000
+  ) {
     return cached.canApprove;
   }
 
@@ -780,7 +785,7 @@ export async function fetchPullRequestMetadata(
 export async function resolvePullRequestWorkspace(
   prNumber: number,
   repoRef?: RepoRef,
-  options?: { forceFresh?: boolean; headShaOverride?: string }
+  options?: { forceFresh?: boolean }
 ): Promise<PullRequestWorkspaceResolution> {
   const repo = resolveRepo(repoRef);
 
@@ -792,7 +797,7 @@ export async function resolvePullRequestWorkspace(
         pull_number: prNumber,
         ...cacheBustParam(options?.forceFresh),
       }),
-      refreshPullRequestApprovalPermission(repo),
+      refreshPullRequestApprovalPermission(repo, options),
       publicOctokit.paginate(publicOctokit.pulls.listFiles, {
         owner: repo.owner,
         repo: repo.repo,
@@ -811,7 +816,7 @@ export async function resolvePullRequestWorkspace(
           }
         : null;
 
-    const headSha = options?.headShaOverride ?? pullRequest.data.head.sha;
+    const headSha = pullRequest.data.head.sha;
     const comparison = await publicOctokit.repos.compareCommitsWithBasehead({
       owner: repo.owner,
       repo: repo.repo,

@@ -134,4 +134,23 @@ describe("one document across editor views", () => {
       expect(useDraftStore.getState().getDraft(path)?.content).toBe(before);
     }
   );
+  it("preserves the published baseline when a late draft is rerendered against the old source", () => {
+    const committed = serializeFormat(
+      "^(COMMITTED)$",
+      ["comment"],
+      ["COMMITTED"]
+    );
+    const later = serializeFormat("^(LATER)$", ["comment"], ["LATER"]);
+    const view = render(<FormatEditor filePath={path} mode="raw" />);
+    act(() =>
+      useDraftStore.getState().setDraft(path, later, "published", committed)
+    );
+    view.rerender(<FormatEditor filePath={path} mode="raw" readOnly />);
+    expect(useDraftStore.getState().getDraft(path)).toMatchObject({
+      content: later,
+      baselineHeadSha: "published",
+      headContent: committed,
+    });
+    expect(screen.getByRole("textbox")).toHaveValue(later);
+  });
 });

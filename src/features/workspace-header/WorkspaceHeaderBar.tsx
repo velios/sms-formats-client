@@ -18,7 +18,6 @@ interface Props {
   mode: WorkspaceEditorMode;
   onModeChange: (mode: WorkspaceEditorMode) => void;
   readOnly: boolean;
-  sourceDeletedBaseSha: string | null;
   allFormatFiles: string[];
   onRenameFile: (fromPath: string, toPath: string) => boolean;
 }
@@ -48,7 +47,6 @@ export function WorkspaceHeaderBar({
   mode,
   onModeChange,
   readOnly,
-  sourceDeletedBaseSha,
   allFormatFiles,
   onRenameFile,
 }: Props) {
@@ -96,7 +94,6 @@ export function WorkspaceHeaderBar({
           isSenders={showSenders}
           onRenameFile={onRenameFile}
           readOnly={readOnly}
-          sourceDeletedBaseSha={showSenders ? null : sourceDeletedBaseSha}
         />
       )}
     </div>
@@ -156,14 +153,12 @@ function WorkspaceFileControls({
   filePath,
   isSenders,
   readOnly,
-  sourceDeletedBaseSha,
   allFormatFiles,
   onRenameFile,
 }: {
   filePath: string;
   isSenders: boolean;
   readOnly: boolean;
-  sourceDeletedBaseSha: string | null;
   allFormatFiles: string[];
   onRenameFile: (fromPath: string, toPath: string) => boolean;
 }) {
@@ -180,18 +175,11 @@ function WorkspaceFileControls({
   const draft = draftStore.getDraft(filePath);
   const { data: headContent } = useWorkspaceFileContent({
     filePath,
-    contentRefName: sourceDeletedBaseSha ?? undefined,
-    enabled: draft?.headContent !== null || Boolean(sourceDeletedBaseSha),
+    enabled: draft?.headContent !== null,
   });
 
-  const hasSourceDeletedPreview = Boolean(sourceDeletedBaseSha);
-  const baseSha = draft?.baselineHeadSha ?? sourceRef?.sha ?? "";
-  const remoteBaseline = draft
-    ? draft.headContent
-    : hasSourceDeletedPreview
-      ? null
-      : (headContent ?? null);
-  const isDeleted = draft?.isDeleted ?? hasSourceDeletedPreview;
+  const remoteBaseline = draft ? draft.headContent : (headContent ?? null);
+  const isDeleted = draft?.isDeleted ?? false;
   const isModified = draft ? draft.content !== draft.headContent : false;
   const canUndo = draftStore.canUndo(filePath);
   const canRedo = draftStore.canRedo(filePath);
@@ -209,11 +197,7 @@ function WorkspaceFileControls({
   });
 
   const fileName = filePath.split("/").pop() ?? filePath;
-  const refName =
-    sourceDeletedBaseSha ??
-    sourceRef?.sha ??
-    sourceRef?.name ??
-    config.defaultBranch;
+  const refName = sourceRef?.sha ?? sourceRef?.name ?? config.defaultBranch;
   const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
   const fileRepoUrl = `https://github.com/${repository.owner}/${repository.repo}/blob/${encodeURIComponent(refName)}/${encodedPath}`;
 
@@ -258,10 +242,6 @@ function WorkspaceFileControls({
   };
 
   const handleReset = () => {
-    if (sourceDeletedBaseSha) {
-      draftStore.setDraft(filePath, headContent ?? "", baseSha, null);
-      return;
-    }
     draftStore.resetFileToRemote(filePath);
   };
 

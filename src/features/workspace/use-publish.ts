@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { BankInfo, RepoRef } from "@/domain/types";
 import { resolvePublishPreflightState } from "@/features/publish-panel/preflight";
 import type { CommitMessageInput } from "@/features/publish-panel/UpdatePullRequestDialog";
 import { validateBankSnapshot } from "@/features/workspace/bank-snapshot";
-import type { ActiveRouteSession } from "@/features/workspace/use-workspace-session";
 import {
   getGitHubUserToken,
   resolvePullRequestWorkspace,
   updatePullRequestHead,
 } from "@/infrastructure/github";
-import { useDraftStore, useSourceStore } from "@/store";
+import { useDraftStore } from "@/store";
+import { waitForDraftPersistence } from "@/store/persistence";
+import type {
+  PublicationTicket,
+  WorkspaceSessionController,
+} from "./workspace-session";
 
 async function countBlockingPublishValidationIssues(params: {
   bank: BankInfo | undefined;
@@ -30,6 +34,10 @@ async function countBlockingPublishValidationIssues(params: {
     sourceRefName: headSha,
   });
   return issues.filter((issue) => issue.level === "error").length;
+}
+
+function publishErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 function buildCommitMessage(
@@ -63,75 +71,43 @@ function isDraftSnapshotCurrent(
 
 export function useBankPublishAction(params: {
   bank: BankInfo | undefined;
-  bankPath: string;
-  writable: boolean;
-  draftStore: ReturnType<typeof useDraftStore.getState>;
-  onWorkspaceReadOnly: (session: ActiveRouteSession) => void;
-  onWorkspaceStale: (session: ActiveRouteSession) => void;
-  onWorkspaceSynced: (
-    session: ActiveRouteSession,
-    preserveDrafts?: boolean
-  ) => Promise<void>;
-  repository: { owner: string; repo: string };
-  sourceRef: { type: "pr"; prNumber: number; sha: string } | null;
+  controller: WorkspaceSessionController;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
-  const {
-    bank,
-    bankPath,
-    writable,
-    draftStore,
-    onWorkspaceReadOnly,
-    onWorkspaceStale,
-    onWorkspaceSynced,
-    repository,
-    sourceRef,
-    t,
-  } = params;
-  const [isPublishing, setIsPublishing] = useState(false);
+  const { bank, controller, t } = params;
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
+  const isPublishing =
+    controller.getSnapshot().operation === "publishing" ||
+    controller.getSnapshot().operation === "syncing";
 
   useEffect(() => {
-    setIsPublishing(false);
     setPublishError(null);
     setIsUpdateDialogOpen(false);
-  }, [repository.owner, repository.repo, sourceRef?.prNumber, sourceRef?.type]);
+  }, [controller]);
 
-  const runPreflight = useCallback(async (): Promise<
-    | {
-        ok: true;
-        token: string;
-        prNumber: number;
-        headSha: string;
-        files: ReturnType<typeof draftStore.getChangedFiles>;
-        scopeKey: string | null;
-      }
-    | { ok: false }
-  > => {
-    if (!(writable && sourceRef)) {
-      setPublishError(t("publish.readOnly"));
-      return { ok: false };
-    }
+  const runPreflight = async (ticket: PublicationTicket) => {
+    const { session, scopeKey } = ticket;
+    const { repository, prNumber, headSha, bankPath } = session;
     const token = getGitHubUserToken()?.trim() ?? "";
     if (!token) {
-      setPublishError(t("githubAuth.emptyToken"));
-      return { ok: false };
+      throw new Error(t("githubAuth.emptyToken"));
     }
-    const scopeKey = useDraftStore.getState().draftScopeKey;
+    const draftStore = useDraftStore.getState();
     const files = draftStore.getChangedFiles();
-    const resolution = await resolvePullRequestWorkspace(
-      sourceRef.prNumber,
-      repository,
-      { forceFresh: true }
-    );
-    if (resolution.status !== "supported") {
-      setPublishError(t("publish.updateError"));
-      return { ok: false };
+    const resolution = await resolvePullRequestWorkspace(prNumber, repository, {
+      forceFresh: true,
+    });
+    if (!controller.isPublicationCurrent(ticket)) {
+      return null;
     }
-    const publishPreflightState = resolvePublishPreflightState({
+    controller.observeResolution(ticket, resolution);
+    if (resolution.status !== "supported") {
+      throw new Error(t("publish.updateError"));
+    }
+    const preflight = resolvePublishPreflightState({
       resolverHeadSha: resolution.headSha,
-      sessionHeadSha: sourceRef.sha,
+      sessionHeadSha: headSha,
       writable: resolution.writable,
       localChangesCount: files.filter((file) =>
         file.filePath.startsWith(`${bankPath}/`)
@@ -141,185 +117,115 @@ export function useBankPublishAction(params: {
       ),
       validationErrorsCount: 0,
     });
-    if (publishPreflightState === "stale") {
-      onWorkspaceStale(resolution);
-      setPublishError(t("publish.outdatedBase"));
-      return { ok: false };
+    const errors = {
+      stale: "publish.outdatedBase",
+      "read-only": "publish.readOnly",
+      "no-changes": "publish.noChanges",
+      "invalid-scope": "validation.multiBankPublish",
+      "validation-failed": "validation.errors",
+    };
+    if (preflight !== "can-publish") {
+      throw new Error(t(errors[preflight]));
     }
-    if (publishPreflightState === "read-only") {
-      onWorkspaceReadOnly(resolution);
-      setPublishError(
-        t("publish.readOnly", {
-          defaultValue: "This pull request is read-only.",
-        })
-      );
-      return { ok: false };
-    }
-    if (publishPreflightState === "no-changes") {
-      setPublishError(t("publish.noChanges"));
-      return { ok: false };
-    }
-    if (publishPreflightState === "invalid-scope") {
-      setPublishError(t("validation.multiBankPublish"));
-      return { ok: false };
-    }
-    const validationErrorsCount = await countBlockingPublishValidationIssues({
+    const count = await countBlockingPublishValidationIssues({
       bank,
       bankPath,
       repository,
-      headSha: sourceRef.sha,
+      headSha,
       draftStore,
     });
-    if (validationErrorsCount > 0) {
-      setPublishError(t("validation.errors", { count: validationErrorsCount }));
-      return { ok: false };
+    if (!controller.isPublicationCurrent(ticket)) {
+      return null;
+    }
+    if (count > 0) {
+      throw new Error(t("validation.errors", { count }));
     }
     if (!isDraftSnapshotCurrent(files, scopeKey)) {
-      setPublishError(t("publish.editedDuringValidation"));
-      return { ok: false };
+      throw new Error(t("publish.editedDuringValidation"));
     }
-    return {
-      ok: true,
-      token,
-      prNumber: sourceRef.prNumber,
-      headSha: sourceRef.sha,
-      files,
-      scopeKey,
-    };
-  }, [
-    bank,
-    bankPath,
-    draftStore,
-    onWorkspaceReadOnly,
-    onWorkspaceStale,
-    repository,
-    sourceRef?.prNumber,
-    sourceRef?.type,
-    sourceRef?.sha,
-    t,
-    writable,
-  ]);
+    return { token, files };
+  };
 
-  const pushAndSync = useCallback(
-    async (
-      token: string,
-      prNumber: number,
-      expectedHeadSha: string,
-      files: ReturnType<typeof draftStore.getChangedFiles>,
-      scopeKey: string | null,
-      commitMessage?: string
-    ): Promise<boolean> => {
-      const { headSha: newHeadSha } = await updatePullRequestHead(
-        token,
-        prNumber,
-        expectedHeadSha,
-        files.map((file) => ({
+  const beginUpdate = async () => {
+    const ticket = controller.beginPublication();
+    if (!ticket) {
+      return;
+    }
+    setPublishError(null);
+    try {
+      if (await runPreflight(ticket)) {
+        setIsUpdateDialogOpen(true);
+      }
+    } catch (error) {
+      if (controller.isTicketCurrent(ticket)) {
+        setPublishError(publishErrorMessage(error, t("publish.updateError")));
+      }
+    } finally {
+      controller.finishPublication(ticket);
+    }
+  };
+
+  const submitUpdate = async (
+    commit: CommitMessageInput | null
+  ): Promise<void> => {
+    const ticket = controller.beginPublication();
+    if (!ticket) {
+      return;
+    }
+    setPublishError(null);
+    let committed = false;
+    try {
+      const pre = await runPreflight(ticket);
+      if (!pre) {
+        return;
+      }
+      const { session, scopeKey } = ticket;
+      const { headSha } = await updatePullRequestHead(
+        pre.token,
+        session.prNumber,
+        session.headSha,
+        pre.files.map((file) => ({
           path: file.filePath,
           content: file.isDeleted ? undefined : file.content,
           delete: file.isDeleted,
         })),
-        repository,
-        commitMessage
+        session.repository,
+        buildCommitMessage(commit)
       );
+      committed = true;
+      controller.recordPublication(ticket, headSha);
       useDraftStore
         .getState()
-        .acknowledgePublished(files, newHeadSha, scopeKey);
-      const active = useSourceStore.getState();
-      if (
-        active.repository.owner !== repository.owner ||
-        active.repository.repo !== repository.repo ||
-        active.sourceRef?.prNumber !== prNumber
-      ) {
-        return true;
-      }
-      try {
-        const syncedResolution = await resolvePullRequestWorkspace(
-          prNumber,
-          repository,
-          { forceFresh: true, headShaOverride: newHeadSha }
-        );
-        if (syncedResolution.status !== "supported") {
-          setPublishError(t("publish.updatedRefreshFailed"));
-          return false;
-        }
-        await onWorkspaceSynced(syncedResolution, true);
-        return true;
-      } catch {
-        setPublishError(t("publish.updatedRefreshFailed"));
-        return false;
-      }
-    },
-    [onWorkspaceSynced, repository, t]
-  );
-
-  const beginUpdate = useCallback(async () => {
-    setPublishError(null);
-    setIsPublishing(true);
-    try {
-      const pre = await runPreflight();
-      if (pre.ok) {
-        setIsUpdateDialogOpen(true);
-      }
+        .acknowledgePublished(pre.files, headSha, scopeKey);
+      await waitForDraftPersistence();
+      await controller.syncPublication(ticket);
     } catch (error) {
-      setPublishError(
-        error instanceof Error ? error.message : t("publish.updateError")
-      );
-    } finally {
-      setIsPublishing(false);
-    }
-  }, [runPreflight, t]);
-
-  const submitUpdate = useCallback(
-    async (commit: CommitMessageInput | null): Promise<void> => {
-      setIsPublishing(true);
-      setPublishError(null);
-      try {
-        const pre = await runPreflight();
-        if (!pre.ok) {
-          setIsUpdateDialogOpen(false);
-          return;
-        }
-        await pushAndSync(
-          pre.token,
-          pre.prNumber,
-          pre.headSha,
-          pre.files,
-          pre.scopeKey,
-          buildCommitMessage(commit)
-        );
-        setIsUpdateDialogOpen(false);
-      } catch (error) {
+      if (controller.isTicketCurrent(ticket)) {
         setPublishError(
-          error instanceof Error ? error.message : t("publish.updateError")
+          committed
+            ? null
+            : publishErrorMessage(error, t("publish.updateError"))
         );
-        setIsUpdateDialogOpen(false);
-      } finally {
-        setIsPublishing(false);
       }
-    },
-    [pushAndSync, runPreflight, t]
-  );
-
-  const closeUpdateDialog = useCallback(() => {
-    setIsUpdateDialogOpen(false);
-  }, []);
-
-  const canUpdateCurrentPullRequest = Boolean(sourceRef && writable);
-  const publishActionLabel = isPublishing
-    ? t("publish.publishing")
-    : t("publish.updatePR");
-  const onPublish = useCallback(() => {
-    void beginUpdate();
-  }, [beginUpdate]);
+    } finally {
+      if (controller.isTicketCurrent(ticket)) {
+        setIsUpdateDialogOpen(false);
+      }
+      controller.finishPublication(ticket);
+    }
+  };
 
   return {
-    canUpdateCurrentPullRequest,
     isPublishing,
-    onPublish,
-    publishActionLabel,
     publishError,
     isUpdateDialogOpen,
     submitUpdate,
-    closeUpdateDialog,
+    closeUpdateDialog: () => setIsUpdateDialogOpen(false),
+    onPublish: () => {
+      void beginUpdate();
+    },
+    publishActionLabel: isPublishing
+      ? t("publish.publishing")
+      : t("publish.updatePR"),
   };
 }
