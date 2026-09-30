@@ -9,6 +9,7 @@ import type {
   RepoRef,
 } from "@/domain/types";
 import { DRAFT_STORE_STORAGE_KEY, draftStoreStateStorage } from "./persistence";
+import type { SavedWorkspaceSession } from "./workspace-session";
 
 interface SourceState {
   repository: RepoRef;
@@ -60,6 +61,11 @@ interface DraftHistoryState {
 interface DraftState {
   drafts: Map<string, DraftEntry>;
   storedDraftsByScope: Record<string, Record<string, DraftEntry>>;
+  workspaceSessionsByScope: Record<string, SavedWorkspaceSession>;
+  saveWorkspaceSession: (
+    scopeKey: string,
+    saved: SavedWorkspaceSession
+  ) => void;
   draftScopeKey: string | null;
   hasHydrated: boolean;
   activateScope: (scopeKey: string | null, restore?: boolean) => void;
@@ -276,6 +282,15 @@ export const useDraftStore = create<DraftState>()(
       return {
         drafts: new Map(),
         storedDraftsByScope: {},
+        workspaceSessionsByScope: {},
+        saveWorkspaceSession: (scopeKey, saved) => {
+          set({
+            workspaceSessionsByScope: {
+              ...get().workspaceSessionsByScope,
+              [scopeKey]: saved,
+            },
+          });
+        },
         draftScopeKey: null,
         hasHydrated: false,
 
@@ -650,6 +665,7 @@ export const useDraftStore = create<DraftState>()(
       },
       partialize: (state) => ({
         storedDraftsByScope: state.storedDraftsByScope,
+        workspaceSessionsByScope: state.workspaceSessionsByScope,
       }),
       storage: draftStoreJsonStorage,
     }

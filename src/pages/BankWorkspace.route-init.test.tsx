@@ -107,10 +107,13 @@ const mocks = vi.hoisted(() => {
   useSourceStore.getState = () => sourceState;
 
   const draftState = {
+    draftScopeKey: null as string | null,
     drafts: new Map<string, unknown>(),
     hasHydrated: true,
     getStoredDraftsForScope: vi.fn(() => []),
-    activateScope: vi.fn(),
+    activateScope: vi.fn((scopeKey: string) => {
+      draftState.draftScopeKey = scopeKey;
+    }),
     getChangedFiles: vi.fn<
       () => Array<{
         filePath: string;
@@ -140,13 +143,14 @@ const mocks = vi.hoisted(() => {
 
   const useDraftStore = (() => draftState) as (() => typeof draftState) & {
     getState: () => typeof draftState;
+    subscribe: () => () => void;
   };
   useDraftStore.getState = () => draftState;
+  useDraftStore.subscribe = () => () => undefined;
 
   return {
     fetchPullRequestApprovalByCurrentUser: vi.fn(() => Promise.resolve(false)),
     banks,
-    clearWorkspaceSession: vi.fn(),
     draftState,
     fetchPullRequestFiles: vi.fn(() => Promise.resolve([])),
     fetchRepoTree: vi.fn(() => Promise.resolve(tree)),
@@ -241,19 +245,8 @@ vi.mock("@/components/ui/status-badge", () => ({
 }));
 
 vi.mock("@/features/format-editor/FormatEditor", () => ({
-  FormatEditor: ({
-    filePath,
-    sourceDeletedBaseSha,
-  }: {
-    filePath: string;
-    sourceDeletedBaseSha?: string | null;
-  }) => (
-    <div
-      data-source-deleted-base-sha={sourceDeletedBaseSha ?? ""}
-      data-testid="format-editor"
-    >
-      {filePath}
-    </div>
+  FormatEditor: ({ filePath }: { filePath: string }) => (
+    <div data-testid="format-editor">{filePath}</div>
   ),
 }));
 
@@ -288,14 +281,25 @@ vi.mock("@/store", () => ({
   waitForDraftStoreHydration: () => Promise.resolve(),
 }));
 
-vi.mock("@/store/workspace-session", () => ({
-  clearWorkspaceSession: mocks.clearWorkspaceSession,
+vi.mock("@/store/workspace-session", async () => ({
+  ...(await vi.importActual<typeof import("@/store/workspace-session")>(
+    "@/store/workspace-session"
+  )),
   loadWorkspaceSession: mocks.loadWorkspaceSession,
   saveWorkspaceSession: mocks.saveWorkspaceSession,
 }));
 
 vi.mock("@/infrastructure/file-content", () => ({
   cacheFileContent: mocks.cacheFileContent,
+  loadFileContent: vi.fn(async (params) => {
+    const content = await fetchFileContent(
+      params.filePath,
+      params.commitSha,
+      params.repository
+    );
+    mocks.cacheFileContent({ ...params, content });
+    return content;
+  }),
   loadFileContents: mocks.loadFileContents,
 }));
 
@@ -376,7 +380,11 @@ describe("BankWorkspace route init", () => {
     mocks.draftState.drafts = new Map();
     mocks.draftState.getStoredDraftsForScope.mockReset();
     mocks.draftState.getStoredDraftsForScope.mockReturnValue([]);
+    mocks.draftState.draftScopeKey = null;
     mocks.draftState.activateScope.mockReset();
+    mocks.draftState.activateScope.mockImplementation((scopeKey: string) => {
+      mocks.draftState.draftScopeKey = scopeKey;
+    });
     mocks.draftState.getChangedFiles.mockReset();
     mocks.draftState.getChangedFiles.mockReturnValue([]);
     mocks.draftState.getDeletedFiles.mockReset();
@@ -391,10 +399,12 @@ describe("BankWorkspace route init", () => {
     mocks.draftState.clearAll.mockReset();
     mocks.draftState.renameDraft.mockReset();
 
-    mocks.clearWorkspaceSession.mockReset();
     mocks.loadWorkspaceSession.mockReset();
     mocks.loadWorkspaceSession.mockReturnValue(null);
     mocks.saveWorkspaceSession.mockReset();
+    mocks.saveWorkspaceSession.mockImplementation((saved) => {
+      mocks.loadWorkspaceSession.mockReturnValue(saved);
+    });
 
     mocks.fetchPullRequestFiles.mockReset();
     mocks.fetchPullRequestFiles.mockResolvedValue([]);
@@ -445,17 +455,20 @@ describe("BankWorkspace route init", () => {
     mocks.sourceState.tree = mocks.tree;
     mocks.sourceState.banks = mocks.banks;
     mocks.loadWorkspaceSession.mockReturnValue({
-      repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
-      headSha: "head-sha",
-      baseSha: "base-sha",
-      bankPath: "src/TBank_123",
-      writable: true,
-      readOnlyReason: null,
-      changedFiles: [
-        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
-        { kind: "modify", path: "src/TBank_123/formats/another.txt" },
-      ],
+      session: {
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        baseSha: "base-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+          { kind: "modify", path: "src/TBank_123/formats/another.txt" },
+        ],
+      },
     });
     mocks.resolvePullRequestWorkspace.mockImplementation(
       () => new Promise(() => undefined)
@@ -471,7 +484,7 @@ describe("BankWorkspace route init", () => {
     });
   });
 
-  it("reuses deleted-file metadata from the saved session and passes base SHA to the editor", async () => {
+  it("reports that the selected document is absent from the saved working revision", async () => {
     mocks.routeState.location.search =
       "?file=src/TBank_123/formats/deleted.txt";
     mocks.sourceState.sourceRef = {
@@ -486,16 +499,19 @@ describe("BankWorkspace route init", () => {
     mocks.sourceState.tree = mocks.tree;
     mocks.sourceState.banks = mocks.banks;
     mocks.loadWorkspaceSession.mockReturnValue({
-      repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
-      headSha: "head-sha",
-      baseSha: "base-sha",
-      bankPath: "src/TBank_123",
-      writable: true,
-      readOnlyReason: null,
-      changedFiles: [
-        { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
-      ],
+      session: {
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        baseSha: "base-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
+        ],
+      },
     });
     mocks.resolvePullRequestWorkspace.mockImplementation(
       () => new Promise(() => undefined)
@@ -503,15 +519,12 @@ describe("BankWorkspace route init", () => {
 
     render(<BankWorkspace />);
 
-    await waitFor(() => {
-      expect(screen.getByTestId("format-editor")).toHaveTextContent(
-        "src/TBank_123/formats/deleted.txt"
-      );
-    });
-    expect(screen.getByTestId("format-editor")).toHaveAttribute(
-      "data-source-deleted-base-sha",
-      "base-sha"
+    await waitFor(() =>
+      expect(
+        screen.getByText("workspace.selectedFileRemoved")
+      ).toBeInTheDocument()
     );
+    expect(screen.queryByTestId("format-editor")).not.toBeInTheDocument();
   });
 
   it("does not re-run PR route init when only the selected file changes", async () => {
@@ -550,17 +563,20 @@ describe("BankWorkspace route init", () => {
     mocks.sourceState.tree = mocks.tree;
     mocks.sourceState.banks = mocks.banks;
     mocks.loadWorkspaceSession.mockReturnValue({
-      repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
-      headSha: "head-sha",
-      baseSha: "base-sha",
-      bankPath: "src/TBank_123",
-      writable: true,
-      readOnlyReason: null,
-      changedFiles: [
-        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
-        { kind: "modify", path: "src/TBank_123/formats/another.txt" },
-      ],
+      session: {
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        baseSha: "base-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+          { kind: "modify", path: "src/TBank_123/formats/another.txt" },
+        ],
+      },
     });
     mocks.resolvePullRequestWorkspace.mockImplementation(
       () => new Promise(() => undefined)
@@ -624,17 +640,17 @@ describe("BankWorkspace route init", () => {
       )
     );
 
-    window.dispatchEvent(new Event("focus"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "workspace.checkUpdates" })
+    );
 
     await waitFor(() =>
       expect(
-        screen.getByText(
-          "PR changed since your last local edits. You're viewing the cached previous version. Discard local changes and refresh the PR to continue."
-        )
+        screen.getByText("workspace.cachedStaleNotice")
       ).toBeInTheDocument()
     );
     expect(screen.getByTestId("format-editor")).toBeInTheDocument();
-    expect(mocks.cacheFileContent).not.toHaveBeenCalled();
+    expect(mocks.sourceState.sourceRef?.sha).toBe("head-sha");
   });
 
   it("caches the new revision and refreshes the workspace when head changes without local drafts", async () => {
@@ -672,7 +688,9 @@ describe("BankWorkspace route init", () => {
       )
     );
 
-    window.dispatchEvent(new Event("focus"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "workspace.checkUpdates" })
+    );
 
     await waitFor(() =>
       expect(mocks.cacheFileContent).toHaveBeenCalledWith(
@@ -721,7 +739,9 @@ describe("BankWorkspace route init", () => {
       expect(screen.getByTestId("format-editor")).toBeInTheDocument()
     );
     mocks.draftState.discardAll.mockClear();
-    window.dispatchEvent(new Event("focus"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "workspace.checkUpdates" })
+    );
     await waitFor(() => expect(mocks.fetchRepoTree).toHaveBeenCalledTimes(2));
     mocks.draftState.getChangedFiles.mockReturnValue([
       {
@@ -734,9 +754,7 @@ describe("BankWorkspace route init", () => {
     await act(async () => finishTree(mocks.tree));
     await waitFor(() =>
       expect(
-        screen.getByText(
-          "PR changed since your last local edits. You're viewing the cached previous version. Discard local changes and refresh the PR to continue."
-        )
+        screen.getByText("workspace.cachedStaleNotice")
       ).toBeInTheDocument()
     );
     expect(mocks.draftState.discardAll).not.toHaveBeenCalled();
@@ -874,7 +892,7 @@ describe("BankWorkspace route init", () => {
     expect(mocks.draftState.acknowledgePublished).toHaveBeenCalledWith(
       mocks.draftState.getChangedFiles(),
       "new-head-sha",
-      undefined
+      "zenmoney/sms-formats:pr:123"
     );
     expect(mocks.draftState.discardAll).not.toHaveBeenCalled();
   });
@@ -948,7 +966,6 @@ describe("BankWorkspace route init", () => {
       mock.mock.invocationCallOrder.at(-1) ?? -1;
     const readOrder = Math.max(
       lastOrder(mocks.fetchRepoTree),
-      lastOrder(vi.mocked(fetchOpenPRs)),
       lastOrder(vi.mocked(fetchFileContent))
     );
     const setSourceCalls = mocks.sourceState.setSource.mock.calls;
@@ -968,6 +985,37 @@ describe("BankWorkspace route init", () => {
         commitSha: "new-head-sha",
         content: "primed content",
       })
+    );
+  });
+  it("does not recheck GitHub on focus or visibility events", async () => {
+    render(<BankWorkspace />);
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toBeInTheDocument()
+    );
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(mocks.resolvePullRequestWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not make the open PR list a prerequisite for revision updates", async () => {
+    render(<BankWorkspace />);
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toBeInTheDocument()
+    );
+    vi.mocked(fetchOpenPRs).mockRejectedValueOnce(new Error("list offline"));
+    const current =
+      await mocks.resolvePullRequestWorkspace.mock.results[0]?.value;
+    mocks.resolvePullRequestWorkspace.mockResolvedValueOnce({
+      ...current,
+      headSha: "next-head",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "workspace.checkUpdates" })
+    );
+    await waitFor(() =>
+      expect(mocks.sourceState.sourceRef?.sha).toBe("next-head")
     );
   });
 });

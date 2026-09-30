@@ -489,6 +489,19 @@
     "discardAndOpenLatest": "Discard stale drafts and open the latest PR"
   },
   "workspace": {
+    "selectedFileRemoved": "The selected file is absent from the working revision: {{path}}",
+    "checkUpdates": "Check for updates",
+    "retrySync": "Retry synchronization",
+    "recoveryUnavailable": "The original revision could not be restored. Drafts are preserved; the new revision has not been applied.",
+    "unavailable": {
+      "closed": "This PR is closed. The working revision and drafts remain available for reading.",
+      "merged": "This PR is merged. The working revision and drafts remain available for reading.",
+      "not-found": "This PR was not found. Saved data has not been deleted.",
+      "inaccessible": "This PR is inaccessible. Saved data has not been deleted.",
+      "no-bank-changes": "This PR no longer changes a bank. The working revision remains available for reading.",
+      "multiple-banks": "This PR changes multiple banks and is no longer supported by the editor.",
+      "outside-bank-scope": "This PR changes files outside the bank and is no longer supported by the editor."
+    },
     "cachedStaleNotice": "PR changed since your edits. You are viewing the previous version. Discard local changes and refresh the PR to continue.",
     "discardAndRefresh": "Discard local changes and refresh PR"
   },

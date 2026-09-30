@@ -1,133 +1,70 @@
+import { z } from "zod/v4";
+import type { PullRequestWorkspaceResolution } from "@/domain/pull-request-workspace";
 import type { RepoRef } from "@/domain/types";
+import { useDraftStore } from "@/store";
+import { makeDraftSourceKey } from "./draft-scope";
 
-const WORKSPACE_SESSION_STORAGE_KEY = "sms-formats-workspace-session";
+export type WorkspaceSession = Extract<
+  PullRequestWorkspaceResolution,
+  { status: "supported" }
+>;
 
-type WorkspaceSessionChangedFileKind = "add" | "modify" | "delete" | "rename";
-
-export interface WorkspaceSessionChangedFile {
-  kind: WorkspaceSessionChangedFileKind;
-  path: string;
-  oldPath?: string;
+export interface SavedWorkspaceSession {
+  session: WorkspaceSession;
+  pendingPublishedHeadSha?: string;
 }
 
-export interface WorkspaceSession {
-  repository: RepoRef;
-  prNumber: number;
-  headSha: string;
-  baseSha: string;
-  bankPath: string;
-  writable: boolean;
-  readOnlyReason: "no-write-access" | null;
-  changedFiles: WorkspaceSessionChangedFile[];
+const savedSessionSchema = z.object({
+  session: z.object({
+    status: z.literal("supported"),
+    repository: z.object({ owner: z.string().min(1), repo: z.string().min(1) }),
+    prNumber: z.number().int().positive(),
+    headSha: z.string().min(1),
+    baseSha: z.string().min(1),
+    bankPath: z.string().min(1),
+    writable: z.boolean(),
+    readOnlyReason: z.literal("no-write-access").nullable(),
+    changedFiles: z.array(
+      z.object({
+        kind: z.enum(["add", "modify", "delete", "rename"]),
+        path: z.string(),
+        oldPath: z.string().optional(),
+      })
+    ),
+  }),
+  pendingPublishedHeadSha: z.string().min(1).optional(),
+});
+
+export function workspaceScope(repository: RepoRef, prNumber: number): string {
+  return makeDraftSourceKey({ type: "pr", prNumber }, repository);
 }
 
-function isRepoRef(value: unknown): value is RepoRef {
-  if (!(value && typeof value === "object")) {
-    return false;
-  }
-
-  const candidate = value as Partial<RepoRef>;
-  return (
-    typeof candidate.owner === "string" && typeof candidate.repo === "string"
+export function loadWorkspaceSession(
+  repository: RepoRef,
+  prNumber: number
+): SavedWorkspaceSession | null {
+  const result = savedSessionSchema.safeParse(
+    useDraftStore.getState().workspaceSessionsByScope[
+      workspaceScope(repository, prNumber)
+    ]
   );
-}
-
-function isReadOnlyReason(
-  value: unknown
-): value is WorkspaceSession["readOnlyReason"] {
-  return value === null || value === "no-write-access";
-}
-
-function isChangedFileKind(
-  value: unknown
-): value is WorkspaceSessionChangedFileKind {
-  return (
-    value === "add" ||
-    value === "modify" ||
-    value === "delete" ||
-    value === "rename"
-  );
-}
-
-function isWorkspaceSessionChangedFile(
-  value: unknown
-): value is WorkspaceSessionChangedFile {
-  if (!(value && typeof value === "object")) {
-    return false;
-  }
-
-  const candidate = value as Partial<WorkspaceSessionChangedFile>;
-  return (
-    isChangedFileKind(candidate.kind) &&
-    typeof candidate.path === "string" &&
-    (typeof candidate.oldPath === "undefined" ||
-      typeof candidate.oldPath === "string")
-  );
-}
-
-function isWorkspaceSession(value: unknown): value is WorkspaceSession {
-  if (!(value && typeof value === "object")) {
-    return false;
-  }
-
-  const candidate = value as Partial<WorkspaceSession>;
   if (
-    !(
-      isRepoRef(candidate.repository) && Number.isInteger(candidate.prNumber)
-    ) ||
-    typeof candidate.headSha !== "string" ||
-    typeof candidate.baseSha !== "string" ||
-    typeof candidate.bankPath !== "string" ||
-    typeof candidate.writable !== "boolean" ||
-    !(
-      Array.isArray(candidate.changedFiles) &&
-      candidate.changedFiles.every(isWorkspaceSessionChangedFile)
-    ) ||
-    !isReadOnlyReason(candidate.readOnlyReason)
+    !result.success ||
+    result.data.session.repository.owner !== repository.owner ||
+    result.data.session.repository.repo !== repository.repo ||
+    result.data.session.prNumber !== prNumber
   ) {
-    return false;
-  }
-  const prNumber = candidate.prNumber;
-  return typeof prNumber === "number" && prNumber > 0;
-}
-
-export function loadWorkspaceSession(): WorkspaceSession | null {
-  try {
-    const raw = localStorage.getItem(WORKSPACE_SESSION_STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw);
-    if (!isWorkspaceSession(parsed)) {
-      return null;
-    }
-
-    return parsed;
-  } catch {
     return null;
   }
+  return result.data;
 }
 
-export function saveWorkspaceSession(session: WorkspaceSession): void {
-  try {
-    localStorage.setItem(
-      WORKSPACE_SESSION_STORAGE_KEY,
-      JSON.stringify(session)
+export function saveWorkspaceSession(saved: SavedWorkspaceSession): void {
+  const { session } = saved;
+  useDraftStore
+    .getState()
+    .saveWorkspaceSession(
+      workspaceScope(session.repository, session.prNumber),
+      saved
     );
-  } catch {
-    // Browser storage may be unavailable.
-  }
-}
-
-export function clearWorkspaceSession(): void {
-  try {
-    if (typeof localStorage.removeItem === "function") {
-      localStorage.removeItem(WORKSPACE_SESSION_STORAGE_KEY);
-      return;
-    }
-    localStorage.setItem(WORKSPACE_SESSION_STORAGE_KEY, "");
-  } catch {
-    // Browser storage may be unavailable.
-  }
 }

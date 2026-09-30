@@ -90,10 +90,13 @@ const mocks = vi.hoisted(() => {
   useSourceStore.getState = () => sourceState;
 
   const draftState = {
+    draftScopeKey: null as string | null,
     drafts: new Map<string, unknown>(),
     hasHydrated: true,
     getStoredDraftsForScope: vi.fn(() => []),
-    activateScope: vi.fn(),
+    activateScope: vi.fn((scopeKey: string) => {
+      draftState.draftScopeKey = scopeKey;
+    }),
     getChangedFiles: vi.fn<
       () => Array<{
         filePath: string;
@@ -119,12 +122,13 @@ const mocks = vi.hoisted(() => {
 
   const useDraftStore = (() => draftState) as (() => typeof draftState) & {
     getState: () => typeof draftState;
+    subscribe: () => () => void;
   };
   useDraftStore.getState = () => draftState;
+  useDraftStore.subscribe = () => () => undefined;
 
   return {
     banks,
-    clearWorkspaceSession: vi.fn(),
     draftState,
     fetchPullRequestFiles: vi.fn(() => Promise.resolve([])),
     fetchRepoTree: vi.fn(() => Promise.resolve(tree)),
@@ -136,18 +140,30 @@ const mocks = vi.hoisted(() => {
     getGitHubAuthChangeVersion: vi.fn(() => 0),
     indexBanksFromTree: vi.fn(() => banks),
     loadWorkspaceSession: vi.fn(() => ({
-      repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
-      headSha: "head-sha",
-      baseSha: "base-sha",
-      bankPath: "src/TBank_123",
-      writable: true,
-      readOnlyReason: null,
-      changedFiles: [
-        { kind: "modify" as const, path: "src/TBank_123/formats/current.txt" },
-        { kind: "modify" as const, path: "src/TBank_123/formats/another.txt" },
-        { kind: "delete" as const, path: "src/TBank_123/formats/deleted.txt" },
-      ],
+      session: {
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        baseSha: "base-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          {
+            kind: "modify" as const,
+            path: "src/TBank_123/formats/current.txt",
+          },
+          {
+            kind: "modify" as const,
+            path: "src/TBank_123/formats/another.txt",
+          },
+          {
+            kind: "delete" as const,
+            path: "src/TBank_123/formats/deleted.txt",
+          },
+        ],
+      },
     })),
     loadBankSnapshot: vi.fn(),
     refreshPullRequestApprovalPermission: vi.fn(() => Promise.resolve(false)),
@@ -301,13 +317,16 @@ vi.mock("@/store", () => ({
   waitForDraftStoreHydration: () => Promise.resolve(),
 }));
 
-vi.mock("@/store/workspace-session", () => ({
-  clearWorkspaceSession: mocks.clearWorkspaceSession,
+vi.mock("@/store/workspace-session", async () => ({
+  ...(await vi.importActual<typeof import("@/store/workspace-session")>(
+    "@/store/workspace-session"
+  )),
   loadWorkspaceSession: mocks.loadWorkspaceSession,
   saveWorkspaceSession: mocks.saveWorkspaceSession,
 }));
 
 vi.mock("@/infrastructure/file-content", () => ({
+  loadFileContent: vi.fn(async () => ""),
   useFileContentStore: {
     getState: () => mocks.fileContentStore,
   },
@@ -442,7 +461,11 @@ describe("BankWorkspace intersections behavior", () => {
     mocks.draftState.drafts = new Map();
     mocks.draftState.getStoredDraftsForScope.mockReset();
     mocks.draftState.getStoredDraftsForScope.mockReturnValue([]);
+    mocks.draftState.draftScopeKey = null;
     mocks.draftState.activateScope.mockReset();
+    mocks.draftState.activateScope.mockImplementation((scopeKey: string) => {
+      mocks.draftState.draftScopeKey = scopeKey;
+    });
     mocks.draftState.getChangedFiles.mockReset();
     mocks.draftState.getChangedFiles.mockReturnValue([]);
     mocks.draftState.getDeletedFiles.mockReset();
@@ -454,21 +477,23 @@ describe("BankWorkspace intersections behavior", () => {
     mocks.draftState.clearAll.mockReset();
     mocks.draftState.renameDraft.mockReset();
 
-    mocks.clearWorkspaceSession.mockReset();
     mocks.loadWorkspaceSession.mockReset();
     mocks.loadWorkspaceSession.mockReturnValue({
-      repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
-      headSha: "head-sha",
-      baseSha: "base-sha",
-      bankPath: "src/TBank_123",
-      writable: true,
-      readOnlyReason: null,
-      changedFiles: [
-        { kind: "modify", path: "src/TBank_123/formats/current.txt" },
-        { kind: "modify", path: "src/TBank_123/formats/another.txt" },
-        { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
-      ],
+      session: {
+        status: "supported",
+        repository: { owner: "zenmoney", repo: "sms-formats" },
+        prNumber: 123,
+        headSha: "head-sha",
+        baseSha: "base-sha",
+        bankPath: "src/TBank_123",
+        writable: true,
+        readOnlyReason: null,
+        changedFiles: [
+          { kind: "modify", path: "src/TBank_123/formats/current.txt" },
+          { kind: "modify", path: "src/TBank_123/formats/another.txt" },
+          { kind: "delete", path: "src/TBank_123/formats/deleted.txt" },
+        ],
+      },
     });
     mocks.saveWorkspaceSession.mockReset();
 

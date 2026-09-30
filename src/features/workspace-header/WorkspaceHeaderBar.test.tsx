@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
     markDeleted: vi.fn(),
     redo: vi.fn(),
     resetFileToRemote: vi.fn(),
-    setDraft: vi.fn(),
     undo: vi.fn(),
   },
   useWorkspaceFileContent: vi.fn((_params?: unknown) => ({
@@ -88,7 +87,6 @@ function renderHeaderBar(
       selectedFile="src/TBank_123/formats/current.txt"
       sendersPath="src/TBank_123/senders.txt"
       showSenders={false}
-      sourceDeletedBaseSha={null}
       {...overrides}
     />
   );
@@ -105,7 +103,6 @@ describe("WorkspaceHeaderBar", () => {
     mocks.draftStore.markDeleted.mockReset();
     mocks.draftStore.redo.mockReset();
     mocks.draftStore.resetFileToRemote.mockReset();
-    mocks.draftStore.setDraft.mockReset();
     mocks.draftStore.undo.mockReset();
     mocks.useWorkspaceFileContent.mockReset();
     mocks.useWorkspaceFileContent.mockReturnValue({
@@ -113,25 +110,6 @@ describe("WorkspaceHeaderBar", () => {
       isLoading: false,
       error: null,
     });
-  });
-
-  it("restores a PR-deleted file into a local draft on reset", () => {
-    renderHeaderBar({
-      selectedFile: "src/TBank_123/formats/deleted.txt",
-      sourceDeletedBaseSha: "base-sha",
-    });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "editor.resetFileToSource" })
-    );
-
-    expect(mocks.draftStore.setDraft).toHaveBeenCalledWith(
-      "src/TBank_123/formats/deleted.txt",
-      "BASE CONTENT",
-      "head-sha",
-      null
-    );
-    expect(mocks.draftStore.resetFileToRemote).not.toHaveBeenCalled();
   });
 
   it("allows deleting an existing empty file but renames only a local new file", () => {

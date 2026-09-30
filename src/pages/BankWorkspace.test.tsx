@@ -8,7 +8,6 @@ vi.mock("@/store", () => ({
 
 import type { BankFileRecord } from "@/features/bank-inventory/core";
 import { resolveAutoSelectFile } from "@/features/workspace/auto-select";
-import { resolveWorkspaceEntryMode } from "@/features/workspace/use-workspace-session";
 import { FormatsPanel } from "@/features/workspace/WorkspacePanels";
 
 function fileRecord(
@@ -226,26 +225,6 @@ describe("FormatsPanel intersections", () => {
         )
         ?.getAttribute("data-variant")
     ).toBe("warning");
-  });
-
-  it("prioritizes stale drafts over read-only when opening a PR workspace", () => {
-    expect(
-      resolveWorkspaceEntryMode({
-        headSha: "new-head",
-        persistedDrafts: [{ baselineHeadSha: "old-head" }],
-        writable: false,
-      })
-    ).toBe("stale");
-  });
-
-  it("opens read-only when the current head matches but the PR is not writable", () => {
-    expect(
-      resolveWorkspaceEntryMode({
-        headSha: "same-head",
-        persistedDrafts: [{ baselineHeadSha: "same-head" }],
-        writable: false,
-      })
-    ).toBe("read-only");
   });
 
   it("does not rewrite ?file before PR workspace route init becomes ready", () => {

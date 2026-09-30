@@ -19,7 +19,6 @@ interface Props {
     fileName: string;
   }>;
   readOnly?: boolean;
-  sourceDeletedBaseSha?: string | null;
   onOpenTemplateBySms?: () => void;
   onOpenSmsByTemplate?: () => void;
   onOpenIntersectionFileInApp?: (filePath: string) => void;
@@ -41,7 +40,6 @@ export function FormatEditor({
   mode,
   intersectionExamples = [],
   readOnly = false,
-  sourceDeletedBaseSha = null,
   onOpenTemplateBySms,
   onOpenSmsByTemplate,
   onOpenIntersectionFileInApp,
@@ -57,17 +55,12 @@ export function FormatEditor({
     error: headContentError,
   } = useWorkspaceFileContent({
     filePath,
-    contentRefName: sourceDeletedBaseSha ?? undefined,
-    enabled: draft?.headContent !== null || Boolean(sourceDeletedBaseSha),
+    enabled: draft?.headContent !== null,
   });
   const currentContent = draft?.content ?? headContent ?? "";
   const baseSha = draft?.baselineHeadSha ?? sourceRef?.sha ?? "";
-  const remoteBaseline = draft
-    ? draft.headContent
-    : sourceDeletedBaseSha
-      ? null
-      : (headContent ?? null);
-  const isDeleted = draft?.isDeleted ?? Boolean(sourceDeletedBaseSha);
+  const remoteBaseline = draft ? draft.headContent : (headContent ?? null);
+  const isDeleted = draft?.isDeleted ?? false;
   const isMutationBlocked = readOnly || isDeleted;
   const parsed = useMemo(
     () => parseFormatFile(currentContent, filePath),
@@ -100,12 +93,12 @@ export function FormatEditor({
     setActiveExampleIndex((index) => Math.min(index, examples.length - 1));
   }, [examples.length]);
   useEffect(() => {
-    if (!readOnly && headContent !== undefined && !sourceDeletedBaseSha) {
+    if (!readOnly && headContent !== undefined && baseSha === sourceRef?.sha) {
       useDraftStore
         .getState()
         .ensureDraft(filePath, headContent, baseSha, headContent);
     }
-  }, [baseSha, filePath, readOnly, headContent, sourceDeletedBaseSha]);
+  }, [baseSha, filePath, readOnly, headContent, sourceRef?.sha]);
 
   const writeDocument = (content: string) => {
     if (isMutationBlocked) {
