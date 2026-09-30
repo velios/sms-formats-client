@@ -206,7 +206,7 @@ describe("Dashboard", () => {
       screen.getByRole("textbox", {
         name: "Search pull requests",
       })
-    ).toHaveClass("bg-[color:var(--c-bg-input)]");
+    ).toHaveClass("bg-card");
     expect(screen.getByRole("link", { name: "PR #123" })).toHaveAttribute(
       "href",
       "https://github.com/zenmoney/sms-formats/pull/123"

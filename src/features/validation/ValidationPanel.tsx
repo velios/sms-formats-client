@@ -89,16 +89,12 @@ export function ValidationPanel({ bankPath, bank, onClose }: Props) {
       title={t("validation.title")}
     >
       {running ? (
-        <div
-          aria-live="polite"
-          className="flex items-center gap-2 text-muted-foreground text-sm"
-          role="status"
-        >
+        <div aria-live="polite" className="ui-state" role="status">
           <Spinner />
           <span>{t("app.loading")}</span>
         </div>
       ) : ran ? (
-        <div aria-live="polite" className="flex flex-col gap-4" role="status">
+        <div aria-live="polite" className="ui-panel-stack" role="status">
           <div className="flex gap-2">
             {errors.length === 0 && warnings.length === 0 ? (
               <StatusBadge variant="success">
@@ -120,32 +116,24 @@ export function ValidationPanel({ bankPath, bank, onClose }: Props) {
             )}
           </div>
 
-          <div
-            className="flex max-h-[400px] flex-col gap-1 overflow-y-auto"
-            style={{ maxHeight: 400, overflowY: "auto" }}
-          >
+          <div className="flex max-h-[400px] flex-col gap-1 overflow-y-auto">
             {issues.map((issue, i) => (
               <div
-                className={
-                  issue.level === "error"
-                    ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-[color:var(--c-error)] text-xs"
-                    : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-[color:var(--c-warning)] text-xs"
-                }
+                className="ui-notice flex gap-2"
+                data-tone={issue.level}
                 key={i}
               >
-                <span className="font-mono text-sm" style={{ minWidth: 100 }}>
+                <span className="min-w-[100px] font-mono">
                   {issue.filePath.split("/").pop()}
                 </span>
-                <span className="text-sm">
-                  {t(`validation.issue.${issue.code}`, issue.params)}
-                </span>
+                <span>{t(`validation.issue.${issue.code}`, issue.params)}</span>
               </div>
             ))}
           </div>
         </div>
       ) : null}
 
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="ui-dialog-actions justify-end">
         <Button onClick={onClose} type="button">
           {t("app.close")}
         </Button>

@@ -21,20 +21,20 @@ const KIND_ORDER: DiffKind[] = ["changed", "created", "deleted", "identical"];
 
 const KIND_STYLE: Record<DiffKind, { dot: string; text: string }> = {
   changed: {
-    dot: "bg-[color:var(--c-accent)]",
-    text: "text-[color:var(--c-accent)]",
+    dot: "bg-primary",
+    text: "text-primary",
   },
   created: {
-    dot: "bg-[color:var(--c-success)]",
-    text: "text-[color:var(--c-success)]",
+    dot: "bg-success",
+    text: "text-success",
   },
   deleted: {
-    dot: "bg-[color:var(--c-error)]",
-    text: "text-[color:var(--c-error)]",
+    dot: "bg-destructive",
+    text: "text-destructive",
   },
   identical: {
-    dot: "bg-[color:var(--c-text-dim)]",
-    text: "text-[color:var(--c-text-dim)]",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
   },
 };
 
@@ -115,7 +115,7 @@ function KindIcon({ kind }: { kind: DiffKind }) {
     return (
       <Trash2
         aria-hidden="true"
-        className="size-3.5 shrink-0 text-[color:var(--c-error)]"
+        className="size-3.5 shrink-0 text-destructive"
       />
     );
   }
@@ -123,7 +123,7 @@ function KindIcon({ kind }: { kind: DiffKind }) {
     return (
       <FilePlus2
         aria-hidden="true"
-        className="size-3.5 shrink-0 text-[color:var(--c-success)]"
+        className="size-3.5 shrink-0 text-success"
       />
     );
   }
@@ -136,13 +136,13 @@ function Gutter({ kind, rejected }: { kind: DiffKind; rejected: boolean }) {
       <span
         aria-hidden="true"
         className={`size-2 shrink-0 rounded-full ${
-          rejected ? "bg-[color:var(--c-error)]" : KIND_STYLE[kind].dot
+          rejected ? "bg-destructive" : KIND_STYLE[kind].dot
         }`}
       />
       {rejected ? (
         <Ban
           aria-hidden="true"
-          className="size-3.5 shrink-0 text-[color:var(--c-error)]"
+          className="size-3.5 shrink-0 text-destructive"
         />
       ) : (
         <KindIcon kind={kind} />
@@ -155,19 +155,19 @@ function FileName({ row }: { row: ManifestRow }) {
   const { head, tail } = splitName(row.fileName);
   return (
     <span
-      className={`flex min-w-0 flex-1 items-baseline text-[13px] ${
+      className={`flex min-w-0 flex-1 items-baseline text-sm ${
         row.kind === "deleted"
           ? "line-through decoration-1 decoration-current"
           : ""
-      } ${row.supersededBelow ? "text-[color:var(--c-text-dim)]" : ""}`}
+      } ${row.supersededBelow ? "text-muted-foreground" : ""}`}
     >
       <span className="min-w-0 truncate">{head}</span>
       {tail !== "" && (
         <span
-          className={`shrink-0 font-mono text-[11.5px] tabular-nums ${
+          className={`shrink-0 font-mono text-xs tabular-nums ${
             row.supersededBelow
-              ? "text-[color:var(--c-text-dim)]"
-              : "text-[color:var(--c-text-muted)]"
+              ? "text-muted-foreground"
+              : "text-muted-foreground"
           }`}
         >
           {tail}
@@ -199,7 +199,7 @@ function CountsLegend({
       {shown.map((kind) => (
         <span className="flex items-center gap-1.5" key={kind}>
           <KindDot kind={kind} />
-          <span className="text-[color:var(--c-text-muted)]">
+          <span className="text-muted-foreground">
             {t(`importAnswer.kindCount.${kind}`, { count: counts[kind] })}
           </span>
         </span>
@@ -217,7 +217,7 @@ function ProblemList({
 }) {
   return problems.map((problem) => (
     <div key={`${problem.kind}-${problem.line}`}>
-      <span className="text-[color:var(--c-text-muted)]">
+      <span className="text-muted-foreground">
         {t("importAnswer.line", { line: problem.line })}
       </span>{" "}
       — {t(`importAnswer.problem.${problem.kind}`)}
@@ -245,25 +245,25 @@ function ParseSummary({
   t: Translate;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-[var(--radius-md)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-3 py-2 text-[13px]">
+    <div className="ui-notice flex items-center gap-2">
       {broken && (
-        <span className="text-[color:var(--c-error)]">
+        <span className="text-destructive">
           {t("importAnswer.status.broken")}
         </span>
       )}
       {!broken && blocked && (
-        <span className="text-[color:var(--c-error)]">
+        <span className="text-destructive">
           {t("importAnswer.status.outOfBounds")}
         </span>
       )}
       {!(broken || blocked || hasRows) && (
-        <span className="text-[color:var(--c-text-muted)]">
+        <span className="text-muted-foreground">
           {t("importAnswer.status.noFiles")}
         </span>
       )}
       {!blocked && hasRows && <CountsLegend counts={counts} t={t} />}
       {overwriteCount > 0 && !(blocked || done) && (
-        <span className="flex items-center gap-1.5 text-[color:var(--c-warning)]">
+        <span className="flex items-center gap-1.5 text-warning">
           <TriangleAlert aria-hidden="true" className="size-3.5" />
           {t("importAnswer.overwriteWarning", { count: overwriteCount })}
         </span>
@@ -271,7 +271,7 @@ function ParseSummary({
       <Button
         className="ml-auto"
         onClick={onShowText}
-        size="xs"
+        size="sm"
         type="button"
         variant="default"
       >
@@ -295,7 +295,7 @@ function RefusalBanner({
   t: Translate;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[color:var(--c-error)] bg-[color:var(--c-error-soft)] p-3">
+    <div className="ui-notice flex flex-col gap-2" data-tone="error">
       <StatusBadge variant="error">
         {t(
           broken
@@ -303,18 +303,18 @@ function RefusalBanner({
             : "importAnswer.refusal.boundsTitle"
         )}
       </StatusBadge>
-      <div className="flex flex-col gap-1 text-[12px]">
+      <div className="flex flex-col gap-1 text-xs">
         <ProblemList problems={problems} t={t} />
         {violations.map((row) => (
           <div key={row.path}>
             <code className="font-mono">{row.path}</code>{" "}
-            <span className="text-[color:var(--c-text-muted)]">
+            <span className="text-muted-foreground">
               — {t(`importAnswer.violation.${row.violation}`)}
             </span>
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-3 pt-1 text-[12px] text-[color:var(--c-text-muted)]">
+      <div className="flex items-center gap-3 pt-1 text-muted-foreground text-xs">
         {t(
           broken
             ? "importAnswer.refusal.brokenHint"
@@ -322,7 +322,7 @@ function RefusalBanner({
         )}
         <Button
           onClick={onPasteAgain}
-          size="xs"
+          size="sm"
           type="button"
           variant="secondary"
         >
@@ -341,11 +341,11 @@ function LossNotice({
   t: Translate;
 }) {
   return (
-    <div className="flex flex-col gap-1 border-[color:var(--c-warning)] border-l-2 py-1 pl-3 text-[12px]">
-      <span className="font-medium text-[color:var(--c-warning)]">
+    <div className="ui-notice flex flex-col gap-1" data-tone="warning">
+      <span className="font-medium text-warning">
         {t("importAnswer.loss.title")}
       </span>
-      <div className="text-[color:var(--c-text-muted)]">
+      <div className="text-muted-foreground">
         <ProblemList problems={problems} t={t} />
       </div>
     </div>
@@ -356,14 +356,12 @@ function ProsePanel({ text, t }: { text: string; t: Translate }) {
   const empty = text.trim() === "";
   return (
     <div className="flex flex-col gap-2">
-      <div className="font-semibold text-[11px] text-[color:var(--c-text-dim)] uppercase tracking-[0.5px]">
+      <div className="font-semibold text-muted-foreground text-xs uppercase tracking-[0.5px]">
         {t("importAnswer.prosePanelTitle")}
       </div>
       <div
-        className={`max-w-[68ch] whitespace-pre-wrap text-[13.5px] leading-[1.7] ${
-          empty
-            ? "text-[color:var(--c-text-dim)]"
-            : "text-[color:var(--c-text)]"
+        className={`max-w-[68ch] whitespace-pre-wrap text-sm leading-normal ${
+          empty ? "text-muted-foreground" : "text-foreground"
         }`}
       >
         {empty ? t("importAnswer.proseNone") : text}
@@ -376,14 +374,14 @@ function RowPanel({ row, t }: { row: ManifestRow; t: Translate }) {
   const rejected = row.violation !== null;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 border-[color:var(--c-border)] border-b pb-3">
+      <div className="flex items-center gap-2 border-border border-b pb-3">
         <Gutter kind={row.kind} rejected={rejected} />
-        <span className="min-w-0 flex-1 break-all font-mono text-[12px] leading-[1.5]">
+        <span className="min-w-0 flex-1 break-all font-mono text-xs leading-[1.5]">
           {row.path}
         </span>
         <span
-          className={`shrink-0 text-[12px] ${
-            rejected ? "text-[color:var(--c-error)]" : KIND_STYLE[row.kind].text
+          className={`shrink-0 text-xs ${
+            rejected ? "text-destructive" : KIND_STYLE[row.kind].text
           }`}
         >
           {rejected
@@ -393,32 +391,32 @@ function RowPanel({ row, t }: { row: ManifestRow; t: Translate }) {
       </div>
 
       {!rejected && (
-        <div className="text-[12px] text-[color:var(--c-text-muted)]">
+        <div className="text-muted-foreground text-xs">
           {provenanceText(row, t)}
         </div>
       )}
 
       {row.supersededBelow && (
-        <div className="border-[color:var(--c-warning)] border-l-2 py-1 pl-3 text-[12px] text-[color:var(--c-text-muted)]">
+        <div className="ui-notice" data-tone="warning">
           {t("importAnswer.supersededNote")}
         </div>
       )}
 
       {row.overwritesManualEdit && (
-        <div className="flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:var(--c-warning)] bg-[color:var(--c-warning-soft)] p-2 text-[12px] text-[color:var(--c-warning)]">
+        <div className="ui-notice flex items-start gap-2" data-tone="warning">
           <PenLine aria-hidden="true" className="mt-px size-3.5 shrink-0" />
           {t("importAnswer.overwriteNote")}
         </div>
       )}
 
       {rejected ? (
-        <div className="flex flex-col gap-2 text-[13px]">
-          <div className="text-[color:var(--c-error)]">
+        <div className="flex flex-col gap-2 text-sm">
+          <div className="text-destructive">
             {t("importAnswer.violationNote", {
               reason: t(`importAnswer.violation.${row.violation}`),
             })}
           </div>
-          <div className="text-[color:var(--c-text-muted)]">
+          <div className="text-muted-foreground">
             {t("importAnswer.violationHint")}
           </div>
         </div>
@@ -449,15 +447,15 @@ function ResultPanel({
       <StatusBadge variant="success">
         {t("importAnswer.result.title")}
       </StatusBadge>
-      <CountsLegend className="text-[14px]" counts={counts} t={t} />
-      <div className="text-[13px] text-[color:var(--c-text-muted)]">
+      <CountsLegend className="text-sm" counts={counts} t={t} />
+      <div className="text-muted-foreground text-sm">
         {t(
           recalculated
             ? "importAnswer.result.recalculated"
             : "importAnswer.result.notRecalculated"
         )}
       </div>
-      <div className="border-[color:var(--c-border)] border-t pt-3 text-[13px] text-[color:var(--c-text-muted)] leading-[1.6]">
+      <div className="border-border border-t pt-3 text-muted-foreground text-sm leading-[1.6]">
         {t("importAnswer.result.hint")}
       </div>
     </div>
@@ -486,16 +484,16 @@ function Manifest({
   t: Translate;
 }) {
   const rowClassName = (isSelected: boolean) =>
-    `flex w-full items-center gap-2 border-[color:var(--c-border)] border-b border-l-2 px-3 py-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-inset ${
+    `ui-panel-inset flex w-full items-center gap-2 border-border border-b border-l-2 py-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${
       isSelected
-        ? "border-l-[color:var(--c-accent)] bg-[color:var(--c-bg-hover)] font-medium"
-        : "border-l-transparent hover:bg-[color:var(--c-bg-elevated)]"
+        ? "border-l-[color:var(--primary)] bg-accent font-medium"
+        : "border-l-transparent hover:bg-muted"
     }`;
 
   return (
     <div
       aria-label={t("importAnswer.manifestLabel")}
-      className={`flex w-[384px] shrink-0 flex-col overflow-y-auto rounded-[var(--radius-md)] border border-[color:var(--c-border)] ${
+      className={`ui-panel flex w-[384px] shrink-0 flex-col overflow-y-auto ${
         frozen ? "pointer-events-none opacity-55" : ""
       }`}
       onKeyDown={onKeyDown}
@@ -516,12 +514,12 @@ function Manifest({
           <span aria-hidden="true" className="size-2 shrink-0" />
           <MessageSquareText
             aria-hidden="true"
-            className="size-3.5 shrink-0 text-[color:var(--c-text-dim)]"
+            className="size-3.5 shrink-0 text-muted-foreground"
           />
         </span>
-        <span className="flex-1 text-[13px]">{t("importAnswer.prose")}</span>
+        <span className="flex-1 text-sm">{t("importAnswer.prose")}</span>
         {!hasProse && (
-          <span className="text-[11px] text-[color:var(--c-text-dim)]">
+          <span className="text-muted-foreground text-xs">
             {t("importAnswer.proseEmpty")}
           </span>
         )}
@@ -541,18 +539,18 @@ function Manifest({
           <Gutter kind={row.kind} rejected={row.violation !== null} />
           <FileName row={row} />
           {row.violation !== null && (
-            <span className="shrink-0 text-[11px] text-[color:var(--c-error)]">
+            <span className="shrink-0 text-destructive text-xs">
               {t("importAnswer.rejected")}
             </span>
           )}
           {row.supersededBelow && (
-            <span className="shrink-0 text-[11px] text-[color:var(--c-text-dim)]">
+            <span className="shrink-0 text-muted-foreground text-xs">
               {t("importAnswer.superseded")}
             </span>
           )}
           {row.overwritesManualEdit && (
             <span
-              className="flex shrink-0 items-center text-[color:var(--c-warning)]"
+              className="flex shrink-0 items-center text-warning"
               title={t("importAnswer.overwriteMark")}
             >
               <PenLine aria-hidden="true" className="size-3.5" />
@@ -563,7 +561,7 @@ function Manifest({
       ))}
 
       {rows.length === 0 && (
-        <div className="px-3 py-4 text-[12px] text-[color:var(--c-text-dim)]">
+        <div className="ui-panel-body text-muted-foreground text-xs">
           {t(broken ? "importAnswer.emptyBroken" : "importAnswer.emptyParsed")}
         </div>
       )}

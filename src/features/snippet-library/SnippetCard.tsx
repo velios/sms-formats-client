@@ -14,9 +14,9 @@ export function SnippetCard({
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] p-3">
+    <div className="ui-card">
       <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 break-all rounded-[3px] bg-[color:var(--c-tone-quantifier-soft-bg)] px-2 py-1 font-mono font-semibold text-[13px] text-[color:var(--c-tone-quantifier-text)]">
+        <code className="min-w-0 flex-1 break-all rounded-md bg-[color:var(--c-tone-quantifier-soft-bg)] px-2 py-1 font-mono font-semibold text-[color:var(--c-tone-quantifier-text)] text-xs">
           {snippet.pattern}
         </code>
         <StatusBadge
@@ -34,7 +34,7 @@ export function SnippetCard({
           {t("snippets.insert")}
         </Button>
       </div>
-      <p className="mt-2 text-[color:var(--c-text)] text-sm">{snippet.desc}</p>
+      <p className="mt-2 text-foreground text-xs">{snippet.desc}</p>
       {snippet.trigger && (
         <SnippetField label={t("snippets.trigger")} value={snippet.trigger} />
       )}
@@ -46,7 +46,7 @@ export function SnippetCard({
         />
       )}
       {snippet.gotcha && (
-        <p className="mt-1.5 text-[color:var(--c-warning)] text-xs">
+        <p className="mt-1 text-warning text-xs">
           <span className="font-semibold">{t("snippets.gotcha")}: </span>
           {snippet.gotcha}
         </p>
@@ -65,10 +65,8 @@ function SnippetField({
   mono?: boolean;
 }) {
   return (
-    <p className="mt-1.5 text-[color:var(--c-text-muted)] text-xs">
-      <span className="font-semibold text-[color:var(--c-text-dim)]">
-        {label}:{" "}
-      </span>
+    <p className="mt-1 text-muted-foreground text-xs">
+      <span className="font-semibold text-muted-foreground">{label}: </span>
       <span className={cn(mono && "font-mono")}>{value}</span>
     </p>
   );

@@ -138,7 +138,7 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="flex h-[52px] shrink-0 items-center gap-4 border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-surface)] px-6 py-2">
+      <header className="ui-panel-inset flex h-[52px] shrink-0 items-center gap-3 border-border border-b bg-card py-2">
         <button
           className="cursor-pointer whitespace-nowrap font-semibold text-base"
           onClick={() => navigate("/")}
@@ -149,7 +149,7 @@ export function AppHeader() {
 
         {isDeveloperMode && (
           <>
-            <span className="mr-0.5 text-[color:var(--c-text-dim)]">/</span>
+            <span className="mr-0.5 text-muted-foreground">/</span>
             <SourceSelector allowRepoSwitch />
           </>
         )}
@@ -168,7 +168,7 @@ export function AppHeader() {
         <PanelResizeToggle />
         <Button
           aria-label={t("githubAuth.openSettings")}
-          className="size-9 rounded-full"
+          className="rounded-md"
           onClick={openGitHubTokenModal}
           size="icon"
           title={
@@ -189,11 +189,8 @@ export function AppHeader() {
           onClose={() => setGithubTokenModalOpen(false)}
           title={t("githubAuth.title")}
         >
-          <div className="mb-4 flex flex-col gap-2">
-            <label
-              className="text-[color:var(--c-text-muted)] text-xs"
-              htmlFor={githubTokenInputId}
-            >
+          <div className="ui-field">
+            <label className="ui-field-label" htmlFor={githubTokenInputId}>
               {t("githubAuth.tokenLabel")}
             </label>
             <Input
@@ -207,9 +204,7 @@ export function AppHeader() {
               type="password"
               value={githubTokenInput}
             />
-            <div className="text-[color:var(--c-text-muted)] text-sm">
-              {t("githubAuth.tokenHint")}
-            </div>
+            <div className="ui-field-hint">{t("githubAuth.tokenHint")}</div>
             {hasSavedGitHubToken && (
               <StatusBadge variant="success">
                 {t("githubAuth.tokenSaved")}
@@ -219,7 +214,7 @@ export function AppHeader() {
               <StatusBadge variant="error">{githubTokenError}</StatusBadge>
             )}
           </div>
-          <div className="mt-6 flex justify-end gap-2">
+          <div className="ui-dialog-actions justify-end">
             <Button
               className="mr-auto"
               disabled={isSavingGitHubToken || isHardResetting}

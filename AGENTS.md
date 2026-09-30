@@ -84,3 +84,7 @@ Canonical label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `re
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### UI composition
+
+Before creating, changing, or reviewing screens, UI components, or styles, read [docs/ui-design.md](docs/ui-design.md) for composition conventions.

@@ -448,7 +448,7 @@ export function BankWorkspace() {
 
   if (!activeSession) {
     return routeInitState.operation === "opening" ? (
-      <div className="flex items-center gap-2">
+      <div className="ui-panel ui-panel-body ui-state">
         <Spinner />
         <span>{t("app.loading")}</span>
       </div>
@@ -462,8 +462,8 @@ export function BankWorkspace() {
 
   if (!bank && inventory.formatFiles.length === 0) {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="text-[color:var(--c-text-muted)]">
+      <div className="ui-panel ui-panel-body">
+        <div className="text-muted-foreground">
           {t("bank.noResults")}: {bankPath}
         </div>
       </div>
@@ -487,7 +487,7 @@ export function BankWorkspace() {
     });
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="ui-panel-stack h-full">
       <WorkspaceHeaderBar
         allFormatFiles={inventory.formatFiles}
         bankName={displayName}
@@ -513,7 +513,7 @@ export function BankWorkspace() {
       )}
 
       <ResizablePanels side="left">
-        <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
+        <div className="ui-panel-stack overflow-hidden">
           <BankActionsPanel
             approvePullRequestError={approvePullRequestError}
             approvePullRequestLabel={approvePullRequestLabel}
@@ -604,7 +604,7 @@ export function BankWorkspace() {
           />
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
+        <div className="ui-panel-stack min-w-0 overflow-hidden">
           {renderWorkspaceContent({
             showSenders,
             bankPath,

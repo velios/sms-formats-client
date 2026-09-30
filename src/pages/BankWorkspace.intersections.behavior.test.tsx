@@ -715,11 +715,9 @@ describe("BankWorkspace intersections behavior", () => {
       screen.getByRole("textbox", { name: "bank.searchFile" })
     ).toHaveValue("");
     expect(
-      screen.getByRole("button", { name: "bank.allFiles" }).className
-    ).toContain("border-b-[color:var(--c-accent)]");
-    expect(getFormatRow("another.txt").className).toContain(
-      "text-[color:var(--c-accent)]"
-    );
+      screen.getByRole("button", { name: "bank.allFiles" })
+    ).toHaveAttribute("data-active", "true");
+    expect(getFormatRow("another.txt").className).toContain("text-primary");
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
@@ -761,11 +759,9 @@ describe("BankWorkspace intersections behavior", () => {
       screen.getByRole("textbox", { name: "bank.searchFile" })
     ).toHaveValue("");
     expect(
-      screen.getByRole("button", { name: "bank.allFiles" }).className
-    ).toContain("border-b-[color:var(--c-accent)]");
-    expect(getFormatRow("another.txt").className).toContain(
-      "text-[color:var(--c-accent)]"
-    );
+      screen.getByRole("button", { name: "bank.allFiles" })
+    ).toHaveAttribute("data-active", "true");
+    expect(getFormatRow("another.txt").className).toContain("text-primary");
     expect(scrollIntoViewMock).toHaveBeenCalled();
   });
 
@@ -797,9 +793,7 @@ describe("BankWorkspace intersections behavior", () => {
     const intersectionsTab = await screen.findByRole("button", {
       name: "bank.intersectionsTab",
     });
-    expect(intersectionsTab.className).toContain(
-      "border-b-[color:var(--c-accent)]"
-    );
+    expect(intersectionsTab).toHaveAttribute("data-active", "true");
 
     expect(getFormatRow("current.txt")).toBeInTheDocument();
     expect(getFormatRow("another.txt")).toBeInTheDocument();

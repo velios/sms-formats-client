@@ -14,10 +14,10 @@ interface Props {
 
 const groupPillClassName = (isActive: boolean) =>
   cn(
-    "cursor-pointer rounded-full border px-2.5 py-[3px] font-semibold text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
+    "cursor-pointer rounded-full border px-2 py-1 font-semibold text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     isActive
-      ? "border-[color:var(--c-accent)] bg-[color:var(--c-accent-soft)] text-[color:var(--c-accent)]"
-      : "border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-text-muted)] hover:text-[color:var(--c-accent)]"
+      ? "border-primary bg-primary-soft text-primary"
+      : "border-border bg-card text-muted-foreground hover:text-primary"
   );
 
 export function SnippetsPanel({ onInsert }: Props) {
@@ -32,7 +32,7 @@ export function SnippetsPanel({ onInsert }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex shrink-0 flex-wrap items-center gap-1 border-[color:var(--c-border)] border-b px-2.5 py-2">
+      <div className="ui-panel-inset flex shrink-0 flex-wrap items-center gap-1 border-border border-b py-2">
         <button
           className={groupPillClassName(activeGroup === ALL_GROUPS)}
           onClick={() => setActiveGroup(ALL_GROUPS)}
@@ -51,9 +51,9 @@ export function SnippetsPanel({ onInsert }: Props) {
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="ui-panel-body min-h-0 flex-1 overflow-y-auto">
         {visibleSnippets.length === 0 ? (
-          <div className="p-2 text-[color:var(--c-text-muted)] text-sm">
+          <div className="text-muted-foreground text-xs">
             {t("snippets.empty")}
           </div>
         ) : (

@@ -16,13 +16,15 @@ export function App() {
 
   return (
     <>
-      <div className="fixed inset-0 z-[9999] hidden items-center justify-center bg-[color:var(--c-bg)] p-8 text-center text-[color:var(--c-text-muted)] text-base max-[1199px]:flex">
+      <div className="fixed inset-0 z-[9999] hidden items-center justify-center bg-background p-8 text-center text-base text-muted-foreground max-[1199px]:flex">
         <div>{t("app.desktopOnly")}</div>
       </div>
       <div className="flex h-screen min-w-[1200px] flex-col max-[1199px]:hidden">
         <AppHeader />
-        <main className="flex-1 overflow-hidden p-6">
-          <Suspense fallback={<div>{t("app.loading")}</div>}>
+        <main className="ui-panel-body flex-1 overflow-hidden">
+          <Suspense
+            fallback={<div className="ui-state">{t("app.loading")}</div>}
+          >
             <Routes>
               <Route element={<Dashboard />} path="/" />
               <Route element={<Navigate replace to="/" />} path="/workspace" />

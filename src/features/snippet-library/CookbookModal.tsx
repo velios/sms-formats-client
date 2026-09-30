@@ -20,7 +20,7 @@ export function CookbookModal({ onClose }: Props) {
         <span className="flex items-center gap-3">
           {t("cookbook.title")}
           <a
-            className="font-normal text-[color:var(--c-text-dim)] text-xs"
+            className="font-normal text-muted-foreground text-xs"
             href={COOKBOOK_GITHUB_URL}
             rel="noopener noreferrer"
             target="_blank"

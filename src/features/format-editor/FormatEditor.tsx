@@ -171,7 +171,7 @@ export function FormatEditor({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="ui-panel ui-panel-body ui-state">
         <Spinner />
         <span>{t("app.loading")}</span>
       </div>
@@ -179,7 +179,7 @@ export function FormatEditor({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+    <div className="ui-panel-stack h-full overflow-hidden">
       {headContentError && (
         <StatusBadge variant="error">{headContentError}</StatusBadge>
       )}
@@ -187,10 +187,7 @@ export function FormatEditor({
       {mode === "raw" && parseErrors.length > 0 && (
         <div className="flex flex-col gap-1">
           {parseErrors.map((err, i) => (
-            <div
-              className="rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-2 text-[color:var(--c-warning)] text-xs"
-              key={i}
-            >
+            <div className="ui-notice" data-tone="warning" key={i}>
               {err}
             </div>
           ))}
@@ -227,11 +224,9 @@ export function FormatEditor({
         </StatusBadge>
       )}
       {mode === "raw" && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
-          <div className="flex min-h-10 shrink-0 items-center border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-elevated)] px-4 py-1 font-semibold text-[12px] text-[color:var(--c-text-muted)] uppercase tracking-[0.5px]">
-            {t("editor.raw")}
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto p-4">
+        <div className="ui-panel flex min-h-0 flex-1 flex-col">
+          <div className="ui-panel-heading shrink-0">{t("editor.raw")}</div>
+          <div className="ui-panel-body min-h-0 flex-1 overflow-auto">
             <Textarea
               className="min-h-[20rem] font-mono"
               onChange={(e) => handleRawChange(e.target.value)}

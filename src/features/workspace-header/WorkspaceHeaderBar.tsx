@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { config } from "@/config";
 import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
-import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 
 export type WorkspaceEditorMode = "structured" | "raw";
@@ -23,20 +22,11 @@ interface Props {
 }
 
 const headerExternalLinkClassName =
-  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
+  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-muted-foreground no-underline hover:bg-primary-soft hover:text-primary hover:no-underline";
 
-const headerModeTabClassName = (isActive: boolean) =>
-  cn(
-    "inline-flex h-[26px] cursor-pointer items-center whitespace-nowrap rounded-[5px] border px-3 font-medium text-[12.5px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
-    isActive
-      ? "border-[color:var(--c-border)] bg-white text-[color:var(--c-accent)] shadow-[0_1px_2px_rgba(51,51,51,0.10)]"
-      : "border-transparent bg-transparent text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
-  );
+const headerActionButtonClassName = "gap-1 whitespace-nowrap";
 
-const headerActionButtonClassName =
-  "h-[28px] gap-1.5 whitespace-nowrap px-2 text-[12.5px]";
-
-const headerDividerClassName = "h-5 w-px shrink-0 bg-[color:var(--c-border)]";
+const headerDividerClassName = "h-5 w-px shrink-0 bg-border";
 
 export function WorkspaceHeaderBar({
   bankName,
@@ -55,9 +45,9 @@ export function WorkspaceHeaderBar({
   const showModeToggle = !showSenders && Boolean(selectedFile);
 
   return (
-    <div className="flex h-13 shrink-0 items-center rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] px-[14px]">
+    <div className="ui-panel ui-panel-inset flex h-11 shrink-0 items-center">
       <div className="flex w-[calc(clamp(264px,19vw,340px)+2px)] min-w-0 shrink-0 items-center gap-2 pr-4">
-        <h2 className="m-0 truncate font-semibold text-[15px]">{bankName}</h2>
+        <h2 className="m-0 truncate font-semibold text-base">{bankName}</h2>
         <a
           aria-label={t("bank.openBankFolderInRepo")}
           className={headerExternalLinkClassName}
@@ -70,16 +60,18 @@ export function WorkspaceHeaderBar({
         </a>
       </div>
       {showModeToggle && (
-        <div className="flex shrink-0 gap-[3px] rounded-[7px] border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-[3px]">
+        <div className="ui-segmented" role="group">
           <button
-            className={headerModeTabClassName(mode === "structured")}
+            aria-pressed={mode === "structured"}
+            className="ui-segment"
             onClick={() => onModeChange("structured")}
             type="button"
           >
             {t("editor.structured")}
           </button>
           <button
-            className={headerModeTabClassName(mode === "raw")}
+            aria-pressed={mode === "raw"}
+            className="ui-segment"
             onClick={() => onModeChange("raw")}
             type="button"
           >
@@ -249,7 +241,7 @@ function WorkspaceFileControls({
     <div className="ml-4 flex min-w-0 flex-1 items-center gap-2">
       <div className={headerDividerClassName} />
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        <span className="truncate font-medium font-mono text-[13px]">
+        <span className="truncate font-medium font-mono text-sm">
           {fileName}
         </span>
         <a
@@ -318,7 +310,7 @@ function WorkspaceFileControls({
           <span aria-hidden="true">↷</span>
           {t("editor.redo")}
         </Button>
-        <div className="mx-1.5 h-[18px] w-px shrink-0 bg-[color:var(--c-border)]" />
+        <div className="mx-1.5 h-[18px] w-px shrink-0 bg-border" />
         {!isSenders && (
           <Button
             aria-label={t("editor.deleteFormat")}

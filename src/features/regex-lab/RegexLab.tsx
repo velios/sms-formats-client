@@ -59,15 +59,6 @@ type ExampleSourceMode = "examples" | "intersections";
 
 import { ColumnPickerModal } from "./ColumnPickerModal";
 import { PatternExplanationPane } from "./PatternExplanationPane";
-import {
-  highlightModeSegmentClassName,
-  regexLabHeaderActionsClassName,
-  regexLabHeaderButtonClassName,
-  regexLabPanelBodyClassName,
-  regexLabPanelClassName,
-  regexLabPanelHeaderClassName,
-  regexLabTabClassName,
-} from "./regex-styles";
 import { MatchInfoPanel, MatchOverlayTextarea } from "./SmsMatchView";
 
 function WhitespacePlusToggle() {
@@ -78,12 +69,12 @@ function WhitespacePlusToggle() {
   );
   return (
     <label
-      className="flex cursor-pointer select-none items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--c-border)] px-2 py-1 text-[color:var(--c-text-dim)] text-xs"
+      className="flex cursor-pointer select-none items-center gap-1.5 rounded-md border border-border px-2 py-1 text-muted-foreground text-xs"
       title={t("editor.whitespacePlusHint")}
     >
       <input
         checked={whitespacePlusMode}
-        className="accent-[color:var(--c-border-focus)]"
+        className="accent-[color:var(--ring)]"
         onChange={(e) => setWhitespacePlusMode(e.target.checked)}
         type="checkbox"
       />
@@ -487,21 +478,19 @@ export function RegexLab({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ResizablePanels side="right">
-        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
-          <div className={cn(regexLabPanelClassName, "shrink-0")}>
-            <div className={regexLabPanelHeaderClassName}>
+        <div className="ui-panel-stack min-w-0 overflow-hidden">
+          <div className={cn("ui-panel", "shrink-0")}>
+            <div className="ui-panel-heading">
               <div className="flex items-center gap-3">
                 <span>{t("editor.regex")}</span>
                 <div
                   aria-label={t("editor.highlightModeLabel")}
-                  className="flex items-center overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)]"
+                  className="ui-segmented"
                   role="group"
                 >
                   <button
                     aria-pressed={highlightMode === "groups"}
-                    className={highlightModeSegmentClassName(
-                      highlightMode === "groups"
-                    )}
+                    className="ui-segment"
                     onClick={() => {
                       setHighlightMode("groups");
                       setRightPaneTab("snippets");
@@ -513,9 +502,7 @@ export function RegexLab({
                   </button>
                   <button
                     aria-pressed={highlightMode === "parts"}
-                    className={highlightModeSegmentClassName(
-                      highlightMode === "parts"
-                    )}
+                    className="ui-segment"
                     onClick={() => {
                       setHighlightMode("parts");
                       setRightPaneTab("explanation");
@@ -528,9 +515,8 @@ export function RegexLab({
                 </div>
                 <WhitespacePlusToggle />
               </div>
-              <div className={regexLabHeaderActionsClassName}>
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
-                  className={regexLabHeaderButtonClassName}
                   onClick={() => setIsCookbookOpen(true)}
                   size="sm"
                   type="button"
@@ -539,7 +525,6 @@ export function RegexLab({
                   {t("cookbook.open")}
                 </Button>
                 <Button
-                  className={regexLabHeaderButtonClassName}
                   onClick={() => setIsFormatRulesOpen(true)}
                   size="sm"
                   type="button"
@@ -548,7 +533,6 @@ export function RegexLab({
                   {t("formatRules.open")}
                 </Button>
                 <Button
-                  className={regexLabHeaderButtonClassName}
                   onClick={onOpenSmsByTemplate}
                   size="sm"
                   type="button"
@@ -558,7 +542,7 @@ export function RegexLab({
                 </Button>
               </div>
             </div>
-            <div className="p-4">
+            <div className="ui-panel-body">
               <RegexPatternEditor
                 activeTokenIndex={editorActiveTokenIndex}
                 canHighlight={explanation.canHighlightPattern}
@@ -584,14 +568,13 @@ export function RegexLab({
             </div>
           </div>
 
-          <div className={cn(regexLabPanelClassName, "flex shrink-0 flex-col")}>
-            <div className={regexLabPanelHeaderClassName}>
+          <div className={cn("ui-panel", "flex shrink-0 flex-col")}>
+            <div className="ui-panel-heading">
               <div className="flex items-center gap-2">
                 {t("editor.testString")}
                 {!isShowingIntersectionExamples && (
                   <Button
                     aria-label={t("editor.addExample")}
-                    className={regexLabHeaderButtonClassName}
                     disabled={readOnly}
                     onClick={onAddExample}
                     size="sm"
@@ -602,10 +585,9 @@ export function RegexLab({
                   </Button>
                 )}
               </div>
-              <div className={regexLabHeaderActionsClassName}>
+              <div className="flex flex-wrap items-center gap-2">
                 {hasIntersectionExamples && (
                   <Button
-                    className={regexLabHeaderButtonClassName}
                     onClick={handleToggleExampleSource}
                     size="sm"
                     type="button"
@@ -617,7 +599,6 @@ export function RegexLab({
                   </Button>
                 )}
                 <Button
-                  className={regexLabHeaderButtonClassName}
                   onClick={onOpenTemplateBySms}
                   size="sm"
                   type="button"
@@ -625,12 +606,7 @@ export function RegexLab({
                 >
                   {t("quickCheck.openTemplateBySms")}
                 </Button>
-                <Button
-                  asChild
-                  className={regexLabHeaderButtonClassName}
-                  size="sm"
-                  variant="ghost"
-                >
+                <Button asChild size="sm" variant="ghost">
                   <a
                     href={regex101Url}
                     rel="noopener noreferrer"
@@ -641,13 +617,12 @@ export function RegexLab({
                 </Button>
               </div>
             </div>
-            <div className="flex flex-wrap border-[color:var(--c-border)] border-b">
+            <div className="flex flex-wrap border-border border-b">
               {visibleExampleTexts.map((_, i) => (
                 <div className="flex items-center" key={i}>
                   <button
-                    className={regexLabTabClassName(
-                      i === visibleActiveExampleIndex
-                    )}
+                    className="ui-tab"
+                    data-active={i === visibleActiveExampleIndex}
                     onClick={() => {
                       if (isShowingIntersectionExamples) {
                         setActiveIntersectionExampleIndex(i);
@@ -670,8 +645,8 @@ export function RegexLab({
                         className={cn(
                           "ml-1",
                           exampleMatchStates[i]?.matched
-                            ? "text-[color:var(--c-success)]"
-                            : "text-[color:var(--c-error)]"
+                            ? "text-success"
+                            : "text-destructive"
                         )}
                       >
                         {exampleMatchStates[i]?.matched ? "✓" : "✗"}
@@ -683,7 +658,7 @@ export function RegexLab({
                     onOpenIntersectionFileInApp && (
                       <Button
                         aria-label={`${t("quickCheck.openInApp")}: ${intersectionExamples[i]!.fileName}`}
-                        className="px-1 py-0.5 text-[11px] text-[color:var(--c-text-dim)]"
+                        className="px-1 py-0.5 text-muted-foreground text-xs"
                         onClick={() =>
                           onOpenIntersectionFileInApp(
                             intersectionExamples[i]!.filePath
@@ -701,7 +676,7 @@ export function RegexLab({
                     visibleExampleTexts.length > 1 && (
                       <Button
                         aria-label={t("editor.removeExample")}
-                        className="px-1 py-0.5 text-[11px] text-[color:var(--c-text-dim)]"
+                        className="px-1 py-0.5 text-muted-foreground text-xs"
                         disabled={readOnly}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -719,7 +694,7 @@ export function RegexLab({
               ))}
             </div>
 
-            <div className={regexLabPanelBodyClassName}>
+            <div className="ui-panel-body">
               <MatchOverlayTextarea
                 activeMatchRange={activeMatchRange}
                 hoveredGroup={hoveredGroup}
@@ -734,13 +709,8 @@ export function RegexLab({
             </div>
           </div>
 
-          <div
-            className={cn(
-              regexLabPanelClassName,
-              "flex min-h-0 flex-1 flex-col"
-            )}
-          >
-            <div className={regexLabPanelHeaderClassName}>
+          <div className={cn("ui-panel", "flex min-h-0 flex-1 flex-col")}>
+            <div className="ui-panel-heading">
               {t("editor.matchInfo").toUpperCase()}
             </div>
             <MatchInfoPanel

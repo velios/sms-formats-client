@@ -26,21 +26,21 @@ interface OpenPullRequestItem {
 }
 
 const sourceNavDropdownClassName =
-  "z-[120] max-h-[min(420px,calc(100vh-120px))] overflow-y-auto rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] shadow-[var(--shadow-md)]";
+  "z-[120] max-h-[min(420px,calc(100vh-120px))] overflow-y-auto rounded-md border border-border bg-card shadow-[var(--shadow-md)]";
 
 const sourceNavOptionClassName = (isActive: boolean) =>
   cn(
-    "flex w-full items-center gap-2 bg-transparent px-3 py-2 text-left transition-colors",
+    "ui-panel-inset flex w-full items-center gap-2 bg-transparent py-2 text-left transition-colors",
     isActive
-      ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
-      : "outline-none hover:bg-[color:var(--c-bg-hover)] data-highlighted:bg-[color:var(--c-bg-hover)]"
+      ? "bg-accent text-primary"
+      : "outline-none hover:bg-accent data-highlighted:bg-accent"
   );
 
 const sourceNavLabelClassName =
-  "max-w-[360px] overflow-hidden text-ellipsis whitespace-nowrap bg-transparent p-0 text-left text-[color:var(--c-text)] hover:text-[color:var(--c-accent)]";
+  "max-w-[360px] overflow-hidden text-ellipsis whitespace-nowrap bg-transparent p-0 text-left text-foreground hover:text-primary";
 
 const sourceNavExternalLinkClassName =
-  "ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
+  "ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-muted-foreground no-underline hover:bg-primary-soft hover:text-primary hover:no-underline";
 
 function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => b.number - a.number);
@@ -129,7 +129,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
               style={{ minWidth: 320 }}
             >
               {isReposFetching && (
-                <div className="px-3 py-2 text-[color:var(--c-text-muted)] text-sm">
+                <div className="ui-panel-inset py-2 text-muted-foreground text-sm">
                   {t("app.loading")}
                 </div>
               )}
@@ -162,7 +162,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
 
       {!isHome && (
         <>
-          <span className="mr-0.5 text-[color:var(--c-text-dim)]">/</span>
+          <span className="mr-0.5 text-muted-foreground">/</span>
           <div className="relative flex min-w-0 items-center gap-1">
             <DropdownMenu.Root
               onOpenChange={(open) => setOpenMenu(open ? "source" : null)}
@@ -195,7 +195,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                 style={{ minWidth: 420 }}
               >
                 {isPRsFetching && (
-                  <div className="px-3 py-2 text-[color:var(--c-text-muted)] text-sm">
+                  <div className="ui-panel-inset py-2 text-muted-foreground text-sm">
                     {t("app.loading")}
                   </div>
                 )}
@@ -217,7 +217,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                         }}
                         type="button"
                       >
-                        <span className="text-[color:var(--c-text-muted)] text-sm">
+                        <span className="text-muted-foreground text-sm">
                           #{pullRequest.number}
                         </span>
                         <span className="truncate text-sm">
@@ -227,7 +227,7 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                     </DropdownMenu.Item>
                   ))}
                 {!isPRsFetching && sortedPRs.length === 0 && (
-                  <div className="px-3 py-2 text-[color:var(--c-text-muted)] text-sm">
+                  <div className="ui-panel-inset py-2 text-muted-foreground text-sm">
                     {t("bank.noResults")}
                   </div>
                 )}

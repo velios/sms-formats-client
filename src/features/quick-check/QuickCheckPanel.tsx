@@ -7,7 +7,6 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { recognizeSms, regexesBySms, smsesByRegex } from "@/domain/format";
 import type { RepoRef } from "@/domain/types";
-import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
 import {
   type LoadedFormat,
@@ -87,14 +86,6 @@ type QuickCheckRunState =
       summary: SmsByTemplateSummary;
       results: SmsByTemplateResult[];
     };
-
-const quickCheckTabClassName = (isActive: boolean) =>
-  cn(
-    "cursor-pointer rounded-md border px-3 py-1.5 font-medium text-xs transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]",
-    isActive
-      ? "border-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-2px_0_var(--c-accent)]"
-      : "border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
-  );
 
 interface Props {
   bankName: string;
@@ -426,9 +417,11 @@ export function QuickCheckPanel({
       onClose={onClose}
       title={t("quickCheck.title", { bank: bankName })}
     >
-      <div className="mb-4 flex gap-1" role="tablist">
+      <div className="ui-tabs" role="tablist">
         <button
-          className={quickCheckTabClassName(mode === "template-by-sms")}
+          aria-selected={mode === "template-by-sms"}
+          className="ui-tab"
+          data-active={mode === "template-by-sms"}
           onClick={() => handleSwitchMode("template-by-sms")}
           role="tab"
           type="button"
@@ -436,7 +429,9 @@ export function QuickCheckPanel({
           {t("quickCheck.openTemplateBySms")}
         </button>
         <button
-          className={quickCheckTabClassName(mode === "sms-by-template")}
+          aria-selected={mode === "sms-by-template"}
+          className="ui-tab"
+          data-active={mode === "sms-by-template"}
           onClick={() => handleSwitchMode("sms-by-template")}
           role="tab"
           type="button"
@@ -446,11 +441,8 @@ export function QuickCheckPanel({
       </div>
 
       {mode === "template-by-sms" ? (
-        <div className="flex flex-col gap-1">
-          <label
-            className="text-[color:var(--c-text-muted)] text-xs"
-            htmlFor={inputId}
-          >
+        <div className="ui-field">
+          <label className="ui-field-label" htmlFor={inputId}>
             {t("quickCheck.smsLabel")}
           </label>
           <Textarea
@@ -460,11 +452,11 @@ export function QuickCheckPanel({
             placeholder={t("quickCheck.smsPlaceholder")}
             value={smsText}
           />
-          <div className="text-[color:var(--c-text-dim)] text-xs">
+          <div className="ui-field-hint">
             {t("quickCheck.scopeInfo", { count: formatPaths.length })}
           </div>
           {activeFormatContext && (
-            <div className="text-[color:var(--c-text-dim)] text-xs">
+            <div className="ui-field-hint">
               {t("quickCheck.activeSmsSource", {
                 file: extractFormatFileName(activeFormatContext.filePath),
                 index: activeFormatContext.activeExampleIndex + 1,
@@ -473,11 +465,8 @@ export function QuickCheckPanel({
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-1">
-          <label
-            className="text-[color:var(--c-text-muted)] text-xs"
-            htmlFor={inputId}
-          >
+        <div className="ui-field">
+          <label className="ui-field-label" htmlFor={inputId}>
             {t("quickCheck.templateRegexLabel")}
           </label>
           <Textarea
@@ -487,11 +476,11 @@ export function QuickCheckPanel({
             placeholder={t("quickCheck.templateRegexPlaceholder")}
             value={templateRegex}
           />
-          <div className="text-[color:var(--c-text-dim)] text-xs">
+          <div className="ui-field-hint">
             {t("quickCheck.scopeInfo", { count: formatPaths.length })}
           </div>
           {activeFormatContext && (
-            <div className="text-[color:var(--c-text-dim)] text-xs">
+            <div className="ui-field-hint">
               {t("quickCheck.activeTemplateSource", {
                 file: extractFormatFileName(activeFormatContext.filePath),
               })}
@@ -503,7 +492,8 @@ export function QuickCheckPanel({
       {errorMessage && (
         <div
           aria-live="assertive"
-          className="mt-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs"
+          className="ui-notice"
+          data-tone="error"
           role="alert"
         >
           {errorMessage}
@@ -511,11 +501,7 @@ export function QuickCheckPanel({
       )}
 
       {templateBySmsState && (
-        <div
-          aria-live="polite"
-          className="mt-4 flex flex-wrap gap-1"
-          role="status"
-        >
+        <div aria-live="polite" className="flex flex-wrap gap-1" role="status">
           <StatusBadge variant="info">
             {t("quickCheck.summaryChecked", {
               checked: templateBySmsState.summary.checkedRegexes,
@@ -552,11 +538,7 @@ export function QuickCheckPanel({
       )}
 
       {smsByTemplateState && (
-        <div
-          aria-live="polite"
-          className="mt-4 flex flex-wrap gap-1"
-          role="status"
-        >
+        <div aria-live="polite" className="flex flex-wrap gap-1" role="status">
           <StatusBadge variant="info">
             {t("quickCheck.summaryCheckedSms", {
               checked: smsByTemplateState.summary.checkedSmsCount,
@@ -592,18 +574,15 @@ export function QuickCheckPanel({
         </div>
       )}
 
-      <div className="mt-4 flex max-h-[420px] flex-col gap-2 overflow-y-auto">
+      <div className="flex max-h-[420px] flex-col gap-2 overflow-y-auto">
         {templateBySmsState && templateBySmsState.results.length === 0 && (
-          <div className="text-[color:var(--c-text-muted)] text-sm">
+          <div className="text-muted-foreground text-sm">
             {t("quickCheck.noRegexes")}
           </div>
         )}
 
         {templateBySmsState?.results.map((result) => (
-          <div
-            className="rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-2"
-            key={result.filePath}
-          >
+          <div className="ui-card bg-muted" key={result.filePath}>
             <div className="mb-1 flex items-center gap-1">
               <span className="font-mono text-sm">{result.fileName}</span>
               <StatusBadge
@@ -627,20 +606,20 @@ export function QuickCheckPanel({
                   : t("quickCheck.sourceRemote")}
               </StatusBadge>
             </div>
-            <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[color:var(--c-text)] text-xs leading-6">
+            <pre className="m-0 whitespace-pre-wrap break-words font-mono text-foreground text-xs leading-6">
               {result.regex}
             </pre>
             {result.status === "match" && sourceRefName && (
               <div className="mt-1 flex items-center gap-2">
                 <button
-                  className="border-0 bg-transparent p-0 text-[color:var(--c-accent)] text-xs hover:underline"
+                  className="border-0 bg-transparent p-0 text-primary text-xs hover:underline"
                   onClick={() => handleOpenInApp(result.filePath)}
                   type="button"
                 >
                   {t("quickCheck.openInApp")}
                 </button>
                 <a
-                  className="text-[color:var(--c-accent)] text-xs no-underline hover:underline"
+                  className="text-primary text-xs no-underline hover:underline"
                   href={buildGitHubFileLink({
                     filePath: result.filePath,
                     repository,
@@ -654,7 +633,7 @@ export function QuickCheckPanel({
               </div>
             )}
             {result.errorMessage && (
-              <div className="text-[color:var(--c-text-muted)] text-sm">
+              <div className="text-muted-foreground text-sm">
                 {result.errorMessage}
               </div>
             )}
@@ -662,16 +641,13 @@ export function QuickCheckPanel({
         ))}
 
         {smsByTemplateState && smsByTemplateState.results.length === 0 && (
-          <div className="text-[color:var(--c-text-muted)] text-sm">
+          <div className="text-muted-foreground text-sm">
             {t("quickCheck.noFormats")}
           </div>
         )}
 
         {smsByTemplateState?.results.map((result) => (
-          <div
-            className="rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-2"
-            key={result.filePath}
-          >
+          <div className="ui-card bg-muted" key={result.filePath}>
             <div className="mb-1 flex items-center gap-1">
               <span className="font-mono text-sm">{result.fileName}</span>
               <StatusBadge
@@ -694,21 +670,21 @@ export function QuickCheckPanel({
               </StatusBadge>
             </div>
             {result.firstMatchedExample && (
-              <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[color:var(--c-text)] text-xs leading-6">
+              <pre className="m-0 whitespace-pre-wrap break-words font-mono text-foreground text-xs leading-6">
                 {result.firstMatchedExample}
               </pre>
             )}
             {result.status === "match" && sourceRefName && (
               <div className="mt-1 flex items-center gap-2">
                 <button
-                  className="border-0 bg-transparent p-0 text-[color:var(--c-accent)] text-xs hover:underline"
+                  className="border-0 bg-transparent p-0 text-primary text-xs hover:underline"
                   onClick={() => handleOpenInApp(result.filePath)}
                   type="button"
                 >
                   {t("quickCheck.openInApp")}
                 </button>
                 <a
-                  className="text-[color:var(--c-accent)] text-xs no-underline hover:underline"
+                  className="text-primary text-xs no-underline hover:underline"
                   href={buildGitHubFileLink({
                     filePath: result.filePath,
                     repository,
@@ -725,7 +701,7 @@ export function QuickCheckPanel({
         ))}
       </div>
 
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="ui-dialog-actions justify-end">
         <Button onClick={onClose} type="button" variant="default">
           {t("app.close")}
         </Button>

@@ -490,7 +490,6 @@
   },
   "workspace": {
     "selectedFileRemoved": "The selected file is absent from the working revision: {{path}}",
-    "checkUpdates": "Check for updates",
     "retrySync": "Retry synchronization",
     "recoveryUnavailable": "The original revision could not be restored. Drafts are preserved; the new revision has not been applied.",
     "unavailable": {

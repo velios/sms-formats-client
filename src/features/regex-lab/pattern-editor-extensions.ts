@@ -365,8 +365,8 @@ const groupBandClassMap = [
 const fullMatchBandClass =
   "rounded-[2px] bg-[color:var(--c-group-0)] shadow-[inset_0_-2px_0_var(--c-group-border-0)] font-semibold";
 const activeTokenOutlineClass =
-  "rounded-[2px] outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]";
-const selectedGroupFontClass = "text-[16px]";
+  "rounded-[2px] outline outline-2 outline-primary outline-offset-[-1px]";
+const selectedGroupFontClass = "text-base";
 
 function getGroupBandClass(group: number): string {
   if (group <= 0) {
@@ -384,8 +384,8 @@ const baseTheme = EditorView.theme({
   },
   ".cm-content": {
     padding: "8px 4px",
-    caretColor: "var(--c-text)",
-    color: "var(--c-text)",
+    caretColor: "var(--foreground)",
+    color: "var(--foreground)",
     lineHeight: "1.4",
     fontFamily: "var(--font-mono)",
   },
@@ -401,7 +401,7 @@ const baseTheme = EditorView.theme({
     fontFamily: "var(--font-mono)",
   },
   ".cm-cursor": {
-    borderLeftColor: "var(--c-text)",
+    borderLeftColor: "var(--foreground)",
     borderLeftWidth: "2px",
     boxShadow: "0 0 0 1px var(--c-caret-halo)",
   },
@@ -419,8 +419,8 @@ const baseTheme = EditorView.theme({
     boxShadow: "none",
   },
   ".cm-wsplus-literal": {
-    color: "var(--c-warning)",
-    textDecoration: "underline dotted var(--c-warning)",
+    color: "var(--warning)",
+    textDecoration: "underline dotted var(--warning)",
     textUnderlineOffset: "2px",
   },
 });

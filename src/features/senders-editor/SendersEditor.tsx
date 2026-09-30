@@ -52,7 +52,7 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="ui-panel ui-panel-body ui-state">
         <Spinner />
         <span>{t("app.loading")}</span>
       </div>
@@ -60,16 +60,14 @@ export function SendersEditor({ bankPath, readOnly = false }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+    <div className="ui-panel-stack h-full overflow-hidden">
       {headContentError && (
         <StatusBadge variant="error">{headContentError}</StatusBadge>
       )}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
-        <div className="flex min-h-10 shrink-0 items-center border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-elevated)] px-4 py-1 font-semibold text-[12px] text-[color:var(--c-text-muted)] uppercase tracking-[0.5px]">
-          {t("bank.senders")}
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-2 p-4">
-          <div className="text-[color:var(--c-text-muted)] text-xs">
+      <div className="ui-panel flex min-h-0 flex-1 flex-col">
+        <div className="ui-panel-heading shrink-0">{t("bank.senders")}</div>
+        <div className="ui-panel-body flex min-h-0 flex-1 flex-col gap-2">
+          <div className="text-muted-foreground text-xs">
             {t("editor.sendersHint")}
           </div>
           <Textarea

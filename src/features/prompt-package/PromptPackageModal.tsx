@@ -68,17 +68,17 @@ function PreviewSummary(params: {
       : t("promptPackage.tokens", { count: summary.estimatedTokens });
 
   return (
-    <div className="flex flex-col gap-1 text-[13px]">
+    <div className="flex flex-col gap-1 text-sm">
       {summary.layers.map((layer) => (
         <div className="flex justify-between gap-3" key={layer.layer}>
-          <span className="text-[color:var(--c-text-muted)]">
+          <span className="text-muted-foreground">
             {t(`promptPackage.layer.${layer.layer}`)}
           </span>
           <span>{layer.fileCount}</span>
         </div>
       ))}
       <div className="flex justify-between gap-3">
-        <span className="text-[color:var(--c-text-muted)]">
+        <span className="text-muted-foreground">
           {t("promptPackage.documentsIncluded")}
         </span>
         <span className="text-right">
@@ -87,7 +87,7 @@ function PreviewSummary(params: {
             : t("promptPackage.documentsNone")}
         </span>
       </div>
-      <div className="mt-1 border-[color:var(--c-border)] border-t pt-1 text-[color:var(--c-text-muted)]">
+      <div className="mt-1 border-border border-t pt-1 text-muted-foreground">
         {t("promptPackage.totals", {
           files: summary.fileCount,
           kilobytes,
@@ -162,16 +162,13 @@ export function PromptPackageModal({
       onClose={onClose}
       title={t("promptPackage.title", { bank: bankName })}
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-        <div className="flex flex-col gap-1.5">
-          <label
-            className="font-medium text-[13px] text-[color:var(--c-text-muted)]"
-            htmlFor={taskId}
-          >
+      <div className="ui-panel-stack flex-1 overflow-y-auto">
+        <div className="ui-field">
+          <label className="ui-field-label font-medium" htmlFor={taskId}>
             {t("promptPackage.taskLabel")}
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[12px] text-[color:var(--c-text-dim)]">
+            <span className="text-muted-foreground text-xs">
               {t("promptPackage.presetsLabel")}
             </span>
             {PROMPT_PRESETS.map((preset) => (
@@ -196,18 +193,18 @@ export function PromptPackageModal({
           />
         </div>
 
-        <fieldset className="flex flex-col gap-1.5 border-0 p-0">
-          <legend className="mb-1.5 font-medium text-[13px] text-[color:var(--c-text-muted)]">
+        <fieldset className="ui-field border-0 p-0">
+          <legend className="ui-field-label mb-1 font-medium">
             {t("promptPackage.documentsLabel")}
           </legend>
           {DOCUMENT_KEYS.map((key) => (
             <label
-              className="flex cursor-pointer select-none items-center gap-2 text-[13px]"
+              className="flex cursor-pointer select-none items-center gap-2 text-sm"
               key={key}
             >
               <input
                 checked={documents[key]}
-                className="accent-[color:var(--c-border-focus)]"
+                className="accent-[color:var(--ring)]"
                 onChange={(event) =>
                   promptPackage.toggleDocument(key, event.target.checked)
                 }
@@ -218,15 +215,15 @@ export function PromptPackageModal({
           ))}
         </fieldset>
 
-        <div className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] p-3">
-          <div className="font-semibold text-[12px] text-[color:var(--c-text-muted)] uppercase tracking-[0.5px]">
+        <div className="ui-card flex flex-col gap-2 bg-muted">
+          <div className="font-semibold text-muted-foreground text-xs uppercase tracking-[0.5px]">
             {t("promptPackage.previewTitle")}
           </div>
           {errorMessage && (
             <div className="flex flex-col items-start gap-2">
               <StatusBadge variant="error">{errorMessage}</StatusBadge>
               {promptPackage.errorDetail && (
-                <span className="text-[12px] text-[color:var(--c-text-dim)]">
+                <span className="text-muted-foreground text-xs">
                   {promptPackage.errorDetail}
                 </span>
               )}
@@ -244,7 +241,7 @@ export function PromptPackageModal({
             </div>
           )}
           {promptPackage.isBuilding && (
-            <div className="flex items-center gap-2 text-[13px] text-[color:var(--c-text-muted)]">
+            <div className="ui-state">
               <Spinner />
               {t("promptPackage.building")}
             </div>
@@ -255,7 +252,7 @@ export function PromptPackageModal({
         </div>
       </div>
 
-      <div className="mt-4 flex shrink-0 items-center gap-2 border-[color:var(--c-border)] border-t pt-4">
+      <div className="ui-dialog-actions border-border border-t pt-3">
         <Button
           disabled={!result || promptPackage.isBuilding}
           onClick={() => void handleCopy()}
