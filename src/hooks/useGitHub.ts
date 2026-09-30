@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchOpenPRs, fetchSourceRepoForks } from "@/domain/github";
+import { useSyncExternalStore } from "react";
 import type { RepoRef } from "@/domain/types";
+import {
+  fetchOpenPRs,
+  fetchPullRequestMetadata,
+  fetchSourceRepoForks,
+  getGitHubAuthChangeVersion,
+  subscribeGitHubAuthChange,
+} from "@/infrastructure/github";
 import { useDraftStore, useSourceStore } from "@/store";
 import { clearWorkspaceSession } from "@/store/workspace-session";
 
@@ -19,13 +26,44 @@ export type OpenPullRequests = Awaited<ReturnType<typeof fetchOpenPRs>>;
 
 export function useOpenPRs(enabled = true) {
   const repository = useSourceStore((state) => state.repository);
-  return useQuery({
+  const list = useQuery({
     queryKey: openPrsQueryKey(repository),
     queryFn: () => fetchOpenPRs(repository),
     enabled,
     staleTime: SOURCE_CACHE_STALE_MS,
     gcTime: SOURCE_CACHE_GC_MS,
   });
+  const authVersion = useSyncExternalStore(
+    subscribeGitHubAuthChange,
+    getGitHubAuthChangeVersion,
+    getGitHubAuthChangeVersion
+  );
+  const metadata = useQuery({
+    queryKey: [
+      "open-pr-metadata",
+      repoKey(repository),
+      authVersion,
+      list.data?.map((pr) => `${pr.number}:${pr.headSha}`),
+    ],
+    queryFn: async () => {
+      const prs = list.data ?? [];
+      const result: OpenPullRequests = [];
+      for (let start = 0; start < prs.length; start += 4) {
+        result.push(
+          ...(await Promise.all(
+            prs
+              .slice(start, start + 4)
+              .map((pr) => fetchPullRequestMetadata(pr, repository))
+          ))
+        );
+      }
+      return result;
+    },
+    enabled: enabled && Boolean(list.data?.length),
+    staleTime: 30_000,
+    retry: false,
+  });
+  return { ...list, data: metadata.data ?? list.data };
 }
 
 export function useAvailableSourceRepos(enabled = true) {
@@ -43,9 +81,6 @@ export function useSwitchRepository() {
   const clearDrafts = useDraftStore((state) => state.clearAll);
   const setRepository = useSourceStore((state) => state.setRepository);
   const setSource = useSourceStore((state) => state.setSource);
-  const setSourceChangedFiles = useSourceStore(
-    (state) => state.setSourceChangedFiles
-  );
   const setTree = useSourceStore((state) => state.setTree);
   const setBanks = useSourceStore((state) => state.setBanks);
   const setError = useSourceStore((state) => state.setError);
@@ -62,7 +97,6 @@ export function useSwitchRepository() {
     clearWorkspaceSession();
     setRepository(nextRepository);
     setSource(null);
-    setSourceChangedFiles([]);
     setTree([]);
     setBanks([]);
     setError(null);

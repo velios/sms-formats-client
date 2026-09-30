@@ -1,6 +1,12 @@
 import { Octokit } from "@octokit/rest";
 import { config } from "@/config";
-import type { BankInfo, FileEntry, PullRequestLabel, RepoRef } from "../types";
+import {
+  type PullRequestChangedFile,
+  type PullRequestWorkspaceResolution,
+  resolvePullRequestWorkspaceSnapshot,
+} from "@/domain/pull-request-workspace";
+import type { FileEntry, PullRequestLabel, RepoRef } from "@/domain/types";
+import { queryClient } from "@/lib/query-client";
 import { decodeBase64Utf8, encodeBase64Utf8 } from "./encoding";
 
 const defaultRepoRef: RepoRef = {
@@ -18,6 +24,7 @@ const PR_APPROVAL_PERMISSION_STORAGE_KEY =
   "sms-formats-pr-approval-permissions";
 
 interface PullRequestApprovalPermissionEntry {
+  checkedAt: number;
   canApprove: boolean;
 }
 
@@ -45,10 +52,9 @@ type GitHubAuthChangeListener = () => void;
 
 const VALIDATOR_CHECK_NAME_FRAGMENT = "validate";
 const MAX_VALIDATOR_ERROR_LINES = 6;
-const VALIDATE_FORMATS_STEP_NAME = "validate formats";
 
 interface ValidatorFailureResult {
-  failedValidationCount: number;
+  failedValidationCount: number | null;
   validationErrors: string[];
   validationUrl: string | null;
 }
@@ -63,114 +69,8 @@ interface CommitAuthorMetadata {
   committer?: CommitAuthorIdentity | null;
 }
 
-export interface PullRequestChangedFile {
-  kind: "add" | "modify" | "delete" | "rename";
-  path: string;
-  oldPath?: string;
-}
-
-export type PullRequestWorkspaceResolution =
-  | {
-      status: "supported";
-      repository: RepoRef;
-      prNumber: number;
-      headSha: string;
-      baseSha: string;
-      bankPath: string;
-      writable: boolean;
-      readOnlyReason: "no-write-access" | null;
-      changedFiles: PullRequestChangedFile[];
-    }
-  | {
-      status: "unsupported";
-      reason: "no-bank-changes" | "multiple-banks" | "outside-bank-scope";
-    }
-  | {
-      status: "unavailable";
-      reason: "not-found" | "closed" | "merged" | "inaccessible";
-    }
-  | {
-      status: "transient-error";
-      reason: "network" | "timeout" | "rate-limit" | "unknown";
-    };
-
-interface PullRequestWorkspaceSnapshot {
-  repository: RepoRef;
-  prNumber: number;
-  state: "open" | "closed";
-  merged: boolean;
-  headSha: string;
-  baseSha: string;
-  canWriteRepository: boolean;
-  maintainerCanModify: boolean | null;
-  headRepository: RepoRef | null;
-  changedFiles: PullRequestChangedFile[];
-}
-
 function resolveRepo(repoRef?: RepoRef): RepoRef {
   return repoRef ?? defaultRepoRef;
-}
-
-function isSameRepository(left: RepoRef, right: RepoRef): boolean {
-  return left.owner === right.owner && left.repo === right.repo;
-}
-
-function resolveBankPathFromFilePath(path: string | undefined): string | null {
-  if (!path?.startsWith("src/")) {
-    return null;
-  }
-  const [root, bank] = path.split("/");
-  if (!(root === "src" && bank)) {
-    return null;
-  }
-  return `src/${bank}`;
-}
-
-function resolvePullRequestBankPath(changedFiles: PullRequestChangedFile[]):
-  | { status: "supported"; bankPath: string }
-  | {
-      status: "unsupported";
-      reason: "no-bank-changes" | "multiple-banks" | "outside-bank-scope";
-    } {
-  if (changedFiles.length === 0) {
-    return {
-      status: "unsupported",
-      reason: "no-bank-changes",
-    };
-  }
-
-  const bankPaths = new Set<string>();
-  for (const file of changedFiles) {
-    const bankPath = resolveBankPathFromFilePath(file.path);
-    if (!bankPath) {
-      return {
-        status: "unsupported",
-        reason: "outside-bank-scope",
-      };
-    }
-    if (file.kind === "rename") {
-      const oldBankPath = resolveBankPathFromFilePath(file.oldPath);
-      if (!(oldBankPath && oldBankPath === bankPath)) {
-        return {
-          status: "unsupported",
-          reason: "outside-bank-scope",
-        };
-      }
-    }
-    bankPaths.add(bankPath);
-  }
-
-  if (bankPaths.size !== 1) {
-    return {
-      status: "unsupported",
-      reason: "multiple-banks",
-    };
-  }
-
-  return {
-    status: "supported",
-    bankPath: Array.from(bankPaths)[0] ?? "",
-  };
 }
 
 function normalizePullRequestChangedFile(file: {
@@ -197,56 +97,6 @@ function normalizePullRequestChangedFile(file: {
     default:
       return { kind: "modify", path };
   }
-}
-
-function resolvePullRequestWritable(
-  snapshot: PullRequestWorkspaceSnapshot
-): boolean {
-  if (!snapshot.canWriteRepository) {
-    return false;
-  }
-  if (
-    snapshot.headRepository &&
-    isSameRepository(snapshot.headRepository, snapshot.repository)
-  ) {
-    return true;
-  }
-  return snapshot.maintainerCanModify === true;
-}
-
-export function resolvePullRequestWorkspaceSnapshot(
-  snapshot: PullRequestWorkspaceSnapshot
-): PullRequestWorkspaceResolution {
-  if (snapshot.merged) {
-    return {
-      status: "unavailable",
-      reason: "merged",
-    };
-  }
-  if (snapshot.state !== "open") {
-    return {
-      status: "unavailable",
-      reason: "closed",
-    };
-  }
-
-  const bankResolution = resolvePullRequestBankPath(snapshot.changedFiles);
-  if (bankResolution.status !== "supported") {
-    return bankResolution;
-  }
-
-  const writable = resolvePullRequestWritable(snapshot);
-  return {
-    status: "supported",
-    repository: snapshot.repository,
-    prNumber: snapshot.prNumber,
-    headSha: snapshot.headSha,
-    baseSha: snapshot.baseSha,
-    bankPath: bankResolution.bankPath,
-    writable,
-    readOnlyReason: writable ? null : "no-write-access",
-    changedFiles: snapshot.changedFiles,
-  };
 }
 
 export function classifyPullRequestResolverError(
@@ -494,315 +344,9 @@ function formatValidatorErrorLines(
   return uniqueValidatorMessages(lines).slice(0, MAX_VALIDATOR_ERROR_LINES);
 }
 
-function extractValidatorAnnotationMessages(
-  annotations: Array<{
-    path?: string | null;
-    start_line?: number | null;
-    title?: string | null;
-    message?: string | null;
-  }>
-): string[] {
-  return annotations
-    .map((annotation) => {
-      const path = annotation.path?.trim() || "";
-      const line = annotation.start_line ? `:${annotation.start_line}` : "";
-      const title = annotation.title?.trim() || "";
-      const message = annotation.message?.trim() || "";
-      const combined = [title, message].filter(Boolean).join(" — ");
-      if (!combined) {
-        return "";
-      }
-      const location = path ? `${path}${line}: ` : "";
-      return normalizeValidatorLine(`${location}${combined}`);
-    })
-    .filter((line) => line && !isGenericValidatorFailureLine(line))
-    .map((line) => stripActionsLogPrefix(line))
-    .filter(Boolean)
-    .filter((line) => !isGenericValidatorFailureLine(line))
-    .filter((line) => line.toLowerCase() !== "validate")
-    .filter((line) => !isValidationDelimiterLine(line))
-    .filter((line) => !line.toLowerCase().includes(VALIDATE_FORMATS_STEP_NAME))
-    .filter((line) => !line.toLowerCase().includes("validation failed"))
-    .filter((line) => !line.toLowerCase().includes("error(s) in"))
-    .filter((line) => !line.toLowerCase().startsWith("run "))
-    .filter((line) => !line.toLowerCase().includes("example "))
-    .filter((line) => !line.toLowerCase().includes("matches "))
-    .slice(0, MAX_VALIDATOR_ERROR_LINES);
-}
-
-function extractActionsJobId(
-  detailsUrl: string | null | undefined
-): number | null {
-  if (!detailsUrl) {
-    return null;
-  }
-  const match = detailsUrl.match(/\/job\/(\d+)(?:[/?#]|$)/);
-  if (!match?.[1]) {
-    return null;
-  }
-  const parsed = Number.parseInt(match[1], 10);
-  return Number.isInteger(parsed) ? parsed : null;
-}
-
-function extractActionsRunId(
-  detailsUrl: string | null | undefined
-): number | null {
-  if (!detailsUrl) {
-    return null;
-  }
-  const match = detailsUrl.match(/\/runs\/(\d+)(?:[/?#]|$)/);
-  if (!match?.[1]) {
-    return null;
-  }
-  const parsed = Number.parseInt(match[1], 10);
-  return Number.isInteger(parsed) ? parsed : null;
-}
-
-function isValidationDelimiterLine(line: string): boolean {
-  return /={10,}/.test(line);
-}
-
-function extractLinesBetweenValidationDelimiters(lines: string[]): string[] {
-  const extracted: string[] = [];
-  let insideBlock = false;
-
-  for (const line of lines) {
-    if (isValidationDelimiterLine(line)) {
-      insideBlock = !insideBlock;
-      continue;
-    }
-    if (!insideBlock) {
-      continue;
-    }
-    extracted.push(line);
-  }
-
-  return extracted
-    .map((line) => normalizeValidatorLine(stripActionsLogPrefix(line)))
-    .filter(Boolean)
-    .filter((line) => !isGenericValidatorFailureLine(line));
-}
-
-function extractValidatorMessagesFromActionsLog(logText: string): string[] {
-  if (!logText.trim()) {
-    return [];
-  }
-  const lines = logText
-    .split("\n")
-    .map((line) => normalizeValidatorLine(stripActionsLogPrefix(line)))
-    .filter(Boolean)
-    .filter((line) => !isGenericValidatorFailureLine(line))
-    .filter((line) => line.toLowerCase() !== "validate");
-
-  const validateStepStartIndex = lines.findIndex((line) =>
-    line.toLowerCase().includes(VALIDATE_FORMATS_STEP_NAME)
-  );
-
-  const validationFailedIndex = lines.findIndex((line) =>
-    line.toLowerCase().includes("validation failed")
-  );
-
-  const focusedLines = (() => {
-    if (validateStepStartIndex >= 0) {
-      return lines.slice(validateStepStartIndex);
-    }
-    if (validationFailedIndex >= 0) {
-      const start = Math.max(0, validationFailedIndex - 4);
-      const end = Math.min(lines.length, validationFailedIndex + 18);
-      return lines.slice(start, end);
-    }
-    return lines;
-  })();
-
-  const delimitedLines = extractLinesBetweenValidationDelimiters(focusedLines);
-  if (delimitedLines.length > 0) {
-    return uniqueValidatorMessages(delimitedLines).slice(
-      0,
-      MAX_VALIDATOR_ERROR_LINES
-    );
-  }
-
-  const likelyErrors = focusedLines.filter((line) =>
-    isLikelyValidatorLine(line)
-  );
-  const structuredErrors = likelyErrors.filter((line) => {
-    const normalized = line.toLowerCase();
-    return (
-      normalized.includes(".txt:") ||
-      normalized.includes("validation failed") ||
-      normalized.includes("error(s) in") ||
-      normalized.includes("matches ")
-    );
-  });
-
-  const selected =
-    structuredErrors.length > 0 ? structuredErrors : likelyErrors;
-  return uniqueValidatorMessages(selected).slice(0, MAX_VALIDATOR_ERROR_LINES);
-}
-
-async function readUnknownResponseAsText(data: unknown): Promise<string> {
-  if (typeof data === "string") {
-    return data;
-  }
-  if (data instanceof ArrayBuffer) {
-    return new TextDecoder().decode(data);
-  }
-  if (typeof Blob !== "undefined" && data instanceof Blob) {
-    return data.text();
-  }
-  if (
-    typeof data === "object" &&
-    data !== null &&
-    "text" in data &&
-    typeof (data as { text?: unknown }).text === "function"
-  ) {
-    try {
-      return await (data as { text: () => Promise<string> }).text();
-    } catch {
-      return "";
-    }
-  }
-  return "";
-}
-
-async function fetchActionsJobLogText(
-  jobId: number,
-  repo: RepoRef
-): Promise<string> {
-  try {
-    const response = await publicOctokit.request(
-      "GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs",
-      {
-        owner: repo.owner,
-        repo: repo.repo,
-        job_id: jobId,
-      }
-    );
-    const direct = await readUnknownResponseAsText(response.data);
-    if (direct.trim()) {
-      return direct;
-    }
-    const location =
-      (response.headers as Record<string, string | undefined>).location ?? "";
-    if (!location) {
-      return "";
-    }
-    const redirectedResponse = await fetch(location);
-    if (!redirectedResponse.ok) {
-      return "";
-    }
-    return redirectedResponse.text();
-  } catch {
-    return "";
-  }
-}
-
-async function resolveFailedActionsJobId(
-  checkRun: ValidatorCheckRun,
-  repo: RepoRef
-): Promise<number | null> {
-  const fromDetails = extractActionsJobId(checkRun.details_url);
-  if (fromDetails) {
-    return fromDetails;
-  }
-
-  const runId = extractActionsRunId(checkRun.details_url);
-  if (!runId) {
-    return null;
-  }
-  try {
-    const jobsResponse = await publicOctokit.actions.listJobsForWorkflowRun({
-      owner: repo.owner,
-      repo: repo.repo,
-      run_id: runId,
-      per_page: 100,
-    });
-    const failedValidateJob = jobsResponse.data.jobs.find((job) => {
-      const name = job.name?.toLowerCase() ?? "";
-      return job.conclusion === "failure" && name.includes("validate");
-    });
-    if (failedValidateJob?.id) {
-      return failedValidateJob.id;
-    }
-    const firstFailedJob = jobsResponse.data.jobs.find(
-      (job) => job.conclusion === "failure"
-    );
-    return firstFailedJob?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchValidatorErrorsFromActionsLog(
-  checkRun: ValidatorCheckRun,
-  repo: RepoRef
-): Promise<string[]> {
-  const jobId = await resolveFailedActionsJobId(checkRun, repo);
-  if (!jobId) {
-    return [];
-  }
-  const logText = await fetchActionsJobLogText(jobId, repo);
-  return extractValidatorMessagesFromActionsLog(logText);
-}
-
-async function fetchDetailedValidatorRunErrors(
-  checkRun: ValidatorCheckRun,
-  repo: RepoRef
-): Promise<string[]> {
-  const checkRunId = checkRun.id;
-  if (!checkRunId) {
-    return [];
-  }
-
-  try {
-    const checkRunResponse = await publicOctokit.checks.get({
-      owner: repo.owner,
-      repo: repo.repo,
-      check_run_id: checkRunId,
-    });
-    const detailedOutputErrors = extractValidatorErrorMessages(
-      checkRunResponse.data.output
-    );
-    if (detailedOutputErrors.length > 0) {
-      return detailedOutputErrors;
-    }
-  } catch {
-    // Ignore and fallback to annotations.
-  }
-
-  try {
-    const annotations = await publicOctokit.paginate(
-      publicOctokit.checks.listAnnotations,
-      {
-        owner: repo.owner,
-        repo: repo.repo,
-        check_run_id: checkRunId,
-        per_page: 100,
-      }
-    );
-    const annotationErrors = extractValidatorAnnotationMessages(annotations);
-    if (annotationErrors.length > 0) {
-      return annotationErrors;
-    }
-  } catch {
-    // Ignore annotation fetching errors and return empty list.
-  }
-
-  const actionLogErrors = await fetchValidatorErrorsFromActionsLog(
-    checkRun,
-    repo
-  );
-  if (actionLogErrors.length > 0) {
-    return actionLogErrors;
-  }
-
-  return [];
-}
-
 async function fetchValidatorFailuresByHeadSha(
   headSha: string,
-  repo: RepoRef,
-  loadDetailedErrors = false
+  repo: RepoRef
 ): Promise<ValidatorFailureResult> {
   try {
     const checks = await publicOctokit.checks.listForRef({
@@ -822,14 +366,8 @@ async function fetchValidatorFailuresByHeadSha(
       };
     }
 
-    const perRunErrors = await Promise.all(
-      failedRuns.map(async (checkRun) => {
-        const extractedErrors = extractValidatorErrorMessages(checkRun.output);
-        if (extractedErrors.length > 0 || !loadDetailedErrors) {
-          return extractedErrors;
-        }
-        return fetchDetailedValidatorRunErrors(checkRun, repo);
-      })
+    const perRunErrors = failedRuns.map((run) =>
+      extractValidatorErrorMessages(run.output)
     );
 
     return {
@@ -840,14 +378,12 @@ async function fetchValidatorFailuresByHeadSha(
     };
   } catch {
     return {
-      failedValidationCount: 0,
+      failedValidationCount: null,
       validationErrors: [],
       validationUrl: null,
     };
   }
 }
-
-// ─── Default API client (uses shared env token when provided) ───
 
 const sharedToken = config.issueToken.trim();
 
@@ -855,16 +391,12 @@ function createPublicOctokit(token: string): Octokit {
   return token ? new Octokit({ auth: token }) : new Octokit();
 }
 
-// GitHub serves authenticated GETs with `Cache-Control: private, max-age=60`,
-// so the browser HTTP cache (under Octokit's fetch) keeps returning the
-// pre-write body for ~60s — even across page reloads. Appending a unique query
-// param changes the cache key, forcing a fresh read right after we push.
 function cacheBustParam(forceFresh?: boolean): { _cb?: number } {
   return forceFresh ? { _cb: Date.now() } : {};
 }
 
 function readStoredGitHubUserToken(): string {
-  if (typeof window === "undefined") {
+  if (typeof localStorage === "undefined") {
     return "";
   }
   try {
@@ -875,7 +407,7 @@ function readStoredGitHubUserToken(): string {
 }
 
 function persistGitHubUserToken(token: string): void {
-  if (typeof window === "undefined") {
+  if (typeof localStorage === "undefined") {
     return;
   }
   try {
@@ -889,7 +421,7 @@ function persistGitHubUserToken(token: string): void {
     }
     localStorage.setItem(GITHUB_USER_TOKEN_STORAGE_KEY, "");
   } catch {
-    // Ignore localStorage errors (e.g. disabled storage in browser profile).
+    // Browser storage may be unavailable.
   }
 }
 
@@ -899,7 +431,7 @@ function getRepoSlug(repoRef?: RepoRef): string {
 }
 
 function readPullRequestApprovalPermissionCache(): PullRequestApprovalPermissionCache {
-  if (typeof window === "undefined") {
+  if (typeof localStorage === "undefined") {
     return {};
   }
   try {
@@ -920,7 +452,7 @@ function readPullRequestApprovalPermissionCache(): PullRequestApprovalPermission
 function writePullRequestApprovalPermissionCache(
   value: PullRequestApprovalPermissionCache
 ): void {
-  if (typeof window === "undefined") {
+  if (typeof localStorage === "undefined") {
     return;
   }
   try {
@@ -929,12 +461,12 @@ function writePullRequestApprovalPermissionCache(
       JSON.stringify(value)
     );
   } catch {
-    // Ignore localStorage errors (e.g. disabled storage in browser profile).
+    // Browser storage may be unavailable.
   }
 }
 
 function clearPullRequestApprovalPermissionCache(): void {
-  if (typeof window === "undefined") {
+  if (typeof localStorage === "undefined") {
     return;
   }
   try {
@@ -944,7 +476,7 @@ function clearPullRequestApprovalPermissionCache(): void {
     }
     localStorage.setItem(PR_APPROVAL_PERMISSION_STORAGE_KEY, "{}");
   } catch {
-    // Ignore localStorage errors (e.g. disabled storage in browser profile).
+    // Browser storage may be unavailable.
   }
 }
 
@@ -1016,6 +548,7 @@ export function setCachedPullRequestApprovalPermission(
   const cache = readPullRequestApprovalPermissionCache();
   cache[slug] = {
     canApprove,
+    checkedAt: Date.now(),
   };
   writePullRequestApprovalPermissionCache(cache);
 }
@@ -1025,7 +558,10 @@ export function getCachedPullRequestApprovalPermission(
 ): boolean {
   const slug = getRepoSlug(repoRef);
   const cache = readPullRequestApprovalPermissionCache();
-  return cache[slug]?.canApprove === true;
+  return (
+    cache[slug]?.canApprove === true &&
+    Date.now() - cache[slug].checkedAt < 60_000
+  );
 }
 
 export async function refreshPullRequestApprovalPermission(
@@ -1034,7 +570,7 @@ export async function refreshPullRequestApprovalPermission(
   const slug = getRepoSlug(repoRef);
   const cache = readPullRequestApprovalPermissionCache();
   const cached = cache[slug];
-  if (cached) {
+  if (cached && Date.now() - cached.checkedAt < 60_000) {
     return cached.canApprove;
   }
 
@@ -1055,8 +591,7 @@ export async function refreshPullRequestApprovalPermission(
     setCachedPullRequestApprovalPermission(canApprove, repoRef);
     return canApprove;
   } catch {
-    setCachedPullRequestApprovalPermission(false, repoRef);
-    return false;
+    throw new Error("Unable to verify GitHub repository permissions");
   }
 }
 
@@ -1104,39 +639,73 @@ export async function fetchPullRequestApprovalByCurrentUser(
   return resolveLatestReviewStateByReviewer(reviews).get(login) === "APPROVED";
 }
 
-// ─── Source loading ───
-
-export async function fetchBranches(
-  repoRef?: RepoRef
-): Promise<{ name: string; sha: string }[]> {
-  const repo = resolveRepo(repoRef);
-  const res = await publicOctokit.repos.listBranches({
-    owner: repo.owner,
-    repo: repo.repo,
-    per_page: 100,
-  });
-  return res.data.map((b) => ({ name: b.name, sha: b.commit.sha }));
+export interface OpenPullRequest {
+  number: number;
+  title: string;
+  headRef: string;
+  headSha: string;
+  headOwner: string;
+  headRepo: string;
+  approvedCount: number | null;
+  failedValidationCount: number | null;
+  validationErrors: string[];
+  validationUrl: string | null;
+  lastCommitAuthorLogin: string | null;
+  labels: PullRequestLabel[];
 }
 
 export async function fetchOpenPRs(
   repoRef?: RepoRef,
   options?: { forceFresh?: boolean }
-): Promise<
-  {
-    number: number;
-    title: string;
-    headRef: string;
-    headSha: string;
-    headOwner: string;
-    headRepo: string;
-    approvedCount: number;
-    failedValidationCount: number;
-    validationErrors: string[];
-    validationUrl: string | null;
-    lastCommitAuthorLogin: string | null;
-    labels: PullRequestLabel[];
-  }[]
-> {
+): Promise<OpenPullRequest[]> {
+  const repo = resolveRepo(repoRef);
+  const res = await publicOctokit.pulls.list({
+    owner: repo.owner,
+    repo: repo.repo,
+    state: "open",
+    per_page: 100,
+    ...cacheBustParam(options?.forceFresh),
+  });
+  return res.data.map((pr) => {
+    const headRepo = {
+      owner: pr.head.repo?.owner?.login ?? repo.owner,
+      repo: pr.head.repo?.name ?? repo.repo,
+    };
+    return {
+      number: pr.number,
+      title: pr.title,
+      headRef: pr.head.ref,
+      headSha: pr.head.sha,
+      headOwner: headRepo.owner,
+      headRepo: headRepo.repo,
+      approvedCount: null,
+      failedValidationCount: null,
+      validationErrors: [],
+      validationUrl: null,
+      lastCommitAuthorLogin: null,
+      labels: (pr.labels ?? [])
+        .flatMap((label) => {
+          if (typeof label === "string" || !label.name) {
+            return [];
+          }
+          return [
+            {
+              name: label.name,
+              color: label.color ?? "d1d9e0",
+            },
+          ];
+        })
+        .sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+        ),
+    };
+  });
+}
+
+export async function fetchPullRequestMetadata(
+  pr: OpenPullRequest,
+  repo: RepoRef
+): Promise<OpenPullRequest> {
   async function fetchApprovedCount(prNumber: number, repo: RepoRef) {
     try {
       const reviews = await publicOctokit.paginate(
@@ -1150,7 +719,7 @@ export async function fetchOpenPRs(
       );
       return countApprovedReviews(reviews);
     } catch {
-      return 0;
+      return null;
     }
   }
 
@@ -1170,81 +739,42 @@ export async function fetchOpenPRs(
     }
   }
 
-  const repo = resolveRepo(repoRef);
-  const res = await publicOctokit.pulls.list({
-    owner: repo.owner,
-    repo: repo.repo,
-    state: "open",
-    per_page: 100,
-    ...cacheBustParam(options?.forceFresh),
-  });
-  const openPrs = res.data;
-  return Promise.all(
-    openPrs.map(async (pr) => {
-      const headRepo: RepoRef = {
-        owner: pr.head.repo?.owner?.login ?? repo.owner,
-        repo: pr.head.repo?.name ?? repo.repo,
-      };
-      const [approvedCount, validation, lastCommitAuthorLogin] =
-        await Promise.all([
-          fetchApprovedCount(pr.number, repo),
-          fetchValidatorFailuresByHeadSha(pr.head.sha, repo),
-          fetchLastCommitAuthorLogin(pr.head.sha, headRepo),
-        ]);
-
-      return {
-        number: pr.number,
-        title: pr.title,
-        headRef: pr.head.ref,
-        headSha: pr.head.sha,
-        headOwner: headRepo.owner,
-        headRepo: headRepo.repo,
-        approvedCount,
-        failedValidationCount: validation.failedValidationCount,
-        validationErrors: validation.validationErrors,
-        validationUrl: validation.validationUrl,
-        lastCommitAuthorLogin,
-        labels: (pr.labels ?? [])
-          .flatMap((label) => {
-            if (typeof label === "string" || !label.name) {
-              return [];
-            }
-            return [
-              {
-                name: label.name,
-                color: label.color ?? "d1d9e0",
-              },
-            ];
-          })
-          .sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
-          ),
-      };
-    })
-  );
-}
-
-export async function fetchPullRequestValidationDetails(
-  prNumber: number,
-  repoRef?: RepoRef
-): Promise<ValidatorFailureResult> {
-  const repo = resolveRepo(repoRef);
-  const pullRequest = await publicOctokit.pulls.get({
-    owner: repo.owner,
-    repo: repo.repo,
-    pull_number: prNumber,
-  });
-  const details = await fetchValidatorFailuresByHeadSha(
-    pullRequest.data.head.sha,
-    repo,
-    true
-  );
-  return {
-    ...details,
-    validationUrl:
-      details.validationUrl?.trim() ||
-      `https://github.com/${repo.owner}/${repo.repo}/pull/${prNumber}/checks`,
-  };
+  const cached = <T>(
+    kind: string,
+    identity: number | string,
+    loader: () => Promise<T>,
+    staleTime = 30_000
+  ) =>
+    queryClient.fetchQuery({
+      queryKey: [
+        "pr-metadata",
+        repo.owner,
+        repo.repo,
+        getGitHubAuthChangeVersion(),
+        kind,
+        identity,
+      ],
+      queryFn: loader,
+      staleTime,
+      retry: false,
+    });
+  const [approvedCount, validation, lastCommitAuthorLogin] = await Promise.all([
+    cached("reviews", pr.number, () => fetchApprovedCount(pr.number, repo)),
+    cached("checks", pr.headSha, () =>
+      fetchValidatorFailuresByHeadSha(pr.headSha, repo)
+    ),
+    cached(
+      "author",
+      pr.headSha,
+      () =>
+        fetchLastCommitAuthorLogin(pr.headSha, {
+          owner: pr.headOwner,
+          repo: pr.headRepo,
+        }),
+      Number.POSITIVE_INFINITY
+    ),
+  ]);
+  return { ...pr, approvedCount, ...validation, lastCommitAuthorLogin };
 }
 
 export async function resolvePullRequestWorkspace(
@@ -1281,13 +811,22 @@ export async function resolvePullRequestWorkspace(
           }
         : null;
 
+    const headSha = options?.headShaOverride ?? pullRequest.data.head.sha;
+    const comparison = await publicOctokit.repos.compareCommitsWithBasehead({
+      owner: repo.owner,
+      repo: repo.repo,
+      basehead: `${pullRequest.data.base.sha}...${headSha}`,
+      per_page: 1,
+    });
+
     return resolvePullRequestWorkspaceSnapshot({
       repository: repo,
       prNumber,
       state: pullRequest.data.state === "open" ? "open" : "closed",
       merged: pullRequest.data.merged === true,
-      headSha: options?.headShaOverride ?? pullRequest.data.head.sha,
-      baseSha: pullRequest.data.base.sha,
+      headSha,
+      // PR files describe the diff from the merge base, not current main.
+      baseSha: comparison.data.merge_base_commit.sha,
       canWriteRepository,
       maintainerCanModify: pullRequest.data.maintainer_can_modify ?? null,
       headRepository,
@@ -1298,76 +837,6 @@ export async function resolvePullRequestWorkspace(
   } catch (error) {
     return classifyPullRequestResolverError(error);
   }
-}
-
-export async function fetchPullRequestHead(
-  prNumber: number,
-  repoRef?: RepoRef
-): Promise<{ headRef: string; headSha: string }> {
-  const repo = resolveRepo(repoRef);
-  const pr = await publicOctokit.pulls.get({
-    owner: repo.owner,
-    repo: repo.repo,
-    pull_number: prNumber,
-  });
-
-  return {
-    headRef: pr.data.head.ref,
-    headSha: pr.data.head.sha,
-  };
-}
-
-export async function fetchPullRequestCommits(
-  prNumber: number,
-  repoRef?: RepoRef
-): Promise<Array<{ sha: string; message: string }>> {
-  const repo = resolveRepo(repoRef);
-  const commits = await publicOctokit.paginate(
-    publicOctokit.pulls.listCommits,
-    {
-      owner: repo.owner,
-      repo: repo.repo,
-      pull_number: prNumber,
-      per_page: 100,
-    }
-  );
-
-  return commits
-    .map((commit) => ({
-      sha: commit.sha ?? "",
-      message: commit.commit?.message?.split("\n")[0]?.trim() ?? "",
-    }))
-    .filter((commit) => commit.sha.length > 0);
-}
-
-export async function fetchPullRequestFiles(
-  prNumber: number,
-  repoRef?: RepoRef
-): Promise<string[]> {
-  const repo = resolveRepo(repoRef);
-  const files = await publicOctokit.paginate(publicOctokit.pulls.listFiles, {
-    owner: repo.owner,
-    repo: repo.repo,
-    pull_number: prNumber,
-    per_page: 100,
-  });
-
-  return files
-    .map((file) => file.filename)
-    .filter((path): path is string => !!path);
-}
-
-export async function fetchBranchSha(
-  branch: string,
-  repoRef?: RepoRef
-): Promise<string> {
-  const repo = resolveRepo(repoRef);
-  const res = await publicOctokit.repos.getBranch({
-    owner: repo.owner,
-    repo: repo.repo,
-    branch,
-  });
-  return res.data.commit.sha;
 }
 
 export async function fetchSourceRepoForks(): Promise<RepoRef[]> {
@@ -1412,8 +881,6 @@ export async function fetchSourceRepoForks(): Promise<RepoRef[]> {
   });
 }
 
-// ─── Tree and file loading ───
-
 export async function fetchRepoTree(
   sha: string,
   repoRef?: RepoRef
@@ -1450,26 +917,18 @@ export async function fetchFileContent(
     ref,
   });
   const data = res.data as { content?: string; encoding?: string };
-  if (data.content && data.encoding === "base64") {
+  if (typeof data.content === "string" && data.encoding === "base64") {
     return decodeBase64Utf8(data.content.replace(/\n/g, ""));
   }
   throw new Error(`Unexpected content format for ${path}`);
 }
 
-// ─── Blob loading by ref (GraphQL) ───
-
-// Three distinct outcomes, never collapsed into one "no file":
-// - missing: no object at `<ref>:<path>` — the file is absent in this layer;
-// - binary: the object is a Blob without text;
-// - truncated: GitHub returned a cut-off body.
 export type BlobFetchResult =
   | { path: string; status: "loaded"; text: string }
   | { path: string; status: "missing" }
   | { path: string; status: "binary" }
   | { path: string; status: "truncated" };
 
-// GitHub has an undocumented cap on the number of aliases and a 10s timeout:
-// one oversized request loses the whole package, so batches stay separate.
 const BLOB_BATCH_SIZE = 50;
 
 interface BlobNode {
@@ -1557,200 +1016,6 @@ export async function fetchBlobsByRef(
   return results.flat();
 }
 
-// ─── Bank indexing ───
-
-const BANK_PATH_RE = /^src\/([^/]+)\/?$/;
-const BANK_NAME_RE = /^(.+?)(?:_(\d+))?$/;
-const BANK_FROM_BLOB_RE = /^src\/([^/]+)\/(?:formats\/.+\.txt|senders\.txt)$/;
-
-export function indexBanksFromTree(tree: FileEntry[]): BankInfo[] {
-  // Primary source: explicit tree folders src/<name>
-  const bankFoldersFromTrees = tree
-    .filter((e) => e.type === "tree" && BANK_PATH_RE.test(e.path))
-    .map((e) => e.path);
-
-  // Fallback source: infer bank folder from blob paths
-  const bankFoldersFromBlobs = tree
-    .filter((e) => e.type === "blob")
-    .map((e) => BANK_FROM_BLOB_RE.exec(e.path)?.[1])
-    .filter((folderName): folderName is string => !!folderName)
-    .map((folderName) => `src/${folderName}`);
-
-  const bankFolders = Array.from(
-    new Set([...bankFoldersFromTrees, ...bankFoldersFromBlobs])
-  );
-
-  return bankFolders
-    .map((folderPath) => {
-      const folderName = folderPath.replace("src/", "");
-      const nameMatch = BANK_NAME_RE.exec(folderName);
-      const displayName = nameMatch?.[1] ?? folderName;
-      const bankId = nameMatch?.[2] ?? null;
-
-      const formatFiles = tree
-        .filter(
-          (e) =>
-            e.type === "blob" &&
-            e.path.startsWith(`${folderPath}/formats/`) &&
-            e.path.endsWith(".txt")
-        )
-        .map((e) => e.path);
-
-      const hasSenders = tree.some(
-        (e) => e.type === "blob" && e.path === `${folderPath}/senders.txt`
-      );
-
-      return {
-        displayName,
-        folderPath,
-        bankId,
-        formatFiles: formatFiles.sort(),
-        hasSenders,
-      };
-    })
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
-}
-
-// ─── Publish operations (require auth) ───
-
-export async function ensureFork(
-  octokit: Octokit,
-  repoRef?: RepoRef
-): Promise<{ owner: string; repo: string }> {
-  const target = resolveRepo(repoRef);
-  try {
-    const user = await octokit.users.getAuthenticated();
-    const forkOwner = user.data.login;
-
-    try {
-      await octokit.repos.get({ owner: forkOwner, repo: target.repo });
-      return { owner: forkOwner, repo: target.repo };
-    } catch {
-      // Fork doesn't exist — create it
-      await octokit.repos.createFork({
-        owner: target.owner,
-        repo: target.repo,
-      });
-      // Wait a bit for fork to be ready
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      return { owner: forkOwner, repo: target.repo };
-    }
-  } catch (e) {
-    throw new Error(
-      `Failed to ensure fork: ${e instanceof Error ? e.message : String(e)}`
-    );
-  }
-}
-
-export async function createOrUpdateBranch(
-  octokit: Octokit,
-  forkOwner: string,
-  branchName: string,
-  baseSha: string,
-  repoRef?: RepoRef
-): Promise<void> {
-  const target = resolveRepo(repoRef);
-  const ref = `refs/heads/${branchName}`;
-  try {
-    await octokit.git.getRef({
-      owner: forkOwner,
-      repo: target.repo,
-      ref: `heads/${branchName}`,
-    });
-    // Branch exists, update it
-    await octokit.git.updateRef({
-      owner: forkOwner,
-      repo: target.repo,
-      ref: `heads/${branchName}`,
-      sha: baseSha,
-      force: true,
-    });
-  } catch {
-    // Branch doesn't exist, create it
-    await octokit.git.createRef({
-      owner: forkOwner,
-      repo: target.repo,
-      ref,
-      sha: baseSha,
-    });
-  }
-}
-
-export async function createCommit(
-  octokit: Octokit,
-  forkOwner: string,
-  branchName: string,
-  parentSha: string,
-  files: Array<{ path: string; content?: string; delete?: boolean }>,
-  message: string,
-  repoRef?: RepoRef
-): Promise<string> {
-  const target = resolveRepo(repoRef);
-
-  const blobs = await Promise.all(
-    files.map(async (f) => {
-      if (f.delete) {
-        return {
-          path: f.path,
-          sha: null,
-          mode: "100644" as const,
-          type: "blob" as const,
-        };
-      }
-      if (typeof f.content !== "string") {
-        throw new Error(`Missing content for file: ${f.path}`);
-      }
-      const blob = await octokit.git.createBlob({
-        owner: forkOwner,
-        repo: target.repo,
-        content: encodeBase64Utf8(f.content),
-        encoding: "base64",
-      });
-      return {
-        path: f.path,
-        sha: blob.data.sha,
-        mode: "100644" as const,
-        type: "blob" as const,
-      };
-    })
-  );
-
-  // Get base tree
-  const parentCommit = await octokit.git.getCommit({
-    owner: forkOwner,
-    repo: target.repo,
-    commit_sha: parentSha,
-  });
-  const baseTreeSha = parentCommit.data.tree.sha;
-
-  // Create new tree
-  const newTree = await octokit.git.createTree({
-    owner: forkOwner,
-    repo: target.repo,
-    base_tree: baseTreeSha,
-    tree: blobs,
-  });
-
-  // Create commit
-  const commit = await octokit.git.createCommit({
-    owner: forkOwner,
-    repo: target.repo,
-    message,
-    tree: newTree.data.sha,
-    parents: [parentSha],
-  });
-
-  // Update branch ref
-  await octokit.git.updateRef({
-    owner: forkOwner,
-    repo: target.repo,
-    ref: `heads/${branchName}`,
-    sha: commit.data.sha,
-  });
-
-  return commit.data.sha;
-}
-
 interface CreateCommitOnBranchResponse {
   createCommitOnBranch: {
     commit: {
@@ -1810,6 +1075,7 @@ function buildCommitFileChanges(
 export async function updatePullRequestHead(
   token: string,
   prNumber: number,
+  expectedHeadSha: string,
   files: Array<{ path: string; content?: string; delete?: boolean }>,
   repoRef?: RepoRef,
   commitMessage?: string
@@ -1825,12 +1091,13 @@ export async function updatePullRequestHead(
   const headOwner = pr.data.head.repo?.owner?.login ?? repo.owner;
   const headRepo = pr.data.head.repo?.name ?? repo.repo;
   const headRef = pr.data.head.ref;
-  const headSha = pr.data.head.sha;
+  if (pr.data.head.sha !== expectedHeadSha) {
+    throw new Error(
+      "Pull request head changed after validation. Refresh the workspace."
+    );
+  }
   const title = pr.data.title;
   const message = commitMessage?.trim() ? commitMessage : title;
-  // Git Data and Contents REST endpoints see maintainers as read-only on a
-  // contributor's fork. This branch-aware mutation honors the PR author's
-  // "Allow edits from maintainers" grant and keeps all file changes atomic.
   const result = await octokit.graphql<CreateCommitOnBranchResponse>(
     CREATE_COMMIT_ON_BRANCH_MUTATION,
     {
@@ -1839,7 +1106,7 @@ export async function updatePullRequestHead(
           repositoryNameWithOwner: `${headOwner}/${headRepo}`,
           branchName: headRef,
         },
-        expectedHeadOid: headSha,
+        expectedHeadOid: expectedHeadSha,
         message: buildCommitMessageInput(message),
         fileChanges: buildCommitFileChanges(files),
       },
@@ -1855,26 +1122,6 @@ export async function updatePullRequestHead(
     title,
     headSha: newHeadSha,
   };
-}
-
-export async function createPullRequest(
-  octokit: Octokit,
-  forkOwner: string,
-  branchName: string,
-  title: string,
-  body: string,
-  repoRef?: RepoRef
-): Promise<{ url: string; number: number }> {
-  const target = resolveRepo(repoRef);
-  const pr = await octokit.pulls.create({
-    owner: target.owner,
-    repo: target.repo,
-    title,
-    body,
-    head: `${forkOwner}:${branchName}`,
-    base: config.defaultBranch,
-  });
-  return { url: pr.data.html_url, number: pr.data.number };
 }
 
 export async function validateToken(token: string): Promise<string> {

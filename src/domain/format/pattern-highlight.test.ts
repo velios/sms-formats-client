@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { analyzeRegexPattern } from "./pattern-analysis";
 import { buildPatternHighlightPlan } from "./pattern-highlight";
-import { explainRegex, recognitionProgress, testRegex } from "./regex";
+import { recognitionProgress, testRegex } from "./regex";
 import { buildTokenToCaptureGroupMap } from "./token-capture-map";
 
 function plan(pattern: string, sms: string) {
-  const tokens = explainRegex(pattern, "en").patternTokens;
+  const tokens = analyzeRegexPattern(pattern, "en").patternTokens;
   const map = buildTokenToCaptureGroupMap(tokens);
   const matchResult = testRegex(pattern, sms);
   const progress = matchResult.matched

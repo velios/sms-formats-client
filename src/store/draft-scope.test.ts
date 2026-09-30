@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RepoRef, SourceRef } from "@/domain/types";
+import type { PullRequestSource, RepoRef } from "@/domain/types";
 import { isSameDraftScope, makeDraftSourceKey } from "./draft-scope";
 
 describe("draft-scope", () => {
@@ -20,7 +20,7 @@ describe("draft-scope", () => {
   });
 
   it("treats different pull requests as different draft scopes", () => {
-    const currentSource: SourceRef = {
+    const currentSource: PullRequestSource = {
       type: "pr",
       name: "feature/pr-123",
       sha: "abc123",
@@ -39,7 +39,7 @@ describe("draft-scope", () => {
   it("rejects legacy branch draft scopes", () => {
     expect(() =>
       makeDraftSourceKey(
-        { type: "branch", name: "main" } as SourceRef,
+        { type: "branch", name: "main" } as unknown as PullRequestSource,
         repository
       )
     ).toThrow(/legacy|unsupported/i);

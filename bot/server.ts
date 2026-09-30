@@ -12,10 +12,6 @@ import { ensureMainCheckout } from "./main-checkout";
 
 const env = loadBotEnv();
 
-// The corpus is kept fresh on demand, not at boot (ADR-0004). A request outside
-// the TTL window kicks one background freshness check — two conditional ETag
-// GETs (main ref + open-PR list); only moved refs are pulled as git deltas and
-// the snapshot is swapped in atomically. Failures serve the last good snapshot.
 const store = new CorpusStore({
   ttlMs: env.freshnessTtlMs,
   sync: createCorpusSync({
@@ -23,6 +19,12 @@ const store = new CorpusStore({
     branch: env.sourceBranch,
     dir: env.checkoutDir,
     token: env.githubToken,
+    ...(env.offline
+      ? {
+          fetchImpl: (async () =>
+            new Response(null, { status: 304 })) as unknown as typeof fetch,
+        }
+      : {}),
     onSkip: (pr, error) =>
       process.stderr.write(`Skipping PR #${pr.number} in corpus: ${error}\n`),
     onFreshnessError: (error) =>
@@ -36,14 +38,8 @@ const store = new CorpusStore({
     ),
 });
 
-// A restart over an existing disk checkout is not a re-clone: seed the snapshot
-// from disk (main half) so the first request answers from it, while the open TTL
-// gate makes that same request trigger the first freshness check — which folds
-// in open-PR formats and any main delta. A wiped disk has nothing to seed; the
-// first request then clones in the background and meanwhile gets the cold-start
-// stub (see answer.ts).
 if (existsSync(join(env.checkoutDir, ".git"))) {
-  const checkout = ensureMainCheckout({
+  const checkout = await ensureMainCheckout({
     repoSlug: env.sourceRepo,
     branch: env.sourceBranch,
     dir: env.checkoutDir,
@@ -52,8 +48,6 @@ if (existsSync(join(env.checkoutDir, ".git"))) {
   store.seed(buildSnapshot(buildMainCorpus(checkout), checkout.sha));
 }
 
-// Offline dry-run can't call getMe (dummy token), so hand grammY a synthetic
-// identity. Only the token matters for answerGuestQuery; botInfo is unused here.
 const DRY_RUN_BOT_INFO: UserFromGetMe = {
   id: 0,
   is_bot: true,
@@ -69,9 +63,6 @@ const DRY_RUN_BOT_INFO: UserFromGetMe = {
   allows_users_to_create_topics: false,
 };
 
-// Outbound Telegram API calls (getMe, answerGuestQuery) go through a local
-// HTTP proxy when RECOGNITION_BOT_PROXY_URL is set; the inbound webhook served
-// by Bun.serve is unaffected.
 const bot = new Bot(env.token, {
   ...(env.dryRun ? { botInfo: DRY_RUN_BOT_INFO } : {}),
   ...(env.proxyUrl
@@ -79,13 +70,6 @@ const bot = new Bot(env.token, {
     : {}),
 });
 
-// Guest Mode (Bot API 10.0): an @mention or reply in any chat arrives as a
-// `guest_message`, answered exactly once via `answerGuestQuery`. The request
-// drives freshness (noteDemand) and is answered from the current snapshot —
-// fresh or not — or the initializing stub before the first build. We never log
-// the raw SMS; only the rendered format list (which contains no SMS content).
-// A failed answer is swallowed inside the handler — see answer.ts
-// for why webhookCallback must never return 500 here.
 bot.on("guest_message", (ctx) => {
   store.noteDemand();
   return answerGuestMessage(ctx, store.current, {
@@ -93,11 +77,6 @@ bot.on("guest_message", (ctx) => {
   });
 });
 
-// Direct invocation: a private-chat message is the second way to reach the same
-// Recognition (CONTEXT.md). Group messages stay on the guest path — only DMs are
-// handled here, so the bot never answers unprompted in a group. Like the guest
-// path, the request drives freshness and is answered from the current snapshot
-// (or the initializing stub before the first build). The raw SMS is never logged.
 bot.on("message", (ctx) => {
   if (ctx.chat.type !== "private") {
     return;

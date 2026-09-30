@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { analyzeRegexPattern } from "./pattern-analysis";
 import type { RegexMatchResult } from "./regex";
-import { explainRegex, testRegex } from "./regex";
+import { testRegex } from "./regex";
 import {
   buildTokenToCaptureGroupMap,
   isCapturingGroupOpenerToken,
@@ -10,7 +11,7 @@ import {
 } from "./token-capture-map";
 
 function tokensFor(pattern: string) {
-  return explainRegex(pattern, "en").patternTokens;
+  return analyzeRegexPattern(pattern, "en").patternTokens;
 }
 
 /** Helper to build captureGroupMap + matchResult for a pattern/test pair */

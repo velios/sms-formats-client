@@ -1,131 +1,21 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { parseFormatFile } from "@/domain/format";
-import type { BankInfo, RepoRef, ValidationIssue } from "@/domain/types";
-import {
-  checkCrossFormatCollisions,
-  validateFormat,
-} from "@/domain/validation";
+import type { BankInfo, ValidationIssue } from "@/domain/types";
+import { validateBankSnapshot } from "@/features/workspace/bank-snapshot";
 import { useDraftStore, useSourceStore } from "@/store";
-import { useFileContentStore } from "@/store/file-content-store";
 
 interface Props {
   bankPath: string;
   bank: BankInfo | null;
-  changedFormatPaths: string[];
   onClose: () => void;
 }
 
-interface ValidationDraftStore {
-  drafts: Map<string, { content: string; remoteContent: string }>;
-  getDraft: (
-    filePath: string
-  ) => { content: string; remoteContent: string } | undefined;
-}
-
-async function loadLatestFormatContent(params: {
-  path: string;
-  prNumber: number;
-  sourceRefName: string | null;
-  repository: RepoRef;
-  draftStore: ValidationDraftStore;
-}): Promise<string | null> {
-  const { path, prNumber, sourceRefName, repository, draftStore } = params;
-  const draft = draftStore.getDraft(path);
-  if (draft && draft.content !== draft.remoteContent) {
-    return draft.content;
-  }
-  if (!sourceRefName) {
-    return draft?.content ?? null;
-  }
-  await useFileContentStore.getState().primeFileContent({
-    repository,
-    prNumber,
-    filePath: path,
-    refName: sourceRefName,
-    headSha: sourceRefName,
-    loadedFrom: "validation",
-  });
-  return (
-    useFileContentStore.getState().getCachedFileContent({
-      repository,
-      prNumber,
-      filePath: path,
-      headSha: sourceRefName,
-    }) ??
-    draft?.content ??
-    null
-  );
-}
-
-async function collectChangedFormatContents(params: {
-  changedFormatPaths: string[];
-  prNumber: number;
-  sourceRefName: string | null;
-  repository: RepoRef;
-  draftStore: ValidationDraftStore;
-}): Promise<Map<string, string>> {
-  const {
-    changedFormatPaths,
-    prNumber,
-    sourceRefName,
-    repository,
-    draftStore,
-  } = params;
-  const entries = await Promise.all(
-    changedFormatPaths.map(async (path) => {
-      const latestContent = await loadLatestFormatContent({
-        path,
-        prNumber,
-        sourceRefName,
-        repository,
-        draftStore,
-      });
-      return latestContent == null ? null : ([path, latestContent] as const);
-    })
-  );
-
-  const formatContents = new Map<string, string>();
-  for (const entry of entries) {
-    if (!entry) {
-      continue;
-    }
-    formatContents.set(entry[0], entry[1]);
-  }
-  return formatContents;
-}
-
-function runChangedFormatsValidation(
-  formatContents: Map<string, string>
-): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  const parsedFormats: Array<{
-    filePath: string;
-    parsed: ReturnType<typeof parseFormatFile>;
-  }> = [];
-
-  for (const [path, content] of formatContents) {
-    const parsed = parseFormatFile(content, path);
-    parsedFormats.push({ filePath: path, parsed });
-    issues.push(...validateFormat(parsed, path));
-  }
-
-  issues.push(...checkCrossFormatCollisions(parsedFormats));
-  return issues;
-}
-
-export function ValidationPanel({
-  bankPath,
-  bank,
-  changedFormatPaths,
-  onClose,
-}: Props) {
+export function ValidationPanel({ bankPath, bank, onClose }: Props) {
   const { t } = useTranslation();
-  const dialogTitleId = useId();
   const draftStore = useDraftStore();
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const repository = useSourceStore((s) => s.repository);
@@ -144,7 +34,6 @@ export function ValidationPanel({
             code: "NO_BANK",
             level: "error",
             filePath: bankPath,
-            message: "Bank not found",
           },
         ]);
         return;
@@ -153,28 +42,34 @@ export function ValidationPanel({
       const sourceRefName = sourceRef?.sha ?? sourceRef?.name ?? null;
       const prNumber =
         sourceRef?.type === "pr" && sourceRef.prNumber ? sourceRef.prNumber : 0;
-      if (changedFormatPaths.length === 0) {
-        setIssues([]);
-        return;
+      if (!(prNumber && sourceRefName)) {
+        throw new Error("No workspace revision");
       }
-      if (!prNumber) {
-        setIssues([]);
-        return;
-      }
-
-      const formatContents = await collectChangedFormatContents({
-        changedFormatPaths,
-        prNumber,
-        sourceRefName,
-        repository,
-        draftStore,
-      });
-      setIssues(runChangedFormatsValidation(formatContents));
+      setIssues(
+        await validateBankSnapshot({
+          bank,
+          bankPath,
+          draftStore,
+          sourceRefName,
+          repository,
+        })
+      );
+    } catch (error) {
+      setIssues([
+        {
+          code: "LOAD_FAILED",
+          level: "error",
+          filePath: bankPath,
+          params: {
+            detail: error instanceof Error ? error.message : String(error),
+          },
+        },
+      ]);
     } finally {
       setRan(true);
       setRunning(false);
     }
-  }, [bank, bankPath, changedFormatPaths, draftStore, repository, sourceRef]);
+  }, [bank, bankPath, draftStore, repository, sourceRef]);
 
   useEffect(() => {
     if (hasAutoRun.current) {
@@ -192,7 +87,6 @@ export function ValidationPanel({
       className="sm:max-w-[500px]"
       onClose={onClose}
       title={t("validation.title")}
-      titleId={dialogTitleId}
     >
       {running ? (
         <div
@@ -242,7 +136,9 @@ export function ValidationPanel({
                 <span className="font-mono text-sm" style={{ minWidth: 100 }}>
                   {issue.filePath.split("/").pop()}
                 </span>
-                <span className="text-sm">{issue.message}</span>
+                <span className="text-sm">
+                  {t(`validation.issue.${issue.code}`, issue.params)}
+                </span>
               </div>
             ))}
           </div>

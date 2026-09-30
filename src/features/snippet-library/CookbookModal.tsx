@@ -1,4 +1,3 @@
-import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
 import { config } from "@/config";
@@ -12,7 +11,6 @@ interface Props {
 
 export function CookbookModal({ onClose }: Props) {
   const { t } = useTranslation();
-  const titleId = useId();
 
   return (
     <ModalDialog
@@ -31,9 +29,7 @@ export function CookbookModal({ onClose }: Props) {
           </a>
         </span>
       }
-      titleId={titleId}
     >
-      {/* Trusted build-time HTML from our vendored cookbook (ADR-0009). */}
       <div
         className="cookbook-prose min-h-0 flex-1 overflow-y-auto pr-2"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted build-time cookbook HTML, not user input (ADR-0009)

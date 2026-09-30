@@ -1,10 +1,8 @@
-// ─── Core domain types ───
-
 export interface ValidationIssue {
   code: string;
   level: "error" | "warning";
   filePath: string;
-  message: string;
+  params?: Record<string, string | number>;
 }
 
 export interface ParsedFormat {
@@ -23,11 +21,11 @@ export interface BankInfo {
   hasSenders: boolean;
 }
 
-export interface SourceRef {
-  type: "branch" | "pr";
+export interface PullRequestSource {
+  type: "pr";
   name: string;
   sha: string;
-  prNumber?: number;
+  prNumber: number;
 }
 
 export interface RepoRef {
@@ -45,15 +43,6 @@ export interface FileEntry {
   sha: string;
   type: "blob" | "tree";
 }
-
-export interface PublishPreflight {
-  canPublish: boolean;
-  changedBanks: string[];
-  blockingIssues: ValidationIssue[];
-  warnings: ValidationIssue[];
-}
-
-// ─── Column reference ───
 
 export interface ColumnDef {
   name: string;

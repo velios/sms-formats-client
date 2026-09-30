@@ -9,7 +9,10 @@ import { recognizeSms, regexesBySms, smsesByRegex } from "@/domain/format";
 import type { RepoRef } from "@/domain/types";
 import { cn } from "@/lib/utils";
 import { useDraftStore, useSourceStore } from "@/store";
-import { type CachedFormatEntry, prepareFormatEntries } from "./format-entries";
+import {
+  type LoadedFormat,
+  loadBankSnapshot,
+} from "../workspace/bank-snapshot";
 
 export type QuickCheckMode = "template-by-sms" | "sms-by-template";
 
@@ -142,7 +145,7 @@ function sortSmsByTemplateResults(
 }
 
 function evaluateTemplateBySms(
-  entries: CachedFormatEntry[],
+  entries: LoadedFormat[],
   smsText: string
 ): TemplateBySmsEvaluation {
   const entriesWithRegex = entries.filter((entry) => entry.regex);
@@ -189,7 +192,7 @@ function evaluateTemplateBySms(
 }
 
 function evaluateSmsByTemplate(
-  entries: CachedFormatEntry[],
+  entries: LoadedFormat[],
   regex: string
 ): SmsByTemplateEvaluation {
   const evaluated: SmsByTemplateResult[] = entries.map((entry) => {
@@ -256,7 +259,6 @@ export function QuickCheckPanel({
   onClose,
 }: Props) {
   const { t } = useTranslation();
-  const dialogTitleId = useId();
   const inputId = useId();
   const draftStore = useDraftStore();
   const sourceRef = useSourceStore((s) => s.sourceRef);
@@ -354,10 +356,9 @@ export function QuickCheckPanel({
         setRunState(null);
         return;
       }
-      const prepared = await prepareFormatEntries({
+      const prepared = await loadBankSnapshot({
         filePaths: formatPaths,
         draftStore,
-        prNumber,
         sourceRefName,
         repository,
       });
@@ -424,7 +425,6 @@ export function QuickCheckPanel({
       className="flex max-h-[min(88vh,880px)] flex-col sm:max-w-[760px] lg:max-w-[960px]"
       onClose={onClose}
       title={t("quickCheck.title", { bank: bankName })}
-      titleId={dialogTitleId}
     >
       <div className="mb-4 flex gap-1" role="tablist">
         <button

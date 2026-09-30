@@ -15,9 +15,10 @@ vi.mock("idb-keyval", () => ({
   }),
 }));
 
-vi.mock("@/domain/github", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/domain/github")>("@/domain/github");
+vi.mock("@/infrastructure/github", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/infrastructure/github")
+  >("@/infrastructure/github");
   return {
     ...actual,
     fetchFileContent: (...args: unknown[]) => fetchFileContentMock(...args),
@@ -26,7 +27,7 @@ vi.mock("@/domain/github", async () => {
 
 async function loadModules() {
   const store = await import("@/store");
-  const fileContentStore = await import("@/store/file-content-store");
+  const fileContentStore = await import("@/infrastructure/file-content");
   const hook = await import("./useWorkspaceFileContent");
   return {
     ...store,
@@ -36,10 +37,11 @@ async function loadModules() {
 }
 
 describe("useWorkspaceFileContent", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
     idbStorage.clear();
     fetchFileContentMock.mockReset();
+    (await import("@/lib/query-client")).queryClient.clear();
     const localStorageState = new Map<string, string>();
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => localStorageState.get(key) ?? null,
@@ -53,7 +55,7 @@ describe("useWorkspaceFileContent", () => {
   });
 
   it("returns cached content immediately for the current PR head", async () => {
-    const { useFileContentStore, useSourceStore, useWorkspaceFileContent } =
+    const { cacheFileContent, useSourceStore, useWorkspaceFileContent } =
       await loadModules();
     useSourceStore.getState().setRepository({
       owner: "zenmoney",
@@ -65,20 +67,16 @@ describe("useWorkspaceFileContent", () => {
       sha: "head-sha",
       prNumber: 123,
     });
-    useFileContentStore.getState().setFileContentEntry({
+    cacheFileContent({
       repository: { owner: "zenmoney", repo: "sms-formats" },
-      prNumber: 123,
       filePath: "src/TBank_123/formats/a.txt",
       content: "CACHED CONTENT",
-      lastResolvedHeadSha: "head-sha",
-      loadedFrom: "editor",
-      status: "ready",
+      commitSha: "head-sha",
     });
 
     const { result } = renderHook(() =>
       useWorkspaceFileContent({
         filePath: "src/TBank_123/formats/a.txt",
-        loadedFrom: "editor",
       })
     );
 
@@ -86,6 +84,18 @@ describe("useWorkspaceFileContent", () => {
       expect(result.current.data).toBe("CACHED CONTENT");
       expect(result.current.isLoading).toBe(false);
     });
+    expect(fetchFileContentMock).not.toHaveBeenCalled();
+  });
+
+  it("does not request a file absent at head", async () => {
+    const { useSourceStore, useWorkspaceFileContent } = await loadModules();
+    useSourceStore
+      .getState()
+      .setSource({ type: "pr", name: "pr-1", prNumber: 1, sha: "head" });
+    const { result } = renderHook(() =>
+      useWorkspaceFileContent({ filePath: "new.txt", enabled: false })
+    );
+    expect(result.current.isLoading).toBe(false);
     expect(fetchFileContentMock).not.toHaveBeenCalled();
   });
 
@@ -106,7 +116,6 @@ describe("useWorkspaceFileContent", () => {
     const { result } = renderHook(() =>
       useWorkspaceFileContent({
         filePath: "src/TBank_123/formats/deleted.txt",
-        loadedFrom: "editor",
         contentRefName: "base-sha",
       })
     );

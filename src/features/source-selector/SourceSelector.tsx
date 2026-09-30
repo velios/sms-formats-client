@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { DropdownMenu } from "radix-ui";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
+import { buildPullRequestWorkspacePath } from "@/domain/bank-route";
 import {
   useAvailableSourceRepos,
   useOpenPRs,
   useSwitchRepository,
 } from "@/hooks/useGitHub";
-import {
-  getPullRequestGitHubUrl,
-  getPullRequestWorkspacePath,
-} from "@/lib/pull-request-navigation";
+import { getPullRequestGitHubUrl } from "@/lib/pull-request-navigation";
 import { cn } from "@/lib/utils";
 import { useSourceStore } from "@/store";
 
@@ -24,18 +23,17 @@ interface OpenPullRequestItem {
   title: string;
   headRef: string;
   headSha: string;
-  approvedCount: number;
 }
 
 const sourceNavDropdownClassName =
-  "absolute top-[calc(100%+6px)] left-0 z-[120] max-h-[min(420px,calc(100vh-120px))] overflow-y-auto rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] shadow-[var(--shadow-md)]";
+  "z-[120] max-h-[min(420px,calc(100vh-120px))] overflow-y-auto rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] shadow-[var(--shadow-md)]";
 
 const sourceNavOptionClassName = (isActive: boolean) =>
   cn(
     "flex w-full items-center gap-2 bg-transparent px-3 py-2 text-left transition-colors",
     isActive
       ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
-      : "hover:bg-[color:var(--c-bg-hover)]"
+      : "outline-none hover:bg-[color:var(--c-bg-hover)] data-highlighted:bg-[color:var(--c-bg-hover)]"
   );
 
 const sourceNavLabelClassName =
@@ -61,7 +59,6 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const ref = useRef<HTMLDivElement>(null);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const repository = useSourceStore((state) => state.repository);
   const sourceRef = useSourceStore((state) => state.sourceRef);
@@ -89,18 +86,6 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
     ? getPullRequestGitHubUrl(activePrNumber, repository)
     : repositoryUrl;
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpenMenu(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
   const closeMenu = () => {
     setOpenMenu(null);
   };
@@ -110,33 +95,37 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
   const currentRepositorySlug = `${repository.owner}/${repository.repo}`;
 
   return (
-    <div className="relative flex min-w-0 items-center gap-2" ref={ref}>
+    <div className="relative flex min-w-0 items-center gap-2">
       {allowRepoSwitch && (
         <div className="relative flex min-w-0 items-center gap-1">
-          <button
-            className={sourceNavLabelClassName}
-            onClick={() =>
-              setOpenMenu((current) => (current === "repo" ? null : "repo"))
-            }
-            title={repositoryLabel}
-            type="button"
+          <DropdownMenu.Root
+            onOpenChange={(open) => setOpenMenu(open ? "repo" : null)}
+            open={openMenu === "repo"}
           >
-            {repositoryLabel}
-          </button>
-          <a
-            aria-label={repositoryLabel}
-            className={sourceNavExternalLinkClassName}
-            href={repositoryUrl}
-            rel="noreferrer"
-            target="_blank"
-            title={repositoryLabel}
-          >
-            ↗
-          </a>
+            <DropdownMenu.Trigger asChild>
+              <button
+                className={sourceNavLabelClassName}
+                title={repositoryLabel}
+                type="button"
+              >
+                {repositoryLabel}
+              </button>
+            </DropdownMenu.Trigger>
+            <a
+              aria-label={repositoryLabel}
+              className={sourceNavExternalLinkClassName}
+              href={repositoryUrl}
+              rel="noreferrer"
+              target="_blank"
+              title={repositoryLabel}
+            >
+              ↗
+            </a>
 
-          {openMenu === "repo" && (
-            <div
+            <DropdownMenu.Content
+              align="start"
               className={sourceNavDropdownClassName}
+              sideOffset={6}
               style={{ minWidth: 320 }}
             >
               {isReposFetching && (
@@ -148,25 +137,26 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                 repositoryOptions.map((repoRef) => {
                   const repoSlug = `${repoRef.owner}/${repoRef.repo}`;
                   return (
-                    <button
-                      className={sourceNavOptionClassName(
-                        repoSlug === currentRepositorySlug
-                      )}
-                      key={repoSlug}
-                      onClick={() => {
-                        void switchRepository(repoRef).then(() => {
-                          closeMenu();
-                          navigate("/");
-                        });
-                      }}
-                      type="button"
-                    >
-                      {repoSlug}
-                    </button>
+                    <DropdownMenu.Item asChild key={repoSlug}>
+                      <button
+                        className={sourceNavOptionClassName(
+                          repoSlug === currentRepositorySlug
+                        )}
+                        onClick={() => {
+                          void switchRepository(repoRef).then(() => {
+                            closeMenu();
+                            navigate("/");
+                          });
+                        }}
+                        type="button"
+                      >
+                        {repoSlug}
+                      </button>
+                    </DropdownMenu.Item>
                   );
                 })}
-            </div>
-          )}
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
         </div>
       )}
 
@@ -174,32 +164,34 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
         <>
           <span className="mr-0.5 text-[color:var(--c-text-dim)]">/</span>
           <div className="relative flex min-w-0 items-center gap-1">
-            <button
-              className={sourceNavLabelClassName}
-              onClick={() =>
-                setOpenMenu((current) =>
-                  current === "source" ? null : "source"
-                )
-              }
-              title={sourceLabel}
-              type="button"
+            <DropdownMenu.Root
+              onOpenChange={(open) => setOpenMenu(open ? "source" : null)}
+              open={openMenu === "source"}
             >
-              {sourceLabel}
-            </button>
-            <a
-              aria-label={sourceLabel}
-              className={sourceNavExternalLinkClassName}
-              href={sourceUrl}
-              rel="noreferrer"
-              target="_blank"
-              title={sourceLabel}
-            >
-              ↗
-            </a>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  className={sourceNavLabelClassName}
+                  title={sourceLabel}
+                  type="button"
+                >
+                  {sourceLabel}
+                </button>
+              </DropdownMenu.Trigger>
+              <a
+                aria-label={sourceLabel}
+                className={sourceNavExternalLinkClassName}
+                href={sourceUrl}
+                rel="noreferrer"
+                target="_blank"
+                title={sourceLabel}
+              >
+                ↗
+              </a>
 
-            {openMenu === "source" && (
-              <div
+              <DropdownMenu.Content
+                align="start"
                 className={sourceNavDropdownClassName}
+                sideOffset={6}
                 style={{ minWidth: 420 }}
               >
                 {isPRsFetching && (
@@ -209,37 +201,38 @@ export function SourceSelector({ allowRepoSwitch = false }: Props) {
                 )}
                 {!isPRsFetching &&
                   sortedPRs.map((pullRequest) => (
-                    <button
-                      className={sourceNavOptionClassName(
-                        pullRequest.number === activePrNumber
-                      )}
-                      key={pullRequest.number}
-                      onClick={() => {
-                        closeMenu();
-                        navigate(
-                          getPullRequestWorkspacePath({
-                            repository,
-                            prNumber: pullRequest.number,
-                          })
-                        );
-                      }}
-                      type="button"
-                    >
-                      <span className="text-[color:var(--c-text-muted)] text-sm">
-                        #{pullRequest.number}
-                      </span>
-                      <span className="truncate text-sm">
-                        {pullRequest.title}
-                      </span>
-                    </button>
+                    <DropdownMenu.Item asChild key={pullRequest.number}>
+                      <button
+                        className={sourceNavOptionClassName(
+                          pullRequest.number === activePrNumber
+                        )}
+                        onClick={() => {
+                          closeMenu();
+                          navigate(
+                            buildPullRequestWorkspacePath({
+                              repository,
+                              prNumber: pullRequest.number,
+                            })
+                          );
+                        }}
+                        type="button"
+                      >
+                        <span className="text-[color:var(--c-text-muted)] text-sm">
+                          #{pullRequest.number}
+                        </span>
+                        <span className="truncate text-sm">
+                          {pullRequest.title}
+                        </span>
+                      </button>
+                    </DropdownMenu.Item>
                   ))}
                 {!isPRsFetching && sortedPRs.length === 0 && (
                   <div className="px-3 py-2 text-[color:var(--c-text-muted)] text-sm">
                     {t("bank.noResults")}
                   </div>
                 )}
-              </div>
-            )}
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
           </div>
         </>
       )}

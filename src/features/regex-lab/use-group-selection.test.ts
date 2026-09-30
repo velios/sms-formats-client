@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { explainRegex } from "@/domain/format";
+import { analyzeRegexPattern } from "@/domain/format";
 import {
   type UseGroupSelectionParams,
   useGroupSelection,
@@ -11,7 +11,7 @@ function paramsFor(
   overrides: Partial<UseGroupSelectionParams> = {}
 ): UseGroupSelectionParams {
   return {
-    tokens: explainRegex(regex, "en").patternTokens,
+    tokens: analyzeRegexPattern(regex, "en").patternTokens,
     highlightMode: "groups",
     regex,
     activeExample: "PAY 100",

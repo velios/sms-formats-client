@@ -1,7 +1,3 @@
-// The prompt package surface: task, document checkboxes, composition preview,
-// copy / download / clear (PRD #20). The preview shows the composition of the
-// package, never its text — it answers "did anything get lost?".
-
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ModalDialog } from "@/components/ModalDialog";
@@ -29,7 +25,8 @@ interface Props {
   bankName: string;
   bankPath: string;
   repository: RepoRef;
-  sourceRefName: string | undefined;
+  headSha: string | undefined;
+  baseSha: string | undefined;
   prNumber: number | null;
   inventory: Pick<
     BankInventory,
@@ -72,8 +69,6 @@ function PreviewSummary(params: {
 
   return (
     <div className="flex flex-col gap-1 text-[13px]">
-      {/* All three layers always, zeroes included: an explicit zero explains a
-          missing block and catches drafts that did not get picked up. */}
       {summary.layers.map((layer) => (
         <div className="flex justify-between gap-3" key={layer.layer}>
           <span className="text-[color:var(--c-text-muted)]">
@@ -112,14 +107,14 @@ export function PromptPackageModal({
   bankName,
   bankPath,
   repository,
-  sourceRefName,
+  headSha,
+  baseSha,
   prNumber,
   inventory,
   draftStore,
   onClose,
 }: Props) {
   const { t } = useTranslation();
-  const titleId = useId();
   const taskId = useId();
   const taskRef = useRef<HTMLTextAreaElement>(null);
   const [isCopied, setIsCopied] = useState(false);
@@ -128,7 +123,8 @@ export function PromptPackageModal({
     bankName,
     bankPath,
     repository,
-    sourceRefName,
+    headSha,
+    baseSha,
     inventory,
     draftStore,
   });
@@ -138,9 +134,6 @@ export function PromptPackageModal({
     taskRef.current?.focus();
   }, []);
 
-  // One fetch per opening: the bodies of the layers cannot change while the
-  // modal holds the screen. Editing the task or a checkbox only re-assembles
-  // the string, so nothing here reacts to them.
   const buildRef = useRef(build);
   buildRef.current = build;
   useEffect(() => {
@@ -168,7 +161,6 @@ export function PromptPackageModal({
       className="flex max-h-[calc(100vh-40px)] flex-col sm:max-w-[720px]"
       onClose={onClose}
       title={t("promptPackage.title", { bank: bankName })}
-      titleId={titleId}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
@@ -178,9 +170,6 @@ export function PromptPackageModal({
           >
             {t("promptPackage.taskLabel")}
           </label>
-          {/* Default wordings, not a separate action: the chip drops its text
-              into the field, overwriting what is there, and the field stays
-              editable — the preset is a starting point, not a mode. */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[12px] text-[color:var(--c-text-dim)]">
               {t("promptPackage.presetsLabel")}

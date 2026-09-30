@@ -10,7 +10,8 @@
     "reset": "Reset",
     "close": "Close",
     "retry": "Retry",
-    "backToMain": "Back to main"
+    "backToMain": "Back to main",
+    "back": "Back to PRs"
   },
   "source": {
     "label": "Source",
@@ -28,7 +29,23 @@
     "unsavedDraftsInPr": "You have unsaved local changes in this PR",
     "switchDiscardConfirm": "You have unsaved changes that are not part of a PR commit yet. Switching repository, source, or commit will hide them from the current view, but they will stay saved and reappear when you return. Continue?",
     "commitWithoutMessage": "No commit message",
-    "noCommits": "No commits found"
+    "noCommits": "No commits found",
+    "approvePr": "Approve PR",
+    "approvePrSuccess": "PR #{{number}} approved",
+    "approvePrError": "Could not approve PR",
+    "approvingPr": "Approving…",
+    "approvePrDone": "✓ Approved",
+    "validatorErrorsClickable": "Open validator error details",
+    "openValidatorChecks": "Open on GitHub",
+    "recentPullRequests": "Recent PRs",
+    "validatorLoadFailed": "Could not load validation details. Open checks on GitHub.",
+    "loadingValidationResult": "Loading validation results…",
+    "loadValidationResult": "Retry",
+    "validatorErrorsUnavailable": "Validator failed. Open PR checks for details.",
+    "validatorErrorsTitle": "Validator errors",
+    "checksUnavailable": "Check results are not available yet.",
+    "empty": "No open pull requests in this repository.",
+    "search": "Search by title, branch, or PR number"
   },
   "githubAuth": {
     "openSettings": "GitHub token settings",
@@ -41,7 +58,11 @@
     "resetToken": "Reset token",
     "emptyToken": "Enter a GitHub token",
     "invalidToken": "Failed to validate token",
-    "saving": "Validating…"
+    "saving": "Validating…",
+    "maintainer": "maintainer",
+    "personalKey": "personal token",
+    "sharedKey": "shared token",
+    "permissionStatus": "Repository permissions"
   },
   "bank": {
     "search": "Search bank…",
@@ -70,7 +91,8 @@
     "recentBanks": "Recent banks",
     "recentFormats": "Recently viewed",
     "openFormatInRepo": "Open file in GitHub",
-    "openBankFolderInRepo": "Open bank folder in GitHub"
+    "openBankFolderInRepo": "Open bank folder in GitHub",
+    "resetToSource": "Discard all local changes"
   },
   "editor": {
     "raw": "Final File",
@@ -123,7 +145,16 @@
     "regexEditable": "Regular expression (editable)",
     "regexHighlight": "Regular expression (highlight)",
     "convertTemplateRough": "Convert from Template (basic)",
-    "convertTemplateAccurate": "Convert from Template (accurate)"
+    "convertTemplateAccurate": "Convert from Template (accurate)",
+    "clickTokenHint": "Click a regex token to highlight the captured text",
+    "resetFileToSource": "Reset file to its head revision",
+    "redo": "Redo",
+    "undo": "Undo",
+    "deleteFormat": "Delete format",
+    "regexUnified": "Regular expression",
+    "deleted": "Deleted",
+    "deleteFormatConfirmModified": "This format has local edits. Deleting it will discard those edits. Continue?",
+    "structuredUnavailable": "Fix section markers in the source text to open the structured editor."
   },
   "columns": {
     "add": "Add column",
@@ -151,7 +182,20 @@
     "invalidColumn": "Invalid column: {{column}}",
     "missingSenders": "Missing senders.txt file",
     "multiBankPublish": "Changes span multiple banks. Publish is limited to one bank.",
-    "runValidation": "Run validation"
+    "runValidation": "Run validation",
+    "issue": {
+      "MISSING_COLUMNS": "Missing -----COLUMNS----- marker",
+      "MISSING_EXAMPLE": "No -----EXAMPLE----- section",
+      "MISSING_REGEX": "Missing regular expression",
+      "INVALID_REGEX": "Invalid regular expression syntax",
+      "EXAMPLE_NO_MATCH": "Example {{index}} does not match the format regex",
+      "GROUP_COUNT_MISMATCH": "Capture groups: {{groups}}, columns: {{columns}}",
+      "INVALID_COLUMN": "Invalid column: {{column}}",
+      "EXAMPLE_COLLISION": "Example {{index}} matches the regex in {{target}}",
+      "MISSING_SENDERS": "Missing senders.txt",
+      "NO_BANK": "Bank not found",
+      "LOAD_FAILED": "Could not load bank: {{detail}}"
+    }
   },
   "quickCheck": {
     "openTemplateBySms": "Search template by SMS",
@@ -183,7 +227,19 @@
     "sourceRemote": "github",
     "openInApp": "Open in app",
     "openInGitHub": "Open in GitHub",
-    "noRegexes": "No formats with regex were found."
+    "noRegexes": "No formats with regex were found.",
+    "activeTemplateSource": "Template source: {{file}}",
+    "activeSmsSource": "SMS source: {{file}}, example #{{index}}",
+    "summaryMissingExamples": "Formats without SMS: {{count}}",
+    "noFormats": "No formats found in this bank.",
+    "summaryCheckedSms": "SMS checked: {{checked}} (formats: {{total}})",
+    "summaryMatchedSms": "Matching SMS: {{count}}",
+    "summaryMatchedFormats": "Matching formats: {{count}}",
+    "templateRegexPlaceholder": "Uses the active format’s regular expression",
+    "templateRegexLabel": "Template regular expression",
+    "emptyTemplateRegex": "Enter a template regular expression.",
+    "smsMatchesInFormat": "SMS: {{matched}} / {{total}}",
+    "invalidTemplateRegex": "Invalid template: {{message}}"
   },
   "publish": {
     "title": "Publish PR",
@@ -207,7 +263,9 @@
     "commitDescriptionPlaceholder": "Optional: details of the change",
     "updateAction": "Update",
     "updateWithDefaultTitle": "Update with the default title",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "editedDuringValidation": "Documents changed during validation. Retry publication.",
+    "updatedRefreshFailed": "Changes were published. The workspace could not be refreshed; reload the PR."
   },
   "refresh": {
     "action": "Pull from GitHub",
@@ -409,5 +467,32 @@
       "notRecalculated": "Intersections were not recalculated.",
       "hint": "The drafts are visible in the bank file list. Until they are published you can edit and roll them back."
     }
+  },
+  "createEntity": {
+    "invalidFormatName": "Invalid format name. Use a .txt filename without path separators.",
+    "formatExists": "A file with this name already exists."
+  },
+  "panels": {
+    "resize": "Resize panels",
+    "finishResize": "Finish resizing",
+    "left": "Files and actions",
+    "right": "Reference",
+    "expand": "Expand: {{panel}}",
+    "width": "Width: {{panel}}",
+    "resizeHint": "{{panel}}: drag the edge; double-click to collapse"
+  },
+  "quickRef": {
+    "searchLabel": "Search regex reference",
+    "search": "Search…"
+  },
+  "draft": {
+    "discardAndOpenLatest": "Discard stale drafts and open the latest PR"
+  },
+  "workspace": {
+    "cachedStaleNotice": "PR changed since your edits. You are viewing the previous version. Discard local changes and refresh the PR to continue.",
+    "discardAndRefresh": "Discard local changes and refresh PR"
+  },
+  "regex": {
+    "captureValue": "Value"
   }
 }

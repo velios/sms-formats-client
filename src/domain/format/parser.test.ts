@@ -152,3 +152,24 @@ describe("round-trip", () => {
     expect(reserialized).toBe(original);
   });
 });
+
+it("retains an empty example section while the user is editing it", () => {
+  const raw = serializeFormat("^(.*)$", ["comment"], ["A", ""]);
+  expect(parseFormatFile(raw).examples).toEqual(["A", ""]);
+});
+
+it.each([
+  "",
+  "A\n",
+  "\nA\n\n",
+  " A ",
+])("round-trips example whitespace: %j", (example) => {
+  const regex = " A ";
+  const original = serializeFormat(regex, ["comment"], [example, example]);
+  const parsed = parseFormatFile(original);
+  expect(parsed.regex).toBe(regex);
+  expect(parsed.examples).toEqual([example, example]);
+  expect(serializeFormat(parsed.regex, parsed.columns, parsed.examples)).toBe(
+    original
+  );
+});

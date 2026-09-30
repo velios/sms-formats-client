@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { FormatIntersectionStat } from "@/domain/format";
-import type { CachedFormatEntry } from "@/features/quick-check/format-entries";
+import type { LoadedFormat } from "@/features/workspace/bank-snapshot";
 import {
-  buildCachedFormatEntryFromEditorContext,
   buildIntersectionScope,
+  buildLoadedFormatFromEditorContext,
   mergeLiveEditIntoSnapshot,
   resolveIntersectionScopeFiles,
   resolveVisibleIntersectionEntries,
@@ -12,15 +12,14 @@ import {
 
 function makeEntry(
   filePath: string,
-  overrides: Partial<CachedFormatEntry> = {}
-): CachedFormatEntry {
+  overrides: Partial<LoadedFormat> = {}
+): LoadedFormat {
   return {
     filePath,
     fileName: filePath.split("/").pop() ?? filePath,
     regex: "^PAY (\\d+)$",
     examples: ["PAY 100"],
     source: "remote",
-    fingerprint: "remote:head-sha",
     ...overrides,
   };
 }
@@ -50,19 +49,18 @@ describe("shouldAcceptRunResult", () => {
   });
 });
 
-describe("buildCachedFormatEntryFromEditorContext", () => {
-  it("trims the regex and drops blank examples", () => {
-    const entry = buildCachedFormatEntryFromEditorContext({
+describe("buildLoadedFormatFromEditorContext", () => {
+  it("preserves literal regex whitespace and drops blank examples", () => {
+    const entry = buildLoadedFormatFromEditorContext({
       filePath: "src/Bank_1/formats/current.txt",
       regex: " ^PAY (\\d+)$ ",
       examples: [" PAY 100 ", "", "  ", "PAY 200"],
     });
 
     expect(entry.fileName).toBe("current.txt");
-    expect(entry.regex).toBe("^PAY (\\d+)$");
+    expect(entry.regex).toBe(" ^PAY (\\d+)$ ");
     expect(entry.examples).toEqual(["PAY 100", "PAY 200"]);
     expect(entry.source).toBe("draft");
-    expect(entry.fingerprint).toMatch(/^draft-live:/);
   });
 });
 

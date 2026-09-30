@@ -2,16 +2,12 @@ import { countCaptureGroups, parseFormatFile, smsesByRegex } from "../format";
 import type { BankInfo, ParsedFormat, ValidationIssue } from "../types";
 import { ALLOWED_COLUMN_NAMES } from "../types";
 
-/**
- * Validate a single parsed format file.
- */
 export function validateFormat(
   parsed: ParsedFormat,
   filePath: string
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [...parsed.parseIssues];
 
-  // Check regex validity and that examples match it
   if (parsed.regex) {
     const recognition = smsesByRegex(parsed.examples, parsed.regex);
     if (recognition.error) {
@@ -19,7 +15,6 @@ export function validateFormat(
         code: "INVALID_REGEX",
         level: "error",
         filePath,
-        message: "Invalid regular expression syntax",
       });
     } else {
       recognition.matched.forEach((isMatch, i) => {
@@ -28,14 +23,13 @@ export function validateFormat(
             code: "EXAMPLE_NO_MATCH",
             level: "error",
             filePath,
-            message: `Example ${i + 1} does not match the format regex`,
+            params: { index: i + 1 },
           });
         }
       });
     }
   }
 
-  // Group count vs columns count
   if (parsed.regex && parsed.columns.length > 0) {
     const groupCount = countCaptureGroups(parsed.regex);
     if (groupCount !== null && groupCount !== parsed.columns.length) {
@@ -43,12 +37,11 @@ export function validateFormat(
         code: "GROUP_COUNT_MISMATCH",
         level: "error",
         filePath,
-        message: `Capture group count (${groupCount}) ≠ columns count (${parsed.columns.length})`,
+        params: { groups: groupCount, columns: parsed.columns.length },
       });
     }
   }
 
-  // Column name validation
   for (const col of parsed.columns) {
     const baseName = col.split("#")[0]!;
     if (!ALLOWED_COLUMN_NAMES.has(baseName)) {
@@ -56,7 +49,7 @@ export function validateFormat(
         code: "INVALID_COLUMN",
         level: "error",
         filePath,
-        message: `Invalid column name: ${col}`,
+        params: { column: col },
       });
     }
   }
@@ -84,16 +77,13 @@ function buildCollisionIssuesForPair(
       code: "EXAMPLE_COLLISION",
       level: "error",
       filePath: source.filePath,
-      message: `Example ${i + 1} matches regex of ${targetName}`,
+      params: { index: i + 1, target: targetName },
     });
   });
 
   return issues;
 }
 
-/**
- * Cross-format collision: check if an example from one format matches another format's regex.
- */
 export function checkCrossFormatCollisions(
   formats: { filePath: string; parsed: ParsedFormat }[]
 ): ValidationIssue[] {
@@ -119,9 +109,6 @@ export function checkCrossFormatCollisions(
   return issues;
 }
 
-/**
- * Bank-level validation: check senders.txt exists
- */
 export function validateBankLevel(
   bank: BankInfo,
   formatContents: Map<string, string>
@@ -133,11 +120,9 @@ export function validateBankLevel(
       code: "MISSING_SENDERS",
       level: "error",
       filePath: `${bank.folderPath}/senders.txt`,
-      message: "Missing senders.txt file",
     });
   }
 
-  // Parse all formats and validate individually
   const parsedFormats: { filePath: string; parsed: ParsedFormat }[] = [];
   for (const [path, content] of formatContents) {
     const parsed = parseFormatFile(content, path);
@@ -145,7 +130,6 @@ export function validateBankLevel(
     issues.push(...validateFormat(parsed, path));
   }
 
-  // Cross-format collision checks
   issues.push(...checkCrossFormatCollisions(parsedFormats));
 
   return issues;

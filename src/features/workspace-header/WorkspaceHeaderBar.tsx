@@ -39,9 +39,6 @@ const headerActionButtonClassName =
 
 const headerDividerClassName = "h-5 w-px shrink-0 bg-[color:var(--c-border)]";
 
-// The single workspace header bar above all three columns: bank zone (sized to
-// the sidebar column), the Editor/Final-file toggle (aligned with the work
-// column), the file name (the only shrinkable element) and the file actions.
 export function WorkspaceHeaderBar({
   bankName,
   bankRepoUrl,
@@ -57,13 +54,10 @@ export function WorkspaceHeaderBar({
 }: Props) {
   const { t } = useTranslation();
   const filePath = showSenders ? sendersPath : selectedFile;
-  // The raw/structured split does not exist for senders.txt, so the toggle is
-  // gated out (grilling-session decision; the mockup leaves it ungated).
   const showModeToggle = !showSenders && Boolean(selectedFile);
 
   return (
     <div className="flex h-13 shrink-0 items-center rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] px-[14px]">
-      {/* Bank zone — its trailing divider lands on the sidebar/work column boundary. */}
       <div className="flex w-[calc(clamp(264px,19vw,340px)+2px)] min-w-0 shrink-0 items-center gap-2 pr-4">
         <h2 className="m-0 truncate font-semibold text-[15px]">{bankName}</h2>
         <a
@@ -132,26 +126,32 @@ function buildRenameTargetPath(params: {
   return { targetPath };
 }
 
-// Gating is identical to the pre-header toolbar: rename only succeeds for
-// locally created files, undo/redo follow draft history, delete is
-// unavailable for created files, reset is active while there is anything to
-// roll back. Senders never expose rename/delete.
 function resolveFileActionGating(params: {
   isSenders: boolean;
   readOnly: boolean;
   isDeleted: boolean;
   isModified: boolean;
-  remoteBaseline: string;
+  remoteBaseline: string | null;
+  hasDocument: boolean;
 }): { canReset: boolean; canDelete: boolean; canRename: boolean } {
-  const { isSenders, readOnly, isDeleted, isModified, remoteBaseline } = params;
+  const {
+    isSenders,
+    readOnly,
+    isDeleted,
+    isModified,
+    remoteBaseline,
+    hasDocument,
+  } = params;
   return {
     canReset: !readOnly && (isModified || isDeleted),
-    canDelete: !(isSenders || readOnly) && remoteBaseline !== "" && !isDeleted,
-    canRename: !(isSenders || readOnly || isDeleted),
+    canDelete: !(isSenders || readOnly || isDeleted) && hasDocument,
+    canRename:
+      !(isSenders || readOnly || isDeleted) &&
+      remoteBaseline === null &&
+      hasDocument,
   };
 }
 
-// File name, repo link, change badges and the file action buttons.
 function WorkspaceFileControls({
   filePath,
   isSenders,
@@ -173,26 +173,26 @@ function WorkspaceFileControls({
   const draftStore = useDraftStore();
   const [renameError, setRenameError] = useState<string | null>(null);
 
-  // The old toolbar lived inside a per-file-keyed editor; the header persists
-  // across file switches, so the rename error resets explicitly.
   useEffect(() => {
     setRenameError(null);
   }, [filePath]);
 
-  const { data: remoteContent } = useWorkspaceFileContent({
+  const draft = draftStore.getDraft(filePath);
+  const { data: headContent } = useWorkspaceFileContent({
     filePath,
-    loadedFrom: "editor",
     contentRefName: sourceDeletedBaseSha ?? undefined,
+    enabled: draft?.headContent !== null || Boolean(sourceDeletedBaseSha),
   });
 
-  const draft = draftStore.getDraft(filePath);
   const hasSourceDeletedPreview = Boolean(sourceDeletedBaseSha);
-  const baseSha = draft?.baseSha ?? sourceRef?.sha ?? "";
-  const remoteBaseline =
-    draft?.remoteContent ??
-    (hasSourceDeletedPreview ? "" : (remoteContent ?? ""));
+  const baseSha = draft?.baselineHeadSha ?? sourceRef?.sha ?? "";
+  const remoteBaseline = draft
+    ? draft.headContent
+    : hasSourceDeletedPreview
+      ? null
+      : (headContent ?? null);
   const isDeleted = draft?.isDeleted ?? hasSourceDeletedPreview;
-  const isModified = draft ? draft.content !== draft.remoteContent : false;
+  const isModified = draft ? draft.content !== draft.headContent : false;
   const canUndo = draftStore.canUndo(filePath);
   const canRedo = draftStore.canRedo(filePath);
   const {
@@ -205,6 +205,7 @@ function WorkspaceFileControls({
     isDeleted,
     isModified,
     remoteBaseline,
+    hasDocument: Boolean(draft) || headContent !== undefined,
   });
 
   const fileName = filePath.split("/").pop() ?? filePath;
@@ -221,7 +222,7 @@ function WorkspaceFileControls({
       return;
     }
     const currentDraft = draftStore.getDraft(filePath);
-    if (!currentDraft || currentDraft.remoteContent !== "") {
+    if (!currentDraft || currentDraft.headContent !== null) {
       setRenameError(t("editor.renameOnlyDraft"));
       return;
     }
@@ -258,7 +259,7 @@ function WorkspaceFileControls({
 
   const handleReset = () => {
     if (sourceDeletedBaseSha) {
-      draftStore.setDraft(filePath, remoteContent ?? "", baseSha, "");
+      draftStore.setDraft(filePath, headContent ?? "", baseSha, null);
       return;
     }
     draftStore.resetFileToRemote(filePath);

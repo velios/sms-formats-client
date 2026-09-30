@@ -38,7 +38,7 @@ vi.mock("@/components/ModalDialog", () => ({
   ),
 }));
 
-vi.mock("@/domain/github", () => ({
+vi.mock("@/infrastructure/github", () => ({
   getCachedPullRequestApprovalPermission: vi.fn(() => false),
   getGitHubAuthChangeVersion: vi.fn(() => 0),
   getGitHubUserToken: vi.fn(() => "ghp_saved"),

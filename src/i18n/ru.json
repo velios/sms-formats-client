@@ -10,7 +10,8 @@
     "reset": "Сбросить",
     "close": "Закрыть",
     "retry": "Повторить",
-    "backToMain": "Вернуться к main"
+    "backToMain": "Вернуться к main",
+    "back": "Назад к списку PR"
   },
   "source": {
     "label": "Источник",
@@ -41,7 +42,10 @@
     "unsavedDraftsInPr": "Есть несохранённые локальные правки в этом PR",
     "switchDiscardConfirm": "Есть несохранённые изменения, не вошедшие в коммит PR. При переключении репозитория, источника или коммита они исчезнут с текущего экрана, но останутся сохранёнными и будут восстановлены при возврате. Продолжить?",
     "commitWithoutMessage": "Без сообщения коммита",
-    "noCommits": "Коммиты не найдены"
+    "noCommits": "Коммиты не найдены",
+    "checksUnavailable": "Статус проверок ещё неизвестен.",
+    "empty": "В этом репозитории нет открытых PR.",
+    "search": "Поиск по названию, ветке или номеру PR"
   },
   "githubAuth": {
     "openSettings": "Настройки GitHub токена",
@@ -54,7 +58,11 @@
     "resetToken": "Сбросить токен",
     "emptyToken": "Введите GitHub токен",
     "invalidToken": "Не удалось проверить токен",
-    "saving": "Проверка…"
+    "saving": "Проверка…",
+    "maintainer": "мейнтейнер",
+    "personalKey": "личный ключ",
+    "sharedKey": "общий ключ",
+    "permissionStatus": "Статус прав в репозитории"
   },
   "bank": {
     "search": "Поиск банка…",
@@ -143,7 +151,8 @@
     "regexUnified": "Регулярное выражение (единый редактор)",
     "clickTokenHint": "Нажмите на токен в regex, чтобы подсветить захваченный текст",
     "convertTemplateRough": "Преобразовать из Template (базово)",
-    "convertTemplateAccurate": "Преобразовать из Template (точно)"
+    "convertTemplateAccurate": "Преобразовать из Template (точно)",
+    "structuredUnavailable": "Исправьте маркеры секций в исходном тексте, чтобы открыть структурированный редактор."
   },
   "columns": {
     "add": "Добавить столбец",
@@ -171,7 +180,20 @@
     "invalidColumn": "Недопустимый столбец: {{column}}",
     "missingSenders": "Отсутствует файл senders.txt",
     "multiBankPublish": "Изменения затрагивают несколько банков. Публикация возможна только для одного.",
-    "runValidation": "Запустить валидацию"
+    "runValidation": "Запустить валидацию",
+    "issue": {
+      "MISSING_COLUMNS": "Отсутствует маркер -----COLUMNS-----",
+      "MISSING_EXAMPLE": "Нет секции -----EXAMPLE-----",
+      "MISSING_REGEX": "Отсутствует регулярное выражение",
+      "INVALID_REGEX": "Некорректный синтаксис регулярного выражения",
+      "EXAMPLE_NO_MATCH": "Пример {{index}} не совпадает с regex формата",
+      "GROUP_COUNT_MISMATCH": "Групп захвата: {{groups}}, колонок: {{columns}}",
+      "INVALID_COLUMN": "Недопустимая колонка: {{column}}",
+      "EXAMPLE_COLLISION": "Пример {{index}} совпадает с regex файла {{target}}",
+      "MISSING_SENDERS": "Отсутствует senders.txt",
+      "NO_BANK": "Банк не найден",
+      "LOAD_FAILED": "Не удалось загрузить банк: {{detail}}"
+    }
   },
   "quickCheck": {
     "openTemplateBySms": "Поиск шаблона по СМС",
@@ -238,7 +260,9 @@
     "updateAction": "Обновить",
     "updateWithDefaultTitle": "Обновить со стандартным заголовком",
     "cancel": "Отмена",
-    "prLink": "Ссылка на PR"
+    "prLink": "Ссылка на PR",
+    "editedDuringValidation": "Документы изменились во время проверки. Повторите публикацию.",
+    "updatedRefreshFailed": "Изменения опубликованы. Не удалось обновить рабочую сессию; обновите PR."
   },
   "snippets": {
     "open": "Сниппеты",
@@ -442,5 +466,32 @@
       "notRecalculated": "Пересечения не пересчитывались.",
       "hint": "Черновики видны в списке файлов банка. Пока они не опубликованы, их можно править и откатывать."
     }
+  },
+  "createEntity": {
+    "invalidFormatName": "Некорректное имя формата. Используйте имя .txt без разделителей пути.",
+    "formatExists": "Файл с таким именем уже существует."
+  },
+  "panels": {
+    "resize": "Изменить ширину панелей",
+    "finishResize": "Завершить настройку ширины",
+    "left": "Файлы и действия",
+    "right": "Справка",
+    "expand": "Развернуть: {{panel}}",
+    "width": "Ширина: {{panel}}",
+    "resizeHint": "{{panel}}: тяните границу; двойной щелчок сворачивает панель"
+  },
+  "quickRef": {
+    "searchLabel": "Поиск по справочнику regex",
+    "search": "Поиск…"
+  },
+  "draft": {
+    "discardAndOpenLatest": "Удалить устаревшие черновики и открыть текущий PR"
+  },
+  "workspace": {
+    "cachedStaleNotice": "PR изменился после ваших правок. Показана предыдущая версия. Сбросьте локальные изменения и обновите PR, чтобы продолжить.",
+    "discardAndRefresh": "Сбросить локальные изменения и обновить PR"
+  },
+  "regex": {
+    "captureValue": "Значение"
   }
 }

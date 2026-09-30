@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   fireEvent,
   render as rtlRender,
   screen,
@@ -115,11 +116,22 @@ const mocks = vi.hoisted(() => {
         filePath: string;
         content: string;
         isDeleted: boolean;
-        baseSha: string;
+        baselineHeadSha: string;
       }>
     >(() => []),
     getDeletedFiles: vi.fn(() => []),
-    getDraft: vi.fn(() => undefined),
+    getDraft:
+      vi.fn<
+        (path: string) =>
+          | {
+              filePath: string;
+              content: string;
+              isDeleted: boolean;
+              baselineHeadSha: string;
+            }
+          | undefined
+      >(),
+    acknowledgePublished: vi.fn(),
     resetBankToRemote: vi.fn(),
     discardAll: vi.fn(),
     clearAll: vi.fn(),
@@ -138,12 +150,17 @@ const mocks = vi.hoisted(() => {
     draftState,
     fetchPullRequestFiles: vi.fn(() => Promise.resolve([])),
     fetchRepoTree: vi.fn(() => Promise.resolve(tree)),
-    fileContentStore: {
-      getCachedFileContent: vi.fn(() => undefined),
-      invalidatePullRequestFileContents: vi.fn(),
-      primeFileContent: vi.fn(() => Promise.resolve(null)),
-      setFileContentEntry: vi.fn(),
-    },
+    cacheFileContent: vi.fn(),
+    loadFileContents: vi.fn(async ({ filePaths }: { filePaths: string[] }) => ({
+      contents: new Map(
+        filePaths.map((path) => [
+          path,
+          `^${path.includes("current") ? "CURRENT" : "ANOTHER"}$\n\n-----COLUMNS-----\n\n-----EXAMPLE-----\n${path.includes("current") ? "CURRENT" : "ANOTHER"}\n`,
+        ])
+      ),
+      cachedCount: 0,
+      remoteFetchedCount: filePaths.length,
+    })),
     getCachedPullRequestApprovalPermission: vi.fn(() => false),
     getGitHubAuthChangeVersion: vi.fn(() => 0),
     indexBanksFromTree: vi.fn(() => banks),
@@ -277,15 +294,19 @@ vi.mock("@/store/workspace-session", () => ({
   saveWorkspaceSession: mocks.saveWorkspaceSession,
 }));
 
-vi.mock("@/store/file-content-store", () => ({
-  useFileContentStore: {
-    getState: () => mocks.fileContentStore,
-  },
+vi.mock("@/infrastructure/file-content", () => ({
+  cacheFileContent: mocks.cacheFileContent,
+  loadFileContents: mocks.loadFileContents,
 }));
 
-vi.mock("@/domain/github", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/domain/github")>("@/domain/github");
+vi.mock("@/domain/bank-index", () => ({
+  indexBanksFromTree: mocks.indexBanksFromTree,
+}));
+
+vi.mock("@/infrastructure/github", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/infrastructure/github")
+  >("@/infrastructure/github");
   return {
     ...actual,
     approvePullRequest: vi.fn(),
@@ -299,7 +320,6 @@ vi.mock("@/domain/github", async () => {
       mocks.getCachedPullRequestApprovalPermission,
     getGitHubAuthChangeVersion: mocks.getGitHubAuthChangeVersion,
     getGitHubUserToken: vi.fn(() => ""),
-    indexBanksFromTree: mocks.indexBanksFromTree,
     refreshPullRequestApprovalPermission:
       mocks.refreshPullRequestApprovalPermission,
     resolvePullRequestWorkspace: mocks.resolvePullRequestWorkspace,
@@ -312,7 +332,7 @@ import {
   fetchFileContent,
   fetchOpenPRs,
   getGitHubUserToken,
-} from "@/domain/github";
+} from "@/infrastructure/github";
 import { BankWorkspace } from "./BankWorkspace";
 
 function QueryWrapper({ children }: { children: ReactNode }) {
@@ -362,7 +382,10 @@ describe("BankWorkspace route init", () => {
     mocks.draftState.getDeletedFiles.mockReset();
     mocks.draftState.getDeletedFiles.mockReturnValue([]);
     mocks.draftState.getDraft.mockReset();
-    mocks.draftState.getDraft.mockReturnValue(undefined);
+    mocks.draftState.getDraft.mockImplementation((path) =>
+      mocks.draftState.getChangedFiles().find((file) => file.filePath === path)
+    );
+    mocks.draftState.acknowledgePublished.mockReset();
     mocks.draftState.resetBankToRemote.mockReset();
     mocks.draftState.discardAll.mockReset();
     mocks.draftState.clearAll.mockReset();
@@ -379,12 +402,8 @@ describe("BankWorkspace route init", () => {
     mocks.fetchPullRequestApprovalByCurrentUser.mockResolvedValue(false);
     mocks.fetchRepoTree.mockReset();
     mocks.fetchRepoTree.mockResolvedValue(mocks.tree);
-    mocks.fileContentStore.getCachedFileContent.mockReset();
-    mocks.fileContentStore.getCachedFileContent.mockReturnValue(undefined);
-    mocks.fileContentStore.invalidatePullRequestFileContents.mockReset();
-    mocks.fileContentStore.primeFileContent.mockReset();
-    mocks.fileContentStore.primeFileContent.mockResolvedValue(null);
-    mocks.fileContentStore.setFileContentEntry.mockReset();
+    mocks.cacheFileContent.mockClear();
+    mocks.loadFileContents.mockClear();
     mocks.indexBanksFromTree.mockReset();
     mocks.indexBanksFromTree.mockReturnValue(mocks.banks);
     mocks.resolvePullRequestWorkspace.mockReset();
@@ -568,7 +587,7 @@ describe("BankWorkspace route init", () => {
         filePath: "src/TBank_123/formats/current.txt",
         content: "LOCAL",
         isDeleted: false,
-        baseSha: "head-sha",
+        baselineHeadSha: "head-sha",
       },
     ]);
     mocks.resolvePullRequestWorkspace
@@ -615,12 +634,10 @@ describe("BankWorkspace route init", () => {
       ).toBeInTheDocument()
     );
     expect(screen.getByTestId("format-editor")).toBeInTheDocument();
-    expect(
-      mocks.fileContentStore.invalidatePullRequestFileContents
-    ).not.toHaveBeenCalled();
+    expect(mocks.cacheFileContent).not.toHaveBeenCalled();
   });
 
-  it("invalidates PR file cache and refreshes the workspace when head changes without local drafts", async () => {
+  it("caches the new revision and refreshes the workspace when head changes without local drafts", async () => {
     mocks.resolvePullRequestWorkspace
       .mockResolvedValueOnce({
         status: "supported",
@@ -658,12 +675,12 @@ describe("BankWorkspace route init", () => {
     window.dispatchEvent(new Event("focus"));
 
     await waitFor(() =>
-      expect(
-        mocks.fileContentStore.invalidatePullRequestFileContents
-      ).toHaveBeenCalledWith({
-        repository: { owner: "zenmoney", repo: "sms-formats" },
-        prNumber: 123,
-      })
+      expect(mocks.cacheFileContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repository: { owner: "zenmoney", repo: "sms-formats" },
+          commitSha: "new-head-sha",
+        })
+      )
     );
     await waitFor(() =>
       expect(mocks.sourceState.setSource).toHaveBeenCalledWith({
@@ -675,14 +692,65 @@ describe("BankWorkspace route init", () => {
     );
   });
 
-  it("invalidates PR cache and reloads the workspace after a successful PR update", async () => {
+  it("preserves edits made while a clean workspace refresh is loading", async () => {
+    const session = {
+      status: "supported" as const,
+      repository: { owner: "zenmoney", repo: "sms-formats" },
+      prNumber: 123,
+      headSha: "head-sha",
+      baseSha: "base-sha",
+      bankPath: "src/TBank_123",
+      writable: true,
+      readOnlyReason: null,
+      changedFiles: [],
+    };
+    mocks.resolvePullRequestWorkspace
+      .mockResolvedValueOnce(session)
+      .mockResolvedValue({ ...session, headSha: "new-head-sha" });
+    let finishTree!: (tree: typeof mocks.tree) => void;
+    mocks.fetchRepoTree
+      .mockResolvedValueOnce(mocks.tree)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishTree = resolve;
+          })
+      );
+    render(<BankWorkspace />);
+    await waitFor(() =>
+      expect(screen.getByTestId("format-editor")).toBeInTheDocument()
+    );
+    mocks.draftState.discardAll.mockClear();
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(mocks.fetchRepoTree).toHaveBeenCalledTimes(2));
+    mocks.draftState.getChangedFiles.mockReturnValue([
+      {
+        filePath: "src/TBank_123/formats/current.txt",
+        content: "LATE EDIT",
+        isDeleted: false,
+        baselineHeadSha: "head-sha",
+      },
+    ]);
+    await act(async () => finishTree(mocks.tree));
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "PR changed since your last local edits. You're viewing the cached previous version. Discard local changes and refresh the PR to continue."
+        )
+      ).toBeInTheDocument()
+    );
+    expect(mocks.draftState.discardAll).not.toHaveBeenCalled();
+    expect(mocks.sourceState.sourceRef?.sha).toBe("head-sha");
+  });
+
+  it("acknowledges the published snapshot and reloads the workspace after a successful PR update", async () => {
     vi.mocked(getGitHubUserToken).mockReturnValue("gh-token");
     mocks.draftState.getChangedFiles.mockReturnValue([
       {
         filePath: "src/TBank_123/senders.txt",
         content: "T-BANK",
         isDeleted: false,
-        baseSha: "head-sha",
+        baselineHeadSha: "head-sha",
       },
     ]);
     mocks.resolvePullRequestWorkspace
@@ -769,6 +837,7 @@ describe("BankWorkspace route init", () => {
       expect(mocks.updatePullRequestHead).toHaveBeenCalledWith(
         "gh-token",
         123,
+        "head-sha",
         [
           {
             path: "src/TBank_123/senders.txt",
@@ -781,12 +850,12 @@ describe("BankWorkspace route init", () => {
       )
     );
     await waitFor(() =>
-      expect(
-        mocks.fileContentStore.invalidatePullRequestFileContents
-      ).toHaveBeenCalledWith({
-        repository: { owner: "zenmoney", repo: "sms-formats" },
-        prNumber: 123,
-      })
+      expect(mocks.cacheFileContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repository: { owner: "zenmoney", repo: "sms-formats" },
+          commitSha: "new-head-sha",
+        })
+      )
     );
     await waitFor(() =>
       expect(mocks.fetchRepoTree).toHaveBeenCalledWith("new-head-sha", {
@@ -802,7 +871,12 @@ describe("BankWorkspace route init", () => {
         prNumber: 123,
       })
     );
-    expect(mocks.draftState.discardAll).toHaveBeenCalled();
+    expect(mocks.draftState.acknowledgePublished).toHaveBeenCalledWith(
+      mocks.draftState.getChangedFiles(),
+      "new-head-sha",
+      undefined
+    );
+    expect(mocks.draftState.discardAll).not.toHaveBeenCalled();
   });
 
   it("defers every workspace mutation until all reads resolve, committing the new head in one pass", async () => {
@@ -815,7 +889,7 @@ describe("BankWorkspace route init", () => {
         filePath: "src/TBank_123/senders.txt",
         content: "T-BANK",
         isDeleted: false,
-        baseSha: "head-sha",
+        baselineHeadSha: "head-sha",
       },
     ]);
     const supportedAtHead = {
@@ -886,15 +960,13 @@ describe("BankWorkspace route init", () => {
 
     // Every read must finish before any visible-state write, so React batches
     // the whole transition into a single commit instead of flickering.
-    expect(
-      lastOrder(mocks.fileContentStore.invalidatePullRequestFileContents)
-    ).toBeGreaterThan(readOrder);
+    expect(lastOrder(mocks.cacheFileContent)).toBeGreaterThan(readOrder);
     expect(setSourceNewHeadOrder).toBeGreaterThan(readOrder);
-    expect(mocks.fileContentStore.setFileContentEntry).toHaveBeenCalledWith(
+    expect(mocks.cacheFileContent).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: "src/TBank_123/formats/current.txt",
-        lastResolvedHeadSha: "new-head-sha",
-        status: "ready",
+        commitSha: "new-head-sha",
+        content: "primed content",
       })
     );
   });

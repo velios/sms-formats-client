@@ -129,9 +129,41 @@ describe("WorkspaceHeaderBar", () => {
       "src/TBank_123/formats/deleted.txt",
       "BASE CONTENT",
       "head-sha",
-      ""
+      null
     );
     expect(mocks.draftStore.resetFileToRemote).not.toHaveBeenCalled();
+  });
+
+  it("allows deleting an existing empty file but renames only a local new file", () => {
+    mocks.draftStore.getDraft.mockReturnValue({
+      content: "",
+      headContent: "",
+      baselineHeadSha: "head-sha",
+    });
+    const view = renderHeaderBar();
+    expect(
+      screen.getByRole("button", { name: "editor.deleteFormat" })
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "editor.renameFormat" })
+    ).toBeDisabled();
+    view.unmount();
+    mocks.draftStore.getDraft.mockReturnValue({
+      content: "new",
+      headContent: null,
+      baselineHeadSha: "head-sha",
+    });
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue("renamed.txt");
+    const onRenameFile = vi.fn(() => true);
+    renderHeaderBar({ onRenameFile });
+    fireEvent.click(
+      screen.getByRole("button", { name: "editor.renameFormat" })
+    );
+    expect(onRenameFile).toHaveBeenCalledWith(
+      "src/TBank_123/formats/current.txt",
+      "src/TBank_123/formats/renamed.txt"
+    );
+    prompt.mockRestore();
   });
 
   it("shows the mode toggle for a format file", () => {
@@ -148,7 +180,7 @@ describe("WorkspaceHeaderBar", () => {
   it("hides the mode toggle and format-only actions for senders.txt", () => {
     mocks.draftStore.getDraft.mockReturnValue({
       content: "A\nB",
-      remoteContent: "A",
+      headContent: "A",
       baseSha: "head-sha",
       isDeleted: false,
     });

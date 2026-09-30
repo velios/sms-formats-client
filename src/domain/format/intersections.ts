@@ -17,10 +17,6 @@ export interface FormatIntersectionStat {
   ownMatchedExamples: number;
   intersectingOtherFormats: number;
   intersectingFormatPaths: string[];
-  // The texts behind the counters: which foreign example this regex recognized
-  // and which own example it failed to. The counters answer "how many", these
-  // answer "which one" — needed wherever the intersection has to be quoted
-  // rather than tallied (the prompt package).
   intersectingExamples: IntersectingExample[];
   ownUnmatchedExamples: string[];
 }
@@ -56,8 +52,6 @@ export function calculateFormatIntersectionStats(
       const intersectingFormatPaths = Array.from(intersectingFormatIndexes)
         .sort((a, b) => a - b)
         .map((index) => formats[index]!.filePath);
-      // An invalid or empty regex yields an empty `matched` array, so every own
-      // example counts as unrecognized — same reading as the zero counter.
       const ownUnmatchedExamples = format.examples.filter(
         (_, i) => ownMatched.matched[i] !== true
       );

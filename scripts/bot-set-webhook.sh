@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Register the Telegram webhook for the Recognition Bot, reading secrets from
-# bot/.env. Run after the bot is deployed and Caddy serves the domain over HTTPS.
-#
-# Usage: bash scripts/bot-set-webhook.sh [domain]
-#   domain defaults to $RECOGNITION_BOT_WEBHOOK_DOMAIN from bot/.env
+# Register the deployed relay webhook using bot/.env. See ADR-0005.
+# Usage: bash scripts/bot-set-webhook.sh [relay-domain]
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -12,12 +9,7 @@ set -a
 source bot/.env
 set +a
 
-# The webhook URL must point at the relay domain, never the bot host's own
-# (Telegram-blocked) domain: pointing it at the host yields silent "Connection
-# timed out" deliveries (ADR-0005). So read RECOGNITION_BOT_WEBHOOK_DOMAIN (the
-# public relay domain Telegram can reach), distinct from RECOGNITION_BOT_DOMAIN
-# (the bot host's own domain, used only by the host's Caddy). No fallback to the
-# host domain — that conflation is exactly what broke delivery once.
+# Telegram reaches the public relay, not the bot host.
 DOMAIN="${1:-${RECOGNITION_BOT_WEBHOOK_DOMAIN:?Set RECOGNITION_BOT_WEBHOOK_DOMAIN (the relay domain Telegram reaches) in bot/.env or pass it as the first argument — see ADR-0005}}"
 WEBHOOK_PATH="/${RECOGNITION_BOT_WEBHOOK_PATH#/}"
 URL="https://${DOMAIN}${WEBHOOK_PATH}"

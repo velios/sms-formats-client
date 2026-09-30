@@ -1,27 +1,17 @@
-/**
- * Content transport for the corpus is git, not REST (ADR-0004): a full clone of
- * `main` on first boot, read straight from disk on every restart afterwards. A
- * restart never re-clones — it reads the existing checkout and its HEAD SHA, so
- * the corpus survives process churn without spending GitHub bandwidth. A clone
- * happens only when the checkout directory is missing (e.g. wiped disk).
- *
- * Open-PR content rides the same clone: each head is fetched over git via
- * `refs/pull/<N>/head`, and the files it changes come from a local merge-base
- * diff — no per-file REST. When freshness checks report a shift, only the moved
- * refs are pulled (`fetchMainDelta`, `fetchPullRequestHead`) and refs of closed
- * PRs are pruned (`prunePullRequestRef`) — git deltas, never a re-clone.
- */
-
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+async function gitNetwork(args: string[], cwd?: string): Promise<void> {
+  await execFileAsync("git", args, { cwd });
+}
 
 export interface MainCheckout {
-  /** Absolute path to the working tree root. */
   dir: string;
-  /** Commit SHA currently checked out — used for permalinks. */
   sha: string;
-  /** `owner/repo`, used to build file permalinks. */
   repoSlug: string;
 }
 
@@ -29,7 +19,6 @@ export interface MainCheckoutOptions {
   repoSlug: string;
   branch: string;
   dir: string;
-  /** Read-only token for cloning; omitted clones the public repo anonymously. */
   token?: string;
 }
 
@@ -41,7 +30,6 @@ function git(args: string[], cwd?: string): string {
   }).trim();
 }
 
-/** Like `git`, but preserves the command's output verbatim (no trim). */
 function gitRaw(args: string[], cwd?: string): string {
   return execFileSync("git", args, {
     cwd,
@@ -55,15 +43,18 @@ function cloneUrl(repoSlug: string, token?: string): string {
   return `https://${host}/${repoSlug}.git`;
 }
 
-/**
- * Ensure a local checkout of `main` exists and return where it is and what SHA
- * it points at. Clones only when the directory has no `.git`; otherwise reuses
- * the on-disk checkout untouched.
- */
-export function ensureMainCheckout(options: MainCheckoutOptions): MainCheckout {
+export async function ensureMainCheckout(
+  options: MainCheckoutOptions
+): Promise<MainCheckout> {
   const { repoSlug, branch, dir, token } = options;
   if (!existsSync(join(dir, ".git"))) {
-    git(["clone", "--branch", branch, cloneUrl(repoSlug, token), dir]);
+    await gitNetwork([
+      "clone",
+      "--branch",
+      branch,
+      cloneUrl(repoSlug, token),
+      dir,
+    ]);
   }
   return {
     dir,
@@ -72,23 +63,18 @@ export function ensureMainCheckout(options: MainCheckoutOptions): MainCheckout {
   };
 }
 
-/**
- * Pull `main` forward as a git delta and move the working tree onto it. Called
- * only after a conditional GET reports the main ref moved (ADR-0004), so it's a
- * small fetch, never a re-clone. `reset --hard` leaves the local `refs/pr/<N>`
- * untouched — those are separate refs.
- */
-export function fetchMainDelta(checkout: MainCheckout, branch: string): void {
-  git(["fetch", "origin", branch], checkout.dir);
+export async function fetchMainDelta(
+  checkout: MainCheckout,
+  branch: string
+): Promise<void> {
+  await gitNetwork(["fetch", "origin", branch], checkout.dir);
   git(["reset", "--hard", `origin/${branch}`], checkout.dir);
 }
 
-/** Local ref a fetched PR head lands on, off the public `refs/pull/<N>/head`. */
 function pullRequestRef(prNumber: number): string {
   return `refs/pr/${prNumber}`;
 }
 
-/** Drop a closed PR's local head ref so it leaves the corpus (ADR-0004). */
 export function prunePullRequestRef(
   checkout: MainCheckout,
   prNumber: number
@@ -96,39 +82,27 @@ export function prunePullRequestRef(
   git(["update-ref", "-d", pullRequestRef(prNumber)], checkout.dir);
 }
 
-/**
- * Fetch a PR's head over git (no per-file REST) into a local `refs/pr/<N>`, the
- * companion to the REST enumeration: GitHub publishes every PR head at
- * `refs/pull/<N>/head`, fetched force (`+`) so a rebased/force-pushed PR still
- * resolves. Returns the local ref the head now lives at.
- */
-export function fetchPullRequestHead(
+export async function fetchPullRequestHead(
   checkout: MainCheckout,
   prNumber: number
-): string {
+): Promise<string> {
   const ref = pullRequestRef(prNumber);
-  git(["fetch", "origin", `+refs/pull/${prNumber}/head:${ref}`], checkout.dir);
+  await gitNetwork(
+    ["fetch", "origin", `+refs/pull/${prNumber}/head:${ref}`],
+    checkout.dir
+  );
   return ref;
 }
 
 export interface ChangedFile {
-  /** First char of git's name-status code: `A`/`M` added/modified, `D` deleted. */
   status: string;
-  /** Repo-relative path of the change (rename/copy destination). */
   repoPath: string;
 }
 
-/**
- * Files a PR changes relative to its merge-base with main, via a local
- * `git diff --name-status HEAD...refs/pr/<N>` (three-dot = merge-base diff). The
- * full clone supplies the merge-base, so this is pure local git — zero REST.
- */
 export function changedFiles(
   checkout: MainCheckout,
   prNumber: number
 ): ChangedFile[] {
-  // core.quotepath=false: bank names are Cyrillic, which git otherwise
-  // octal-escapes and wraps in quotes, mangling the path past parsing.
   const output = git(
     [
       "-c",
@@ -151,7 +125,6 @@ export function changedFiles(
   });
 }
 
-/** Content of a file at a fetched PR head (`git show refs/pr/<N>:<path>`). */
 export function readFileAtPullRequestHead(
   checkout: MainCheckout,
   prNumber: number,
@@ -161,4 +134,11 @@ export function readFileAtPullRequestHead(
     ["show", `${pullRequestRef(prNumber)}:${repoPath}`],
     checkout.dir
   );
+}
+
+export function readPullRequestHeadSha(
+  checkout: MainCheckout,
+  prNumber: number
+): string {
+  return git(["rev-parse", pullRequestRef(prNumber)], checkout.dir);
 }

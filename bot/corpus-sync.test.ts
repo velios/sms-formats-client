@@ -163,6 +163,56 @@ describe("createCorpusSync", () => {
     expect(snapshot?.formats.map((f) => f.bank)).toContain("tinkoff");
   });
 
+  it("retries a failed main fetch without accepting its ETag", async () => {
+    const sync = makeSync();
+    await sync();
+    const initial = state.mainSha;
+    writeRepoFile(remote, "src/tinkoff/formats/3.txt", formatFile("^Tinkoff$"));
+    state.mainSha = commitAll(remote, "main 2");
+    state.mainEtag = 'W/"m2"';
+    git(checkoutDir, ["remote", "set-url", "origin", join(remote, "missing")]);
+    await expect(sync()).rejects.toThrow();
+    git(checkoutDir, ["remote", "set-url", "origin", remote]);
+    const recovered = await sync();
+    expect(recovered?.mainSha).toBe(state.mainSha);
+    expect(recovered?.mainSha).not.toBe(initial);
+  });
+
+  it("retries an unfinished PR fetch on two 304 responses without relabelling old contents", async () => {
+    const skipped: number[] = [];
+    const sync = createCorpusSync({
+      repoSlug: "zenmoney/sms-formats",
+      branch: "main",
+      dir: checkoutDir,
+      fetchImpl: fakeFetch(state),
+      onSkip: (pr) => {
+        skipped.push(pr.number);
+      },
+    });
+    await sync();
+    git(remote, ["checkout", "-q", "pr7"]);
+    writeRepoFile(
+      remote,
+      "src/alfabank/formats/9.txt",
+      formatFile("^Alfa V2$")
+    );
+    commitAll(remote, "new head");
+    const newHead = publishPrHead(remote, 7, "pr7");
+    state.pulls = [{ number: 7, title: "Add Alfa", head: { sha: newHead } }];
+    state.pullsEtag = 'W/"p2"';
+    git(checkoutDir, ["remote", "set-url", "origin", join(remote, "missing")]);
+    const failed = await sync();
+    expect(failed).toBeNull();
+    expect(skipped).toEqual([7]);
+    git(checkoutDir, ["remote", "set-url", "origin", remote]);
+    const recovered = await sync();
+    const alfa = recovered?.formats.find(
+      (format) => format.bank === "alfabank"
+    );
+    expect(alfa?.regex).toBe("^Alfa V2$");
+    expect(alfa?.fileUrl).toContain(newHead);
+  });
+
   it("prunes the ref of a closed PR so it leaves the corpus", async () => {
     const sync = makeSync();
     await sync();

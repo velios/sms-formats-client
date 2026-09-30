@@ -2,8 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { prepareFormatEntriesMock } = vi.hoisted(() => ({
-  prepareFormatEntriesMock: vi.fn(),
+const { loadBankSnapshotMock } = vi.hoisted(() => ({
+  loadBankSnapshotMock: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -30,19 +30,19 @@ vi.mock("@/store", () => ({
     }),
 }));
 
-vi.mock("@/features/quick-check/format-entries", () => ({
-  prepareFormatEntries: prepareFormatEntriesMock,
+vi.mock("@/features/workspace/bank-snapshot", () => ({
+  loadBankSnapshot: loadBankSnapshotMock,
 }));
 
 import { QuickCheckPanel } from "@/features/quick-check/QuickCheckPanel";
 
 describe("QuickCheckPanel", () => {
   beforeEach(() => {
-    prepareFormatEntriesMock.mockReset();
+    loadBankSnapshotMock.mockReset();
   });
 
   it("opens a matched file in app and closes the panel", async () => {
-    prepareFormatEntriesMock.mockResolvedValue({
+    loadBankSnapshotMock.mockResolvedValue({
       entries: [
         {
           examples: ["Matched SMS text"],

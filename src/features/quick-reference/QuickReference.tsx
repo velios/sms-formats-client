@@ -150,6 +150,7 @@ const CATEGORIES: RefCategory[] = [
 ];
 
 export function QuickReference() {
+  const { t } = useTranslation();
   const { i18n } = useTranslation();
   const lang = i18n.language as "ru" | "en";
   const [activeCat, setActiveCat] = useState("common");
@@ -181,14 +182,10 @@ export function QuickReference() {
         }}
       >
         <Input
-          aria-label={
-            lang === "ru"
-              ? "Поиск по справочнику regex"
-              : "Search regex reference"
-          }
+          aria-label={t("quickRef.searchLabel")}
           className="h-7 px-2 py-1 text-xs"
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={lang === "ru" ? "Поиск…" : "Search…"}
+          placeholder={t("quickRef.search")}
           value={search}
         />
       </div>

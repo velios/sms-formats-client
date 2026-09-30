@@ -1,45 +1,27 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ModalDialog } from "@/components/ModalDialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { StatusBadge } from "@/components/ui/status-badge";
-import type {
-  RecognitionProgress,
-  RegexExplanation,
-  RegexMatchResult,
-  RegexPatternToken,
-} from "@/domain/format";
+import type { RegexPatternToken } from "@/domain/format";
 import {
+  analyzeRegexPattern,
   buildPatternHighlightPlan,
   buildRegex101Url,
   buildTokenToCaptureGroupMap,
   countCaptureGroups,
-  explainRegex,
   isCapturingGroupOpenerToken,
   recognitionProgress,
   resolveTokenMatchRange,
   testRegex,
 } from "@/domain/format";
-import { ALLOWED_COLUMNS, ALLOWED_COLUMNS_SORTED } from "@/domain/types";
-import { QuickReference } from "@/features/quick-reference/QuickReference";
 import { ResizablePanels } from "@/features/resizable-panels/ResizablePanels";
 import { CookbookModal } from "@/features/snippet-library/CookbookModal";
 import { FormatRulesModal } from "@/features/snippet-library/FormatRulesModal";
-import { SnippetsPanel } from "@/features/snippet-library/SnippetsPanel";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store";
 import {
-  UnifiedRegexEditor,
-  type UnifiedRegexEditorHandle,
-} from "./UnifiedRegexEditor";
+  RegexPatternEditor,
+  type RegexPatternEditorHandle,
+} from "./RegexPatternEditor";
 import { useGroupSelection } from "./use-group-selection";
 
 interface Props {
@@ -47,6 +29,8 @@ interface Props {
   structuralIssues?: string[];
   readOnly?: boolean;
   onRegexChange: (v: string) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
   onRegexBlur?: () => void;
   examples: string[];
   intersectionExamples?: Array<{
@@ -73,98 +57,19 @@ interface PatternSelection {
 
 type ExampleSourceMode = "examples" | "intersections";
 
-const regexLabPanelClassName =
-  "overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
-const regexLabPanelHeaderClassName =
-  "flex min-h-10 items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-1 text-[12px] font-semibold uppercase tracking-[0.5px] text-[color:var(--c-text-muted)]";
-const regexLabHeaderActionsClassName = "flex flex-wrap items-center gap-2";
-const regexLabPanelBodyClassName = "p-4";
-const regexLabTabListClassName =
-  "flex gap-0 border-b border-[color:var(--c-border)]";
-const regexLabHeaderButtonClassName =
-  "h-[26px] px-2.5 border-[color:transparent] text-[color:var(--c-text-muted)] shadow-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)] focus-visible:ring-[color:var(--c-border-focus)]";
-const regexLabTabClassName = (isActive: boolean) =>
-  cn(
-    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid px-4 py-2 font-medium text-[13px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
-    isActive
-      ? "border-b-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-1px_0_var(--c-accent-soft)]"
-      : "border-b-transparent text-[color:var(--c-text-muted)] hover:border-b-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
-  );
-const highlightModeSegmentClassName = (isActive: boolean) =>
-  cn(
-    "cursor-pointer border-none px-2.5 py-1 font-medium text-[12px] normal-case tracking-normal transition-[color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
-    isActive
-      ? "bg-[color:var(--c-accent)] text-[color:var(--c-bg-surface)]"
-      : "bg-[color:var(--c-bg-surface)] text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-accent)]"
-  );
-const regexTokenToneClassMap: Record<string, string> = {
-  anchor:
-    "rounded-[2px] border border-[color:var(--c-tone-anchor-border)] bg-[color:var(--c-tone-anchor-bg)] px-[1px] font-semibold text-[color:var(--c-tone-anchor-text)]",
-  group:
-    "rounded-[2px] border border-[color:var(--c-tone-group-border)] bg-[color:var(--c-tone-group-bg)] px-[1px] font-semibold text-[color:var(--c-tone-group-text)]",
-  quantifier:
-    "rounded-[2px] border border-[color:var(--c-tone-quantifier-border)] bg-[color:var(--c-tone-quantifier-bg)] px-[1px] font-semibold text-[color:var(--c-tone-quantifier-text)]",
-  alternation:
-    "rounded-[2px] border border-[color:var(--c-tone-alternation-border)] bg-[color:var(--c-tone-alternation-bg)] px-[1px] font-semibold text-[color:var(--c-tone-alternation-text)]",
-  escape:
-    "rounded-[2px] border border-[color:var(--c-tone-escape-border)] bg-[color:var(--c-tone-escape-bg)] px-[1px] font-semibold text-[color:var(--c-tone-escape-text)]",
-  charclass:
-    "rounded-[2px] border border-[color:var(--c-tone-charclass-border)] bg-[color:var(--c-tone-charclass-bg)] px-[1px] font-semibold text-[color:var(--c-tone-charclass-text)]",
-  meta: "rounded-[2px] border border-[color:var(--c-tone-meta-border)] bg-[color:var(--c-tone-meta-bg)] px-[1px] font-semibold text-[color:var(--c-tone-meta-text)]",
-  literal:
-    "rounded-[2px] border border-[color:var(--c-tone-literal-border)] bg-[color:var(--c-tone-literal-bg)] px-[1px] font-semibold text-[color:var(--c-tone-literal-text)]",
-};
-const patternBlockToneClassMap: Record<string, string> = {
-  anchor:
-    "border-[color:var(--c-tone-anchor-soft-border)] bg-[color:var(--c-tone-anchor-soft-bg)] text-[color:var(--c-tone-anchor-text)]",
-  group:
-    "border-[color:var(--c-tone-group-soft-border)] bg-[color:var(--c-tone-group-soft-bg)] text-[color:var(--c-tone-group-text)]",
-  quantifier:
-    "border-[color:var(--c-tone-quantifier-soft-border)] bg-[color:var(--c-tone-quantifier-soft-bg)] text-[color:var(--c-tone-quantifier-text)]",
-  alternation:
-    "border-[color:var(--c-tone-alternation-soft-border)] bg-[color:var(--c-tone-alternation-soft-bg)] text-[color:var(--c-tone-alternation-text)]",
-  escape:
-    "border-[color:var(--c-tone-escape-soft-border)] bg-[color:var(--c-tone-escape-soft-bg)] text-[color:var(--c-tone-escape-text)]",
-  charclass:
-    "border-[color:var(--c-tone-charclass-soft-border)] bg-[color:var(--c-tone-charclass-soft-bg)] text-[color:var(--c-tone-charclass-text)]",
-  meta: "border-[color:var(--c-tone-meta-soft-border)] bg-[color:var(--c-tone-meta-soft-bg)] text-[color:var(--c-tone-meta-text)]",
-  literal:
-    "border-[color:var(--c-tone-literal-soft-border)] bg-[color:var(--c-tone-literal-soft-bg)] text-[color:var(--c-tone-literal-text)]",
-};
+import { ColumnPickerModal } from "./ColumnPickerModal";
+import { PatternExplanationPane } from "./PatternExplanationPane";
+import {
+  highlightModeSegmentClassName,
+  regexLabHeaderActionsClassName,
+  regexLabHeaderButtonClassName,
+  regexLabPanelBodyClassName,
+  regexLabPanelClassName,
+  regexLabPanelHeaderClassName,
+  regexLabTabClassName,
+} from "./regex-styles";
+import { MatchInfoPanel, MatchOverlayTextarea } from "./SmsMatchView";
 
-const matchHighlightBaseClass =
-  "rounded-[2px] bg-[color:var(--c-group-0)] shadow-[inset_0_-2px_0_var(--c-group-border-0)] transition-colors";
-const matchHighlightHoverClass = "bg-[color:var(--c-accent-soft)]";
-const matchHighlightRangeActiveClass =
-  "outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]";
-const matchHighlightGroupClassMap = [
-  "bg-[color:var(--c-group-1)] shadow-[inset_0_-2px_0_var(--c-group-border-1)]",
-  "bg-[color:var(--c-group-2)] shadow-[inset_0_-2px_0_var(--c-group-border-2)]",
-  "bg-[color:var(--c-group-3)] shadow-[inset_0_-2px_0_var(--c-group-border-3)]",
-  "bg-[color:var(--c-group-4)] shadow-[inset_0_-2px_0_var(--c-group-border-4)]",
-  "bg-[color:var(--c-group-5)] shadow-[inset_0_-2px_0_var(--c-group-border-5)]",
-];
-
-// Recognition Progress (ADR-0007): provisional, deliberately distinct from a
-// finished full match. B uses a dashed accent outline (not the solid match
-// fill); B's capture groups keep their hue but with muted dashed borders; C is
-// the alarming wavy-underlined tail; the marker is the "waiting for more" caret.
-const progressPrefixClass =
-  "rounded-[2px] border border-dashed border-[color:var(--c-accent)] bg-[color:var(--c-accent-soft)]";
-const progressGroupClassMap = [
-  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-1)] bg-[color:var(--c-group-1)]",
-  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-2)] bg-[color:var(--c-group-2)]",
-  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-3)] bg-[color:var(--c-group-3)]",
-  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-4)] bg-[color:var(--c-group-4)]",
-  "rounded-[2px] border border-dashed border-[color:var(--c-group-border-5)] bg-[color:var(--c-group-5)]",
-];
-const progressTailClass =
-  "rounded-[2px] bg-[color:var(--c-error-soft)] text-[color:var(--c-error)] underline decoration-wavy decoration-[color:var(--c-error)] underline-offset-2";
-const progressWaitingClass =
-  "ml-[1px] animate-pulse font-bold text-[color:var(--c-warning)]";
-const PROGRESS_WAITING_GLYPH = "▏";
-
-// Чек-блок режима `\s+` рядом с кнопками раскраски (ADR-0012).
 function WhitespacePlusToggle() {
   const { t } = useTranslation();
   const whitespacePlusMode = useUIStore((state) => state.whitespacePlusMode);
@@ -187,9 +92,6 @@ function WhitespacePlusToggle() {
   );
 }
 
-// The hand cursor over the regex field marks a clickable capture group. The
-// opening "(" is excluded from the group hit-test (clicking it drops a caret
-// before the group), so it gets the text cursor, not the hand (ADR-0010).
 function shouldShowGroupPointer(
   isGroupsMode: boolean,
   hoveredTokenIndex: number | null,
@@ -211,6 +113,8 @@ export function RegexLab({
   structuralIssues = [],
   readOnly = false,
   onRegexChange,
+  onUndo,
+  onRedo,
   onRegexBlur,
   examples,
   intersectionExamples = [],
@@ -261,17 +165,14 @@ export function RegexLab({
   const [columnPickerGroupIndex, setColumnPickerGroupIndex] = useState<
     number | null
   >(null);
-  const columnPickerTitleId = useId();
   const [isCookbookOpen, setIsCookbookOpen] = useState(false);
   const [isFormatRulesOpen, setIsFormatRulesOpen] = useState(false);
-  const regexEditorRef = useRef<UnifiedRegexEditorHandle>(null);
+  const regexEditorRef = useRef<RegexPatternEditorHandle>(null);
 
   const matchResult = useMemo(
     () => testRegex(regex, activeExample),
     [regex, activeExample]
   );
-  // Recognition Progress only kicks in when the full pattern does not match;
-  // a successful match keeps today's full-match highlighting.
   const progress = useMemo(
     () =>
       matchResult.matched ? null : recognitionProgress(regex, activeExample),
@@ -285,7 +186,7 @@ export function RegexLab({
     ? "ru"
     : "en";
   const explanation = useMemo(
-    () => explainRegex(regex, explanationLocale),
+    () => analyzeRegexPattern(regex, explanationLocale),
     [regex, explanationLocale]
   );
   const tokenCaptureGroupMap = useMemo(
@@ -314,20 +215,12 @@ export function RegexLab({
       ),
     [explanation.patternTokens, patternSelection]
   );
-  // Hover drives the per-token outline + synchronized highlight only in "parts"
-  // mode, where the point is inspecting individual parts. In "groups" mode the
-  // unit is the whole group: an outline chasing the mouse is just noise over the
-  // group selection and the caret, so ignore hover there and let the caret/click
-  // drive the active token, keeping caret placement and selection clean.
   const activePatternTokenIndex =
     (highlightMode === "groups" ? null : hoveredPatternTokenIndex) ??
     resolvedPatternTokenIndexFromSelection ??
     selectedPatternTokenIndex;
   const exampleTabRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
-  // The Group selection tool: a pure reducer + thin hook owns the selection
-  // index, the bracket range, and every reset rule (ADR-0015). Mode gating and
-  // the token→group-number resolve stay here, at the caller.
   const {
     selectedIndex: selectedGroupIndex,
     range: selectedGroupRange,
@@ -341,9 +234,6 @@ export function RegexLab({
     activeExample,
   });
 
-  // Insert a snippet. With a group selected, replace that group's bracket span
-  // (the explicit source of truth) and keep the selection alive for iterative
-  // swaps; otherwise insert at the caret as usual (ADR-0010).
   const handleInsertSnippet = useCallback(
     (pattern: string) => {
       if (selectedGroupRange) {
@@ -359,8 +249,6 @@ export function RegexLab({
     [selectedGroupRange, armGroupReplace]
   );
 
-  // A selected group is the source of truth for the synchronized highlight;
-  // otherwise fall back to the token under the cursor/hover.
   const activeCaptureGroup = useMemo(() => {
     if (selectedGroupIndex != null) {
       return selectedGroupIndex;
@@ -394,10 +282,6 @@ export function RegexLab({
     matchResult,
   ]);
 
-  // The single-token outline belongs to "parts" mode. In "groups" mode the only
-  // field indicator is the group selection (its native CM selection), so the
-  // outline stays off entirely — clicking off a group just places a caret
-  // instead of outlining the token under it (ADR-0010).
   const editorActiveTokenIndex = useMemo(
     () => (highlightMode === "groups" ? null : activePatternTokenIndex),
     [highlightMode, activePatternTokenIndex]
@@ -466,12 +350,10 @@ export function RegexLab({
     }
   }, [explanation.patternTokens.length, selectedPatternTokenIndex]);
 
-  // Clear the single-token selection whenever the regex or example changes.
   useEffect(() => {
     setSelectedPatternTokenIndex(null);
   }, [activeExample, regex]);
 
-  // The snippets tab is editor-only; drop back to explanation in read-only mode.
   useEffect(() => {
     if (readOnly && rightPaneTab === "snippets") {
       setRightPaneTab("explanation");
@@ -491,7 +373,7 @@ export function RegexLab({
     setHoveredGroup(groupIndex);
   }, []);
 
-  const setColumnsForGroupCount = useCallback(
+  const buildColumnsForGroupCount = useCallback(
     (nextCount: number) => {
       const prepared = Array.from(
         { length: nextCount },
@@ -504,26 +386,26 @@ export function RegexLab({
 
   const handleSelectColumn = useCallback(
     (groupIndex: number, columnName: string) => {
-      const newColumns = setColumnsForGroupCount(captureGroupCount);
+      const newColumns = buildColumnsForGroupCount(captureGroupCount);
       newColumns[groupIndex - 1] = columnName;
       onColumnsChange(newColumns);
       setColumnPickerGroupIndex(null);
     },
-    [captureGroupCount, onColumnsChange, setColumnsForGroupCount]
+    [captureGroupCount, onColumnsChange, buildColumnsForGroupCount]
   );
 
   const handleClearColumn = useCallback(
     (groupIndex: number) => {
-      const newColumns = setColumnsForGroupCount(captureGroupCount);
+      const newColumns = buildColumnsForGroupCount(captureGroupCount);
       newColumns[groupIndex - 1] = "";
       onColumnsChange(newColumns);
     },
-    [captureGroupCount, onColumnsChange, setColumnsForGroupCount]
+    [captureGroupCount, onColumnsChange, buildColumnsForGroupCount]
   );
 
   const handleColumnParamChange = useCallback(
     (groupIndex: number, param: string) => {
-      const newColumns = setColumnsForGroupCount(captureGroupCount);
+      const newColumns = buildColumnsForGroupCount(captureGroupCount);
       const current = newColumns[groupIndex - 1] ?? "";
       const base = current.split("#")[0];
       if (!base) {
@@ -532,7 +414,7 @@ export function RegexLab({
       newColumns[groupIndex - 1] = param ? `${base}#${param}` : base;
       onColumnsChange(newColumns);
     },
-    [captureGroupCount, onColumnsChange, setColumnsForGroupCount]
+    [captureGroupCount, onColumnsChange, buildColumnsForGroupCount]
   );
 
   const handlePatternSelectionChange = useCallback(
@@ -557,10 +439,6 @@ export function RegexLab({
     [explanation.patternTokens]
   );
 
-  // Real mouse press in the regex field. In "groups" mode, pressing a token
-  // inside a capture group toggles a whole-group selection; anywhere else
-  // clears it and falls back to the caret-driven single-token highlight
-  // (ADR-0010).
   const handleEditorTokenMouseDown = useCallback(
     (tokenIndex: number | null) => {
       if (highlightMode === "groups" && tokenIndex != null) {
@@ -575,8 +453,6 @@ export function RegexLab({
     [highlightMode, tokenCaptureGroupMap, toggleGroupSelection, deselectGroup]
   );
 
-  // The explanation list selects a single token and always clears any group
-  // selection.
   const handleExplanationTokenActivate = useCallback(
     (tokenIndex: number) => {
       deselectGroup();
@@ -585,10 +461,6 @@ export function RegexLab({
     [handlePatternTokenActivate, deselectGroup]
   );
 
-  // Table-row icon: toggle the selection of this exact group — the only way to
-  // reach an outer/enclosing group in the nested case (ADR-0010). Group selection
-  // is a "groups" mode concept; ignore it in "parts" mode, where the outline/CSS
-  // suppression assumes no group is selected (see editorActiveTokenIndex).
   const handleSelectGroupFromTable = useCallback(
     (groupIndex: number) => {
       if (highlightMode !== "groups") {
@@ -614,11 +486,8 @@ export function RegexLab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* Work column (regex → test string → match info) + the persistent
-          reference column on the right. */}
       <ResizablePanels side="right">
         <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
-          {/* REGULAR EXPRESSION — unified regex editor */}
           <div className={cn(regexLabPanelClassName, "shrink-0")}>
             <div className={regexLabPanelHeaderClassName}>
               <div className="flex items-center gap-3">
@@ -690,18 +559,20 @@ export function RegexLab({
               </div>
             </div>
             <div className="p-4">
-              <UnifiedRegexEditor
+              <RegexPatternEditor
                 activeTokenIndex={editorActiveTokenIndex}
                 canHighlight={explanation.canHighlightPattern}
                 highlightMode={highlightMode}
                 highlightPlan={patternHighlightPlan}
                 key={readOnly ? "readonly" : "editable"}
                 onBlur={onRegexBlur}
+                onRedo={onRedo}
                 onRegexChange={onRegexChange}
                 onSelectionChange={handlePatternSelectionChange}
                 onTokenClick={handlePatternTokenActivate}
                 onTokenHover={setHoveredPatternTokenIndex}
                 onTokenMouseDown={handleEditorTokenMouseDown}
+                onUndo={onUndo}
                 readOnly={readOnly}
                 ref={regexEditorRef}
                 regex={regex}
@@ -892,7 +763,7 @@ export function RegexLab({
           </div>
         </div>
 
-        <RegexLabRightPane
+        <PatternExplanationPane
           activePatternTokenIndex={activePatternTokenIndex}
           errorMessage={matchResult.error}
           explanation={explanation}
@@ -912,7 +783,6 @@ export function RegexLab({
             handleSelectColumn(columnPickerGroupIndex, columnName)
           }
           selectedColumns={columns}
-          titleId={columnPickerTitleId}
         />
       )}
 
@@ -923,150 +793,6 @@ export function RegexLab({
       {isFormatRulesOpen && (
         <FormatRulesModal onClose={() => setIsFormatRulesOpen(false)} />
       )}
-    </div>
-  );
-}
-
-// Right pane of the lab: the snippets/explanation/quick-ref tab strip and the
-// active panel. Reads the persisted tab from the UI store, like the highlight
-// mode switch in the parent that also flips it.
-function RegexLabRightPane({
-  activePatternTokenIndex,
-  errorMessage,
-  explanation,
-  onInsertSnippet,
-  onPatternTokenActivate,
-  onPatternTokenHover,
-  readOnly,
-}: {
-  activePatternTokenIndex: number | null;
-  errorMessage: string | null;
-  explanation: RegexExplanation;
-  onInsertSnippet: (pattern: string) => void;
-  onPatternTokenActivate: (tokenIndex: number) => void;
-  onPatternTokenHover: (tokenIndex: number | null) => void;
-  readOnly: boolean;
-}) {
-  const { t } = useTranslation();
-  const rightPaneTab = useUIStore((state) => state.rightPaneTab);
-  const setRightPaneTab = useUIStore((state) => state.setRightPaneTab);
-
-  return (
-    <div className={cn(regexLabPanelClassName, "flex min-h-0 flex-col")}>
-      <div
-        className={cn(regexLabPanelHeaderClassName, "justify-start px-0 py-0")}
-      >
-        <div className={cn(regexLabTabListClassName, "w-full border-b-0")}>
-          {!readOnly && (
-            <button
-              className={regexLabTabClassName(rightPaneTab === "snippets")}
-              onClick={() => setRightPaneTab("snippets")}
-              type="button"
-            >
-              {t("snippets.open").toUpperCase()}
-            </button>
-          )}
-          <button
-            className={regexLabTabClassName(rightPaneTab === "explanation")}
-            onClick={() => setRightPaneTab("explanation")}
-            type="button"
-          >
-            {t("editor.explanation").toUpperCase()}
-          </button>
-          <button
-            className={regexLabTabClassName(rightPaneTab === "quickref")}
-            onClick={() => setRightPaneTab("quickref")}
-            type="button"
-          >
-            QUICK REF
-          </button>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {rightPaneTab === "explanation" && (
-          <ExplanationPanel
-            activePatternTokenIndex={activePatternTokenIndex}
-            errorMessage={errorMessage}
-            explanation={explanation}
-            onPatternTokenActivate={onPatternTokenActivate}
-            onPatternTokenHover={onPatternTokenHover}
-          />
-        )}
-        {rightPaneTab === "quickref" && <QuickReference />}
-        {rightPaneTab === "snippets" && !readOnly && (
-          <SnippetsPanel onInsert={onInsertSnippet} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface HighlightSegment {
-  text: string;
-  className?: string;
-  title?: string;
-}
-
-function MatchOverlayTextarea({
-  text,
-  result,
-  hoveredGroup,
-  activeMatchRange,
-  progress,
-  onTextChange,
-  readOnly = false,
-}: {
-  text: string;
-  result: RegexMatchResult;
-  hoveredGroup: number | null;
-  activeMatchRange: { start: number; end: number } | null;
-  progress: RecognitionProgress | null;
-  onTextChange: (value: string) => void;
-  readOnly?: boolean;
-}) {
-  const { t } = useTranslation();
-  const highlightsRef = useRef<HTMLDivElement>(null);
-  const waitingLabel = t("editor.recognitionProgressWaiting");
-  const segments = useMemo(
-    () =>
-      buildMatchSegments(
-        text,
-        result,
-        hoveredGroup,
-        activeMatchRange,
-        progress,
-        waitingLabel
-      ),
-    [text, result, hoveredGroup, activeMatchRange, progress, waitingLabel]
-  );
-
-  const handleScroll = useCallback((top: number, left: number) => {
-    if (highlightsRef.current) {
-      highlightsRef.current.scrollTop = top;
-      highlightsRef.current.scrollLeft = left;
-    }
-  }, []);
-
-  return (
-    <div className="relative overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 min-h-[60px] overflow-auto px-3 py-2 text-[13px] text-[color:var(--c-text)] leading-[1.6] [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap]"
-        ref={highlightsRef}
-      >
-        {renderHighlightedText(segments)}
-      </div>
-      <textarea
-        className="relative z-[1] min-h-[60px] w-full resize-y border-none bg-transparent px-3 py-2 text-[13px] text-transparent leading-[1.6] caret-[color:var(--c-text)] outline-none [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] selection:bg-[color:var(--c-accent-soft)]"
-        onChange={(e) => onTextChange(e.target.value)}
-        onScroll={(e) =>
-          handleScroll(e.currentTarget.scrollTop, e.currentTarget.scrollLeft)
-        }
-        readOnly={readOnly}
-        rows={3}
-        spellCheck={false}
-        value={text}
-      />
     </div>
   );
 }
@@ -1091,693 +817,4 @@ function resolveActivePatternTokenIndex(
     (token) => selection.start < token.end && selection.end > token.start
   );
   return tokenIndex >= 0 ? tokenIndex : null;
-}
-
-function buildMatchClass(hoveredGroup: number | null): string {
-  return hoveredGroup === 0
-    ? `${matchHighlightBaseClass} ${matchHighlightHoverClass}`
-    : matchHighlightBaseClass;
-}
-
-function isSegmentInActiveRange(
-  segStart: number,
-  segEnd: number,
-  activeRange: { start: number; end: number } | null
-): boolean {
-  if (!activeRange) {
-    return false;
-  }
-  return segStart < activeRange.end && segEnd > activeRange.start;
-}
-
-function resolveMatchBounds(
-  text: string,
-  result: RegexMatchResult
-): { start: number; end: number } | null {
-  if (!(result.matched && result.fullMatch)) {
-    return null;
-  }
-
-  const fullMatchStart = result.matchStart ?? text.indexOf(result.fullMatch);
-  const fullMatchEnd =
-    result.matchEnd ?? fullMatchStart + result.fullMatch.length;
-  if (fullMatchStart < 0 || fullMatchEnd < fullMatchStart) {
-    return null;
-  }
-
-  const boundedStart = Math.max(0, Math.min(fullMatchStart, text.length));
-  const boundedEnd = Math.max(
-    boundedStart,
-    Math.min(fullMatchEnd, text.length)
-  );
-  return { start: boundedStart, end: boundedEnd };
-}
-
-function normalizeGroupsForBounds(
-  groups: RegexMatchResult["groups"],
-  start: number,
-  end: number
-): RegexMatchResult["groups"] {
-  return [...groups]
-    .filter((group) => group.end > group.start)
-    .map((group) => ({
-      ...group,
-      start: Math.max(start, Math.min(group.start, end)),
-      end: Math.max(start, Math.min(group.end, end)),
-    }))
-    .sort((a, b) => a.start - b.start || b.end - a.end);
-}
-
-function buildMatchSegments(
-  text: string,
-  result: RegexMatchResult,
-  hoveredGroup: number | null,
-  activeMatchRange: { start: number; end: number } | null,
-  progress: RecognitionProgress | null,
-  waitingLabel: string
-): HighlightSegment[] {
-  if (!text) {
-    return [{ text: "\u200b" }];
-  }
-
-  const bounds = resolveMatchBounds(text, result);
-  if (!bounds) {
-    // No full match: show Recognition Progress when a prefix latched (region
-    // B is non-empty); otherwise stay neutral, matching today's "no match".
-    if (progress && progress.prefixEnd > progress.prefixStart) {
-      return buildProgressSegments(text, progress, waitingLabel);
-    }
-    return [{ text }];
-  }
-
-  return buildFullMatchSegments(
-    text,
-    bounds,
-    result,
-    hoveredGroup,
-    activeMatchRange
-  );
-}
-
-function buildFullMatchSegments(
-  text: string,
-  bounds: { start: number; end: number },
-  result: RegexMatchResult,
-  hoveredGroup: number | null,
-  activeMatchRange: { start: number; end: number } | null
-): HighlightSegment[] {
-  const boundedFullMatchStart = bounds.start;
-  const boundedFullMatchEnd = bounds.end;
-  const segments: HighlightSegment[] = [];
-  let cursor = 0;
-
-  if (boundedFullMatchStart > 0) {
-    segments.push({ text: text.slice(0, boundedFullMatchStart) });
-    cursor = boundedFullMatchStart;
-  }
-
-  const sortedGroups = normalizeGroupsForBounds(
-    result.groups,
-    boundedFullMatchStart,
-    boundedFullMatchEnd
-  );
-
-  for (const group of sortedGroups) {
-    const groupStart = Math.max(group.start, cursor);
-    const groupEnd = Math.max(groupStart, group.end);
-    if (groupEnd <= cursor) {
-      continue;
-    }
-
-    if (groupStart > cursor) {
-      const gapActive = isSegmentInActiveRange(
-        cursor,
-        groupStart,
-        activeMatchRange
-      );
-      segments.push({
-        text: text.slice(cursor, groupStart),
-        className:
-          `${buildMatchClass(hoveredGroup)} ${gapActive ? matchHighlightRangeActiveClass : ""}`.trim(),
-      });
-    }
-
-    const groupActive = isSegmentInActiveRange(
-      groupStart,
-      groupEnd,
-      activeMatchRange
-    );
-    segments.push({
-      text: text.slice(groupStart, groupEnd),
-      className:
-        `${getGroupClass(group.index)} ${hoveredGroup === group.index ? "brightness-150" : ""} ${groupActive ? matchHighlightRangeActiveClass : ""}`.trim(),
-      title: `Group ${group.index}`,
-    });
-    cursor = groupEnd;
-  }
-
-  if (cursor < boundedFullMatchEnd) {
-    const tailActive = isSegmentInActiveRange(
-      cursor,
-      boundedFullMatchEnd,
-      activeMatchRange
-    );
-    segments.push({
-      text: text.slice(cursor, boundedFullMatchEnd),
-      className:
-        `${buildMatchClass(hoveredGroup)} ${tailActive ? matchHighlightRangeActiveClass : ""}`.trim(),
-    });
-  }
-
-  if (boundedFullMatchEnd < text.length) {
-    segments.push({ text: text.slice(boundedFullMatchEnd) });
-  }
-
-  return segments.length > 0 ? segments : [{ text }];
-}
-
-function buildProgressSegments(
-  text: string,
-  progress: RecognitionProgress,
-  waitingLabel: string
-): HighlightSegment[] {
-  const prefixStart = Math.max(0, Math.min(progress.prefixStart, text.length));
-  const prefixEnd = Math.max(
-    prefixStart,
-    Math.min(progress.prefixEnd, text.length)
-  );
-  const segments: HighlightSegment[] = [];
-
-  // Region A — head before the format, neutral (like unhighlighted text).
-  if (prefixStart > 0) {
-    segments.push({ text: text.slice(0, prefixStart) });
-  }
-
-  // Region B — recognized prefix (provisional), with muted capture groups.
-  const groups = normalizeGroupsForBounds(
-    progress.groups,
-    prefixStart,
-    prefixEnd
-  );
-  let cursor = prefixStart;
-  for (const group of groups) {
-    const groupStart = Math.max(group.start, cursor);
-    const groupEnd = Math.max(groupStart, group.end);
-    if (groupEnd <= cursor) {
-      continue;
-    }
-    if (groupStart > cursor) {
-      segments.push({
-        text: text.slice(cursor, groupStart),
-        className: progressPrefixClass,
-      });
-    }
-    segments.push({
-      text: text.slice(groupStart, groupEnd),
-      className: getProgressGroupClass(group.index),
-      title: `Group ${group.index}`,
-    });
-    cursor = groupEnd;
-  }
-  if (cursor < prefixEnd) {
-    segments.push({
-      text: text.slice(cursor, prefixEnd),
-      className: progressPrefixClass,
-    });
-  }
-
-  // Region C and the "waiting for more" marker are mutually exclusive: either
-  // text remains past the prefix (C), or the text was exhausted (marker).
-  if (progress.textExhausted) {
-    if (prefixEnd < text.length) {
-      segments.push({ text: text.slice(prefixEnd) });
-    }
-    segments.push({
-      text: PROGRESS_WAITING_GLYPH,
-      className: progressWaitingClass,
-      title: waitingLabel,
-    });
-  } else if (prefixEnd < text.length) {
-    segments.push({
-      text: text.slice(prefixEnd),
-      className: progressTailClass,
-    });
-  }
-
-  return segments;
-}
-
-function renderHighlightedText(segments: HighlightSegment[]) {
-  return segments.map((segment, index) => (
-    <span className={segment.className} key={index} title={segment.title}>
-      {segment.text}
-    </span>
-  ));
-}
-
-function getGroupColor(groupIndex: number): string {
-  const colors = [
-    "var(--c-group-border-1)",
-    "var(--c-group-border-2)",
-    "var(--c-group-border-3)",
-    "var(--c-group-border-4)",
-    "var(--c-group-border-5)",
-  ];
-  return colors[(groupIndex - 1) % colors.length]!;
-}
-
-function getGroupClass(groupIndex: number): string {
-  return matchHighlightGroupClassMap[(groupIndex - 1) % 5]!;
-}
-
-function getProgressGroupClass(groupIndex: number): string {
-  return progressGroupClassMap[(groupIndex - 1) % 5]!;
-}
-
-function MatchInfoPanel({
-  result,
-  hoveredGroup,
-  activeCaptureGroup,
-  onGroupHover,
-  captureGroups,
-  columns,
-  onOpenColumnPicker,
-  onClearColumn,
-  onColumnParamChange,
-  onSelectGroup,
-  selectedGroupIndex,
-  groupSelectionEnabled,
-  hasMissingColumnMappings,
-  structuralIssues,
-  readOnly = false,
-}: {
-  result: RegexMatchResult;
-  hoveredGroup: number | null;
-  activeCaptureGroup: number | null;
-  onGroupHover: (groupIndex: number | null) => void;
-  captureGroups: Array<{
-    index: number;
-    match: { value: string; start: number; end: number } | null;
-  }>;
-  columns: string[];
-  onOpenColumnPicker: (groupIndex: number) => void;
-  onClearColumn: (groupIndex: number) => void;
-  onColumnParamChange: (groupIndex: number, value: string) => void;
-  onSelectGroup: (groupIndex: number) => void;
-  selectedGroupIndex: number | null;
-  groupSelectionEnabled: boolean;
-  hasMissingColumnMappings: boolean;
-  structuralIssues: string[];
-  readOnly?: boolean;
-}) {
-  const { t } = useTranslation();
-  const issues = [
-    ...(result.error ? [t("editor.invalidRegex")] : []),
-    ...structuralIssues,
-  ];
-
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
-      {issues.length > 0 ? (
-        <div className="flex flex-col gap-1">
-          {issues.map((issue, i) => (
-            <div
-              className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs"
-              key={i}
-            >
-              {issue}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {result.matched ? (
-            <div
-              className={cn(
-                "flex items-center gap-2 rounded-[var(--radius-sm)] border border-transparent px-2 py-1",
-                hoveredGroup === 0 && "bg-[color:var(--c-accent-soft)]"
-              )}
-              onMouseEnter={() => onGroupHover(0)}
-              onMouseLeave={() => onGroupHover(null)}
-            >
-              <span
-                className="inline-block h-3 w-3 shrink-0 rounded-full"
-                style={{ background: "var(--c-group-border-0)" }}
-              />
-              <span className="text-[color:var(--c-text-muted)] text-sm">
-                {t("editor.fullMatch")}:
-              </span>
-              <span className="rounded-[3px] bg-[color:var(--c-bg-input)] px-1.5 py-0.5 font-mono text-sm">
-                {result.fullMatch}
-              </span>
-            </div>
-          ) : (
-            <div className="text-[color:var(--c-text-muted)] text-sm">
-              {t("editor.noMatch")}
-            </div>
-          )}
-          {captureGroups.length > 0 && (
-            <>
-              {hasMissingColumnMappings && (
-                <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
-                  {t("columns.missingMappings")}
-                </div>
-              )}
-              <div className="mt-1 font-medium text-[color:var(--c-text-muted)] text-sm">
-                {t("editor.groups")}:
-              </div>
-              <table className="w-full border-collapse text-xs">
-                <thead>
-                  <tr className="text-left text-[color:var(--c-text-dim)]">
-                    <th className="px-1.5 py-[3px]" />
-                    <th className="px-1.5 py-[3px]">#</th>
-                    <th className="px-1.5 py-[3px]">Value</th>
-                    <th className="px-1.5 py-[3px]">{t("editor.columns")}</th>
-                    <th className="px-1.5 py-[3px]" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {captureGroups.map((g) => {
-                    const currentValue = columns[g.index - 1] ?? "";
-                    const baseName = currentValue.split("#")[0] ?? "";
-                    const paramValue = currentValue.includes("#")
-                      ? currentValue.split("#").slice(1).join("#")
-                      : "";
-                    const columnDef = ALLOWED_COLUMNS.find(
-                      (col) => col.name === baseName
-                    );
-
-                    return (
-                      <tr
-                        className={cn(
-                          "rounded-[var(--radius-sm)]",
-                          hoveredGroup === g.index &&
-                            "bg-[color:var(--c-accent-soft)]",
-                          activeCaptureGroup === g.index &&
-                            "outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]"
-                        )}
-                        key={g.index}
-                        onMouseEnter={() => onGroupHover(g.index)}
-                        onMouseLeave={() => onGroupHover(null)}
-                      >
-                        <td className="px-1.5 py-[3px]">
-                          <span
-                            className="inline-block h-3 w-3 rounded-full"
-                            style={{ background: getGroupColor(g.index) }}
-                          />
-                        </td>
-                        <td className="px-1.5 py-[3px] text-[color:var(--c-text-muted)]">
-                          {g.index}
-                        </td>
-                        <td className="px-1.5 py-[3px] font-mono">
-                          {g.match?.value ?? "—"}
-                        </td>
-                        <td className="px-1.5 py-[3px]">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              className="max-w-full"
-                              disabled={readOnly}
-                              onClick={() => onOpenColumnPicker(g.index)}
-                              size="sm"
-                              type="button"
-                              variant={currentValue ? "default" : "destructive"}
-                            >
-                              {currentValue || t("columns.select")}
-                            </Button>
-                            {currentValue && (
-                              <Button
-                                aria-label={t("app.close")}
-                                disabled={readOnly}
-                                onClick={() => onClearColumn(g.index)}
-                                size="sm"
-                                title={t("app.close")}
-                                type="button"
-                                variant="ghost"
-                              >
-                                ×
-                              </Button>
-                            )}
-                            {columnDef?.parameterized && (
-                              <Input
-                                className="h-8 w-[150px] font-mono text-xs"
-                                disabled={readOnly}
-                                onChange={(e) =>
-                                  onColumnParamChange(g.index, e.target.value)
-                                }
-                                placeholder={
-                                  columnDef.paramHint ?? t("columns.param")
-                                }
-                                value={paramValue}
-                              />
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-1.5 py-[3px] text-right">
-                          <Button
-                            aria-label={t("editor.selectGroup")}
-                            aria-pressed={selectedGroupIndex === g.index}
-                            className={cn(
-                              "px-1.5 py-0.5 text-[13px]",
-                              selectedGroupIndex === g.index &&
-                                "text-[color:var(--c-accent)]"
-                            )}
-                            disabled={!groupSelectionEnabled}
-                            onClick={() => onSelectGroup(g.index)}
-                            size="sm"
-                            title={
-                              groupSelectionEnabled
-                                ? t("editor.selectGroupHint")
-                                : t("editor.selectGroupDisabledHint")
-                            }
-                            type="button"
-                            variant="ghost"
-                          >
-                            ⌖
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ExplanationPanel({
-  explanation,
-  errorMessage,
-  activePatternTokenIndex,
-  onPatternTokenActivate,
-  onPatternTokenHover,
-}: {
-  explanation: RegexExplanation;
-  errorMessage: string | null;
-  activePatternTokenIndex: number | null;
-  onPatternTokenActivate: (tokenIndex: number) => void;
-  onPatternTokenHover: (tokenIndex: number | null) => void;
-}) {
-  const { t } = useTranslation();
-  const tokenRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-
-  // Auto-scroll the active token into view within the explanation panel
-  useEffect(() => {
-    if (activePatternTokenIndex == null) {
-      return;
-    }
-    const el = tokenRefs.current.get(activePatternTokenIndex);
-    if (el) {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, [activePatternTokenIndex]);
-
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
-      {errorMessage ? (
-        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
-          {cleanRegexErrorReason(errorMessage)}
-        </div>
-      ) : explanation.patternTokens.length === 0 ? (
-        <div className="text-[color:var(--c-text-muted)] text-sm">—</div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <div className="font-medium text-[color:var(--c-text-muted)] text-sm">
-            {t("editor.patternParts")}
-          </div>
-          {explanation.patternTokens.map((token, index) => (
-            <div
-              className={cn(
-                "flex cursor-pointer items-start gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors",
-                getPatternBlockToneClass(token.type),
-                index === activePatternTokenIndex &&
-                  "outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]"
-              )}
-              key={`${token.start}-${token.end}-${index}`}
-              onBlur={() => onPatternTokenHover(null)}
-              onClick={() => onPatternTokenActivate(index)}
-              onFocus={() => onPatternTokenActivate(index)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onPatternTokenActivate(index);
-                }
-              }}
-              onMouseEnter={() => onPatternTokenHover(index)}
-              onMouseLeave={() => onPatternTokenHover(null)}
-              onMouseUp={() => onPatternTokenActivate(index)}
-              ref={(el) => {
-                if (el) {
-                  tokenRefs.current.set(index, el);
-                } else {
-                  tokenRefs.current.delete(index);
-                }
-              }}
-              role="button"
-              tabIndex={0}
-            >
-              <code className={cn("font-mono", getRegexTokenClass(token.type))}>
-                {token.raw}
-              </code>
-              <span className="min-w-0 flex-1 text-sm">
-                {token.description}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ColumnPickerModal({
-  groupIndex,
-  selectedColumns,
-  currentValue,
-  onClose,
-  onSelectColumn,
-  titleId,
-}: {
-  groupIndex: number;
-  selectedColumns: string[];
-  currentValue: string;
-  onClose: () => void;
-  onSelectColumn: (columnName: string) => void;
-  titleId: string;
-}) {
-  const { t, i18n } = useTranslation();
-  const [search, setSearch] = useState("");
-  const lang = i18n.resolvedLanguage?.startsWith("ru") ? "ru" : "en";
-  const currentBaseName = currentValue.split("#")[0] ?? "";
-  const usedBaseNames = useMemo(() => {
-    const names = new Set<string>();
-    selectedColumns.forEach((column, index) => {
-      if (index === groupIndex - 1) {
-        return;
-      }
-      const base = column.split("#")[0];
-      if (base) {
-        names.add(base);
-      }
-    });
-    return names;
-  }, [groupIndex, selectedColumns]);
-  const filteredColumns = useMemo(() => {
-    if (!search.trim()) {
-      return ALLOWED_COLUMNS_SORTED;
-    }
-    const query = search.toLowerCase();
-    return ALLOWED_COLUMNS_SORTED.filter((column) => {
-      const description =
-        column.description[lang]?.toLowerCase() ??
-        column.description.en.toLowerCase();
-      return (
-        column.name.toLowerCase().includes(query) || description.includes(query)
-      );
-    });
-  }, [lang, search]);
-
-  return (
-    <ModalDialog
-      className="flex max-h-[calc(100vh-40px)] flex-col sm:max-w-[760px]"
-      onClose={onClose}
-      title={t("columns.selectForGroup", { index: groupIndex })}
-      titleId={titleId}
-    >
-      <Input
-        autoFocus
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder={t("columns.search")}
-        value={search}
-      />
-      <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--c-border)]">
-        {filteredColumns.map((column) => {
-          const isUsedByOtherGroup = usedBaseNames.has(column.name);
-          const isCurrent = currentBaseName === column.name;
-          const isDisabled = isUsedByOtherGroup && !isCurrent;
-          return (
-            <button
-              className={cn(
-                "flex w-full items-center gap-2 border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-surface)] px-3 py-2 text-left last:border-b-0",
-                isCurrent && "bg-[color:var(--c-accent-soft)]",
-                !isDisabled && "hover:bg-[color:var(--c-bg-hover)]",
-                isDisabled && "cursor-not-allowed opacity-55"
-              )}
-              disabled={isDisabled}
-              key={column.name}
-              onClick={() =>
-                onSelectColumn(
-                  column.parameterized
-                    ? `${column.name}#${column.paramHint ?? ""}`
-                    : column.name
-                )
-              }
-              type="button"
-            >
-              <span className="font-medium font-mono">{column.name}</span>
-              <span className="text-[color:var(--c-text-muted)] text-sm">
-                {column.description[lang] ?? column.description.en}
-              </span>
-              {column.parameterized && (
-                <StatusBadge className="text-xs" variant="info">
-                  {t("columns.param")}
-                </StatusBadge>
-              )}
-              {isDisabled && (
-                <StatusBadge className="text-xs" variant="warning">
-                  {t("columns.alreadyUsed")}
-                </StatusBadge>
-              )}
-            </button>
-          );
-        })}
-        {filteredColumns.length === 0 && (
-          <div className="p-4 text-[color:var(--c-text-muted)] text-sm">—</div>
-        )}
-      </div>
-      <div className="mt-6 flex justify-end gap-2">
-        <Button onClick={onClose} type="button">
-          {t("app.cancel")}
-        </Button>
-      </div>
-    </ModalDialog>
-  );
-}
-
-// Native engine message is "Invalid regular expression: /<pattern>/: <reason>".
-// The pattern is already on screen above, so keep only the trailing reason.
-function cleanRegexErrorReason(message: string): string {
-  const marker = message.lastIndexOf(": ");
-  return marker === -1 ? message : message.slice(marker + 2);
-}
-
-function getRegexTokenClass(type: string): string {
-  return regexTokenToneClassMap[type] ?? regexTokenToneClassMap.literal!;
-}
-
-function getPatternBlockToneClass(type: string): string {
-  return patternBlockToneClassMap[type] ?? patternBlockToneClassMap.literal!;
 }

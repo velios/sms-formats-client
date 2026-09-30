@@ -24,20 +24,16 @@ function collectRegex(
       code: "MISSING_COLUMNS",
       level: "error",
       filePath,
-      message: "Missing -----COLUMNS----- marker",
     });
-    return lines[0]?.trim() ?? "";
+    return lines[0] ?? "";
   }
 
-  const regexLines: string[] = [];
-  for (let i = 0; i < columnsIdx; i++) {
-    const line = lines[i] ?? "";
-    if (line.trim() === "") {
-      break;
-    }
-    regexLines.push(line);
+  const regexLines = lines.slice(0, columnsIdx);
+  // Remove the format separator, not whitespace typed into the pattern.
+  if (regexLines.at(-1) === "") {
+    regexLines.pop();
   }
-  return regexLines.join("\n").trim();
+  return regexLines.join("\n");
 }
 
 function collectColumns(lines: string[], columnsIdx: number): string[] {
@@ -52,32 +48,17 @@ function collectColumns(lines: string[], columnsIdx: number): string[] {
     .filter(Boolean);
 }
 
-function trimBlankLines(lines: string[]): string[] {
-  const trimmed = [...lines];
-  while (trimmed.length > 0 && trimmed.at(-1)?.trim() === "") {
-    trimmed.pop();
-  }
-  while (trimmed.length > 0 && trimmed[0]?.trim() === "") {
-    trimmed.shift();
-  }
-  return trimmed;
-}
-
 function collectExamplesBetween(
   lines: string[],
   start: number,
   end: number
 ): string {
-  const exLines: string[] = [];
-  for (let i = start; i < end; i++) {
-    const line = lines[i] ?? "";
-    const normalized = line.trim();
-    if (normalized === COLUMNS_MARKER || normalized === EXAMPLE_MARKER) {
-      break;
-    }
-    exLines.push(line);
+  const exLines = lines.slice(start, end);
+  // One blank line separates sections; the final newline terminates the file.
+  if (exLines.at(-1) === "") {
+    exLines.pop();
   }
-  return trimBlankLines(exLines).join("\n");
+  return exLines.join("\n");
 }
 
 function collectExamples(
@@ -91,7 +72,6 @@ function collectExamples(
       code: "MISSING_EXAMPLE",
       level: "error",
       filePath,
-      message: "No -----EXAMPLE----- section found",
     });
     return [];
   }
@@ -101,16 +81,11 @@ function collectExamples(
     const start = (exampleIndices[index] ?? -1) + 1;
     const nextStart = exampleIndices[index + 1] ?? lines.length;
     const exampleText = collectExamplesBetween(lines, start, nextStart);
-    if (exampleText) {
-      examples.push(exampleText);
-    }
+    examples.push(exampleText);
   }
   return examples;
 }
 
-/**
- * Parse a raw format file text into structured model.
- */
 export function parseFormatFile(raw: string, filePath = ""): ParsedFormat {
   const issues: ValidationIssue[] = [];
   const lines = raw.split("\n");
@@ -118,12 +93,11 @@ export function parseFormatFile(raw: string, filePath = ""): ParsedFormat {
   const exampleIndices = findExampleIndices(lines);
   const regex = collectRegex(lines, columnsIdx, filePath, issues);
 
-  if (!regex) {
+  if (!regex.trim()) {
     issues.push({
       code: "MISSING_REGEX",
       level: "error",
       filePath,
-      message: "Missing regex (first line)",
     });
   }
 
@@ -133,9 +107,6 @@ export function parseFormatFile(raw: string, filePath = ""): ParsedFormat {
   return { regex, columns, examples, raw, parseIssues: issues };
 }
 
-/**
- * Serialize a structured format into canonical raw text.
- */
 export function serializeFormat(
   regex: string,
   columns: string[],
@@ -156,9 +127,6 @@ export function serializeFormat(
   return `${parts.join("\n")}\n`;
 }
 
-/**
- * Default template for new format files.
- */
 export const FORMAT_TEMPLATE = serializeFormat(
   "^(.*)$",
   ["comment"],

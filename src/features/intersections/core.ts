@@ -1,8 +1,6 @@
 import type { FormatIntersectionStat } from "@/domain/format";
-import type { CachedFormatEntry } from "@/features/quick-check/format-entries";
+import type { LoadedFormat } from "@/features/workspace/bank-snapshot";
 
-// Set of formats raised into the "Intersections" tab: the clicked format
-// first, then the formats whose examples its regex recognizes (ADR-0011).
 export interface IntersectionScope {
   anchorPath: string;
   formatPaths: string[];
@@ -23,8 +21,6 @@ function extractFormatFileName(path: string): string {
   return path.split("/").pop() ?? path;
 }
 
-// A loaded snapshot is accepted only if no reset/cancel/newer run bumped the
-// run id while it was in flight; a stale run is dropped silently (ADR-0013).
 export function shouldAcceptRunResult(params: {
   currentRunId: number;
   runId: number;
@@ -32,36 +28,35 @@ export function shouldAcceptRunResult(params: {
   return params.currentRunId === params.runId;
 }
 
-export function buildCachedFormatEntryFromEditorContext(params: {
+export function buildLoadedFormatFromEditorContext(params: {
   filePath: string;
   regex: string;
   examples: string[];
-}): CachedFormatEntry {
+}): LoadedFormat {
   const { filePath, regex, examples } = params;
   return {
     filePath,
     fileName: extractFormatFileName(filePath),
-    regex: regex.trim(),
+    regex,
     examples: examples.map(normalizeIntersectionExample).filter(Boolean),
     source: "draft",
-    fingerprint: `draft-live:${Date.now()}`,
   };
 }
 
 export function mergeLiveEditIntoSnapshot(params: {
-  entries: Map<string, CachedFormatEntry>;
+  entries: Map<string, LoadedFormat>;
   context: { filePath: string; regex: string; examples: string[] };
-}): Map<string, CachedFormatEntry> {
+}): Map<string, LoadedFormat> {
   const { entries, context } = params;
   const next = new Map(entries);
-  next.set(context.filePath, buildCachedFormatEntryFromEditorContext(context));
+  next.set(context.filePath, buildLoadedFormatFromEditorContext(context));
   return next;
 }
 
 export function resolveVisibleIntersectionEntries(params: {
-  entriesByPath: Map<string, CachedFormatEntry>;
+  entriesByPath: Map<string, LoadedFormat>;
   deletedFormatFiles: Set<string>;
-}): CachedFormatEntry[] {
+}): LoadedFormat[] {
   const { entriesByPath, deletedFormatFiles } = params;
   return Array.from(entriesByPath.values()).filter(
     (entry) => !deletedFormatFiles.has(entry.filePath)

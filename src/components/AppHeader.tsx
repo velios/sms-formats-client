@@ -6,6 +6,8 @@ import { ModalDialog } from "@/components/ModalDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { PanelResizeToggle } from "@/features/resizable-panels/ResizablePanels";
+import { SourceSelector } from "@/features/source-selector/SourceSelector";
 import {
   getCachedPullRequestApprovalPermission,
   getGitHubAuthChangeVersion,
@@ -14,9 +16,7 @@ import {
   setGitHubUserToken,
   subscribeGitHubAuthChange,
   validateToken,
-} from "@/domain/github";
-import { PanelResizeToggle } from "@/features/resizable-panels/ResizablePanels";
-import { SourceSelector } from "@/features/source-selector/SourceSelector";
+} from "@/infrastructure/github";
 import { useSourceStore, useUIStore } from "@/store";
 import { hardResetAppState } from "@/store/hard-reset";
 
@@ -25,7 +25,6 @@ export function AppHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const githubTokenInputId = useId();
-  const githubTokenDialogTitleId = useId();
   const repository = useSourceStore((s) => s.repository);
   const setLocale = useUIStore((s) => s.setLocale);
   const locale = useUIStore((s) => s.locale);
@@ -53,9 +52,9 @@ export function AppHeader() {
   const hasPersonalToken = Boolean(getGitHubUserToken()?.trim());
   const permissionBadgeLabel = hasPersonalToken
     ? hasMaintainerPermission
-      ? "мейнтейнер"
-      : "личный ключ"
-    : "общий ключ";
+      ? t("githubAuth.maintainer")
+      : t("githubAuth.personalKey")
+    : t("githubAuth.sharedKey");
   const permissionBadgeClassName = hasPersonalToken
     ? hasMaintainerPermission
       ? "success"
@@ -72,11 +71,17 @@ export function AppHeader() {
     setHasMaintainerPermission(
       getCachedPullRequestApprovalPermission(repository)
     );
-    void refreshPullRequestApprovalPermission(repository).then((canApprove) => {
-      if (!cancelled) {
-        setHasMaintainerPermission(canApprove);
-      }
-    });
+    void refreshPullRequestApprovalPermission(repository)
+      .then((canApprove) => {
+        if (!cancelled) {
+          setHasMaintainerPermission(canApprove);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHasMaintainerPermission(false);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -152,7 +157,7 @@ export function AppHeader() {
         <div className="flex-1" />
 
         <StatusBadge
-          title="Статус прав в репозитории"
+          title={t("githubAuth.permissionStatus")}
           variant={permissionBadgeClassName}
         >
           {permissionBadgeLabel}
@@ -183,7 +188,6 @@ export function AppHeader() {
           className="sm:max-w-[520px]"
           onClose={() => setGithubTokenModalOpen(false)}
           title={t("githubAuth.title")}
-          titleId={githubTokenDialogTitleId}
         >
           <div className="mb-4 flex flex-col gap-2">
             <label

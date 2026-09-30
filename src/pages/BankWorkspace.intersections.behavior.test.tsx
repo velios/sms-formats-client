@@ -149,7 +149,7 @@ const mocks = vi.hoisted(() => {
         { kind: "delete" as const, path: "src/TBank_123/formats/deleted.txt" },
       ],
     })),
-    prepareFormatEntries: vi.fn(),
+    loadBankSnapshot: vi.fn(),
     refreshPullRequestApprovalPermission: vi.fn(() => Promise.resolve(false)),
     resolvePullRequestWorkspace: vi.fn(() => new Promise(() => undefined)),
     routeState,
@@ -278,9 +278,8 @@ vi.mock("@/features/quick-check/QuickCheckPanel", () => ({
   ),
 }));
 
-vi.mock("@/features/quick-check/format-entries", () => ({
-  prepareFormatEntries: (...args: unknown[]) =>
-    mocks.prepareFormatEntries(...args),
+vi.mock("@/features/workspace/bank-snapshot", () => ({
+  loadBankSnapshot: (...args: unknown[]) => mocks.loadBankSnapshot(...args),
 }));
 
 vi.mock("@/features/senders-editor/SendersEditor", () => ({
@@ -308,15 +307,20 @@ vi.mock("@/store/workspace-session", () => ({
   saveWorkspaceSession: mocks.saveWorkspaceSession,
 }));
 
-vi.mock("@/store/file-content-store", () => ({
+vi.mock("@/infrastructure/file-content", () => ({
   useFileContentStore: {
     getState: () => mocks.fileContentStore,
   },
 }));
 
-vi.mock("@/domain/github", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/domain/github")>("@/domain/github");
+vi.mock("@/domain/bank-index", () => ({
+  indexBanksFromTree: mocks.indexBanksFromTree,
+}));
+
+vi.mock("@/infrastructure/github", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/infrastructure/github")
+  >("@/infrastructure/github");
   return {
     ...actual,
     approvePullRequest: vi.fn(),
@@ -328,7 +332,6 @@ vi.mock("@/domain/github", async () => {
       mocks.getCachedPullRequestApprovalPermission,
     getGitHubAuthChangeVersion: mocks.getGitHubAuthChangeVersion,
     getGitHubUserToken: vi.fn(() => ""),
-    indexBanksFromTree: mocks.indexBanksFromTree,
     refreshPullRequestApprovalPermission:
       mocks.refreshPullRequestApprovalPermission,
     resolvePullRequestWorkspace: mocks.resolvePullRequestWorkspace,
@@ -469,8 +472,8 @@ describe("BankWorkspace intersections behavior", () => {
     });
     mocks.saveWorkspaceSession.mockReset();
 
-    mocks.prepareFormatEntries.mockReset();
-    mocks.prepareFormatEntries.mockResolvedValue({
+    mocks.loadBankSnapshot.mockReset();
+    mocks.loadBankSnapshot.mockResolvedValue({
       entries: [
         {
           filePath: "src/TBank_123/formats/current.txt",
@@ -509,7 +512,7 @@ describe("BankWorkspace intersections behavior", () => {
     );
 
     await waitFor(() =>
-      expect(mocks.prepareFormatEntries).toHaveBeenCalledWith(
+      expect(mocks.loadBankSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
           filePaths: expect.arrayContaining([
             "src/TBank_123/formats/current.txt",
@@ -518,9 +521,9 @@ describe("BankWorkspace intersections behavior", () => {
         })
       )
     );
-    expect(
-      mocks.prepareFormatEntries.mock.calls[0]?.[0]?.filePaths
-    ).toHaveLength(2);
+    expect(mocks.loadBankSnapshot.mock.calls[0]?.[0]?.filePaths).toHaveLength(
+      2
+    );
     await waitFor(() =>
       expect(getFormatRow("current.txt")).toHaveTextContent("2 / 2 / 1")
     );
@@ -576,7 +579,7 @@ describe("BankWorkspace intersections behavior", () => {
   });
 
   it("keeps the last successful indicators when a repeated calculation fails", async () => {
-    mocks.prepareFormatEntries
+    mocks.loadBankSnapshot
       .mockResolvedValueOnce({
         entries: [
           {

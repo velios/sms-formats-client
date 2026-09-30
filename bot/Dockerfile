@@ -10,7 +10,7 @@
 # --------------------
 # Debian-based bun (not alpine): `bun build --compile` links against the
 # running toolchain's libc, and the runtime stage below is glibc.
-FROM oven/bun:1.3.14 AS build
+FROM oven/bun:1.4.2 AS build
 
 WORKDIR /app
 

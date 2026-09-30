@@ -1,22 +1,14 @@
-// "Before → after", structural rather than textual (ADR-0017): a format file
-// is laid out by the existing `parseFormatFile` — the regex as two lines, the
-// columns as two lines, the examples as an added/removed list, both states at
-// once. `presentableDiff` only tints the differing runs inside the regex line;
-// it carries nothing.
-
 import { presentableDiff } from "@codemirror/merge";
 import { useTranslation } from "react-i18next";
-import { parseFormatFile } from "@/domain/format";
+import { normalizeSmsText, parseFormatFile } from "@/domain/format";
 
 export type DiffKind = "changed" | "created" | "deleted" | "identical";
 
 interface Props {
   path: string;
   kind: DiffKind;
-  /** The body in force; null when nothing stands at this path yet. */
   before: string | null;
   after: string | null;
-  /** Reason from the `<delete>` block. */
   reason: string | null;
 }
 
@@ -61,8 +53,6 @@ function Line(props: {
       >
         {runs
           ? runs.map(([run, changed], index) => (
-              // No rounding, no padding: neighbouring marked runs have to melt
-              // into one band instead of falling apart into a staircase.
               <span
                 className={
                   changed ? "bg-[color:var(--c-accent-soft)]" : undefined
@@ -168,7 +158,7 @@ function SendersDiff({
 }
 
 function normalizeExample(example: string): string {
-  return example.trim().replace(/\s+/g, " ");
+  return normalizeSmsText(example);
 }
 
 function FormatDiff({

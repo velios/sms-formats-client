@@ -22,13 +22,14 @@ function buildInventory(overrides: Partial<BankInventoryInput> = {}) {
 function localChange(params: {
   filePath: string;
   content?: string;
-  remoteContent?: string;
+  headContent?: string | null;
   isDeleted?: boolean;
 }) {
   return {
     filePath: params.filePath,
     content: params.content ?? "draft",
-    remoteContent: params.remoteContent ?? "remote",
+    headContent:
+      params.headContent === undefined ? "remote" : params.headContent,
     isDeleted: params.isDeleted ?? false,
   };
 }
@@ -55,13 +56,13 @@ describe("buildBankInventory records", () => {
     ]);
   });
 
-  it("marks a draft with empty remote content as locally created", () => {
+  it("marks a draft with absent head content as locally created", () => {
     const inventory = buildInventory({
       draftPaths: ["banks/pumb/formats/new.txt"],
       localChanges: [
         localChange({
           filePath: "banks/pumb/formats/new.txt",
-          remoteContent: "",
+          headContent: null,
         }),
       ],
     });
@@ -146,7 +147,7 @@ describe("buildBankInventory deleted-file visibility", () => {
       localChanges: [
         localChange({
           filePath: "banks/pumb/formats/deleted-in-pr.txt",
-          remoteContent: "",
+          headContent: null,
         }),
       ],
     });
@@ -259,28 +260,6 @@ describe("buildBankInventory selections", () => {
     ]);
   });
 
-  it("collects live local format contents without deleted, senders and unsupported files", () => {
-    const inventory = buildInventory({
-      localChanges: [
-        localChange({
-          filePath: "banks/pumb/formats/kept.txt",
-          content: "kept-content",
-        }),
-        localChange({
-          filePath: "banks/pumb/formats/gone.txt",
-          isDeleted: true,
-        }),
-        localChange({ filePath: SENDERS_PATH, content: "senders-content" }),
-        localChange({ filePath: "banks/pumb/notes.md" }),
-        localChange({ filePath: "banks/other/formats/foreign.txt" }),
-      ],
-    });
-
-    expect(inventory.formatContentsForValidation).toEqual(
-      new Map([["banks/pumb/formats/kept.txt", "kept-content"]])
-    );
-  });
-
   // Consumer of `mainLayerPaths`: the prompt package builder, which prints
   // these files as `<files layer="main">` (ADR-0016).
   it("resolves the main layer for the prompt package: head-ref minus added plus deleted", () => {
@@ -293,7 +272,7 @@ describe("buildBankInventory selections", () => {
       localChanges: [
         localChange({
           filePath: "banks/pumb/formats/draft-only.txt",
-          remoteContent: "",
+          headContent: null,
         }),
       ],
       sourceChanges: [

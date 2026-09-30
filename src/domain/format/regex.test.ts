@@ -1,35 +1,35 @@
 import { describe, expect, it } from "vitest";
+import { analyzeRegexPattern } from "./pattern-analysis";
 import {
-  cleanText,
   countCaptureGroups,
-  explainRegex,
+  normalizeSmsText,
   recognitionProgress,
   testRegex,
 } from "./regex";
 
-describe("cleanText", () => {
+describe("normalizeSmsText", () => {
   it("collapses a single newline run to one space", () => {
-    expect(cleanText("a\nb")).toBe("a b");
+    expect(normalizeSmsText("a\nb")).toBe("a b");
   });
 
   it("collapses runs of mixed \\n and \\r to one space", () => {
-    expect(cleanText("a\n\n\nb")).toBe("a b");
-    expect(cleanText("a\r\nb")).toBe("a b");
-    expect(cleanText("a\r\n\r\nb")).toBe("a b");
+    expect(normalizeSmsText("a\n\n\nb")).toBe("a b");
+    expect(normalizeSmsText("a\r\nb")).toBe("a b");
+    expect(normalizeSmsText("a\r\n\r\nb")).toBe("a b");
   });
 
   it("trims leading and trailing whitespace including converted newlines", () => {
-    expect(cleanText("\n\n  hello  \r\n")).toBe("hello");
-    expect(cleanText("  spaced  ")).toBe("spaced");
+    expect(normalizeSmsText("\n\n  hello  \r\n")).toBe("hello");
+    expect(normalizeSmsText("  spaced  ")).toBe("spaced");
   });
 
   it("is idempotent", () => {
-    const once = cleanText("\n a\n\nb \r");
-    expect(cleanText(once)).toBe(once);
+    const once = normalizeSmsText("\n a\n\nb \r");
+    expect(normalizeSmsText(once)).toBe(once);
   });
 
   it("returns empty string for whitespace-only input", () => {
-    expect(cleanText("\n\r\n  ")).toBe("");
+    expect(normalizeSmsText("\n\r\n  ")).toBe("");
   });
 });
 
@@ -230,11 +230,9 @@ describe("countCaptureGroups", () => {
   });
 });
 
-describe("explainRegex", () => {
-  it("returns human-readable explanation lines", () => {
-    const explanation = explainRegex("^\\d{5}$");
-    expect(explanation.lines.length).toBeGreaterThan(0);
-    expect(explanation.lines.join(" ").toLowerCase()).toContain("digit");
+describe("analyzeRegexPattern", () => {
+  it("describes each pattern token", () => {
+    const explanation = analyzeRegexPattern("^\\d{5}$");
     expect(explanation.canHighlightPattern).toBe(true);
     expect(explanation.patternTokens.map((token) => token.raw).join("")).toBe(
       "^\\d{5}$"
@@ -242,7 +240,7 @@ describe("explainRegex", () => {
   });
 
   it("builds token offsets for regex pattern parts", () => {
-    const explanation = explainRegex("(abc)");
+    const explanation = analyzeRegexPattern("(abc)");
     expect(explanation.canHighlightPattern).toBe(true);
     expect(explanation.patternTokens[0]).toEqual(
       expect.objectContaining({
@@ -254,22 +252,18 @@ describe("explainRegex", () => {
   });
 
   it("returns empty explanation for empty regex", () => {
-    const explanation = explainRegex("");
-    expect(explanation.heading).toBeNull();
-    expect(explanation.lines).toEqual([]);
+    const explanation = analyzeRegexPattern("");
     expect(explanation.patternTokens).toEqual([]);
   });
 
   it("returns empty explanation for invalid regex", () => {
-    const explanation = explainRegex("[invalid");
-    expect(explanation.lines).toEqual([]);
+    const explanation = analyzeRegexPattern("[invalid");
     expect(explanation.canHighlightPattern).toBe(false);
     expect(explanation.patternTokens).toEqual([]);
   });
 
   it("supports russian locale output", () => {
-    const explanation = explainRegex("^\\d{5}$", "ru");
-    expect(explanation.lines.join(" ").toLowerCase()).toContain("циф");
+    const explanation = analyzeRegexPattern("^\\d{5}$", "ru");
     expect(explanation.patternTokens[1]?.description.toLowerCase()).toContain(
       "циф"
     );

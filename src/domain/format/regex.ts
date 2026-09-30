@@ -1,6 +1,5 @@
-import { explain as explainWithSimplifier } from "@the-node-forge/regex-simplifier";
-
-export type RegexExplanationLocale = "en" | "ru";
+import type { RegexPatternToken } from "./pattern-analysis";
+import { tokenizeRegexPattern } from "./pattern-analysis";
 
 export interface RegexMatchResult {
   matched: boolean;
@@ -15,11 +14,7 @@ type ExecMatchWithIndices = RegExpExecArray & {
   indices?: Array<[number, number] | undefined>;
 };
 
-/**
- * Normalize subject text before recognition, identical to the mobile app's
- * `_clean_text`: collapse runs of `\n`/`\r` to a single space, then trim edges.
- */
-export function cleanText(text: string): string {
+export function normalizeSmsText(text: string): string {
   return text.replace(/[\n\r]+/g, " ").trim();
 }
 
@@ -28,12 +23,7 @@ interface NormalizedTextMapping {
   toOriginal: (offset: number) => number;
 }
 
-/**
- * Build `cleanText(original)` while tracking how each normalized offset maps
- * back to the original string. A collapsed `[\n\r]+` run (k chars → 1 space)
- * maps its single space's start to the run's start and its end to the run's
- * end; trimmed leading whitespace shifts subsequent offsets.
- */
+// Keep normalized offsets mapped to the original SMS.
 function buildNormalizedTextMapping(text: string): NormalizedTextMapping {
   let collapsed = "";
   const collapsedToOriginal: number[] = [];
@@ -84,12 +74,6 @@ function emptyMatchResult(error: string | null = null): RegexMatchResult {
   };
 }
 
-/**
- * Compile a regex pattern once, preferring the `d` (indices) flag so callers
- * can read group positions, falling back to a plain compile when unsupported.
- * Single home for `new RegExp` shared by the rich (`testRegex`) and boolean
- * (`recognition`) paths.
- */
 export function tryCompile(pattern: string): {
   regex: RegExp | null;
   supportsIndices: boolean;
@@ -172,9 +156,6 @@ function extractMatchGroups(
   return groups;
 }
 
-/**
- * Test a regex string against a test string. Returns match info.
- */
 export function testRegex(pattern: string, testStr: string): RegexMatchResult {
   if (!pattern) {
     return emptyMatchResult();
@@ -221,31 +202,13 @@ export function testRegex(pattern: string, testStr: string): RegexMatchResult {
 }
 
 export interface RecognitionProgress {
-  /** Region B — recognized prefix, in original-text offsets. */
   prefixStart: number;
   prefixEnd: number;
-  /**
-   * Cut point of the recognized prefix inside the *pattern* string (char
-   * offset = end of the last matching depth-0 boundary token). Lets the
-   * pattern field paint its recognized prefix; strictly shorter than the full
-   * pattern. See ADR-0007.
-   */
   prefixPatternEnd: number;
-  /** Capture groups inside the recognized prefix, original-text offsets. */
   groups: RegexMatchResult["groups"];
-  /**
-   * The longest prefix consumed all of the normalized SMS, yet the full
-   * pattern is still unsatisfied (a mandatory token remains). The caller draws
-   * the "waiting for more" caret instead of region C.
-   */
   textExhausted: boolean;
 }
 
-/**
- * Token indices whose `end` sits at bracket depth 0 — the only offsets where
- * slicing the pattern always yields a compilable sub-pattern (a group is taken
- * whole at its closing `)`, never mid-way).
- */
 function depthZeroBoundaryTokenIndices(tokens: RegexPatternToken[]): number[] {
   const indices: number[] = [];
   let depth = 0;
@@ -263,13 +226,6 @@ function depthZeroBoundaryTokenIndices(tokens: RegexPatternToken[]): number[] {
   return indices;
 }
 
-/**
- * Editor-only **Recognition Progress** (see ADR-0007): for an SMS the full
- * pattern does *not* recognize, report how far the pattern reaches left to
- * right. Incrementally recompiles the longest depth-0 prefix of the pattern
- * that still matches, then maps its `[start, end)` and groups back onto the
- * original text. Distinct from device-identical, binary `recognition`.
- */
 export function recognitionProgress(
   pattern: string,
   sms: string
@@ -309,8 +265,6 @@ export function recognitionProgress(
     }
     const start = match.index ?? 0;
     const end = start + match[0].length;
-    // Boundaries grow monotonically, so the last successful one is the longest
-    // matching pattern prefix — its match defines region B.
     best = {
       match,
       supportsIndices: compiled.supportsIndices,
@@ -346,552 +300,11 @@ export function recognitionProgress(
   };
 }
 
-/**
- * Count the number of capturing groups in a regex pattern.
- */
 export function countCaptureGroups(pattern: string): number | null {
   try {
-    // Match-empty cannot be used for many patterns, so we append an empty
-    // alternative and inspect the captures count from the exec result shape.
     const result = new RegExp(`${pattern}|`).exec("");
     return result ? result.length - 1 : 0;
   } catch {
     return null;
-  }
-}
-
-export interface RegexExplanation {
-  heading: string | null;
-  lines: string[];
-  canHighlightPattern: boolean;
-  patternTokens: RegexPatternToken[];
-}
-
-export interface RegexPatternToken {
-  type: string;
-  description: string;
-  raw: string;
-  start: number;
-  end: number;
-}
-
-function isRussianLocale(locale: RegexExplanationLocale): boolean {
-  return locale === "ru";
-}
-
-function normalizeExplanation(
-  explanation: string,
-  locale: RegexExplanationLocale
-): Pick<RegexExplanation, "heading" | "lines"> {
-  const rawLines = explanation
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (rawLines.length === 0) {
-    return { heading: null, lines: [] };
-  }
-
-  const hasHeading = rawLines[0]?.endsWith(":");
-  const rawHeading = hasHeading ? rawLines[0]?.slice(0, -1).trim() : null;
-  const lines = rawLines
-    .slice(hasHeading ? 1 : 0)
-    .map((line) => (line.startsWith("- ") ? line.slice(2).trim() : line))
-    .map((line) =>
-      isRussianLocale(locale) ? translateSimplifierLineToRussian(line) : line
-    )
-    .filter(Boolean);
-  const heading =
-    rawHeading == null
-      ? null
-      : isRussianLocale(locale)
-        ? translateSimplifierHeadingToRussian(rawHeading)
-        : rawHeading;
-
-  return { heading, lines };
-}
-
-function translateSimplifierHeadingToRussian(heading: string): string {
-  if (heading.toLowerCase() === "this pattern") {
-    return "Это выражение";
-  }
-  return heading;
-}
-
-function translateSimplifierLineToRussian(line: string): string {
-  const quantifierMap: Record<string, string> = {
-    digits: "цифр",
-    "word characters": "символов слова",
-    whitespace: "пробельных символов",
-    "any character except newline": "любых символов, кроме перевода строки",
-  };
-  const exactDigitsMatch = line.match(/^exactly (\d+|five) digits$/i);
-  if (exactDigitsMatch) {
-    const count = exactDigitsMatch[1] === "five" ? "5" : exactDigitsMatch[1];
-    return `ровно ${count} цифр`;
-  }
-  const singleMatch = line.match(/^a single (.+)$/i);
-  if (singleMatch) {
-    return `один символ типа: ${singleMatch[1]}`;
-  }
-  const literalMatch = line.match(/^the literal "(.+)"$/i);
-  if (literalMatch) {
-    return `литерал "${literalMatch[1]}"`;
-  }
-  const quantifierMatch = line.match(
-    /^(zero or more|one or more|optional)\s+(.+?)(?:\s+\((greedy|lazy)\))?$/i
-  );
-  if (quantifierMatch) {
-    const quantifier = (quantifierMatch[1] ?? "").toLowerCase();
-    const rawItem = quantifierMatch[2] ?? "";
-    const item = quantifierMap[rawItem.toLowerCase()] ?? rawItem;
-    const mode = quantifierMatch[3]
-      ? ` (${quantifierMatch[3] === "lazy" ? "ленивый" : "жадный"})`
-      : "";
-    if (quantifier === "zero or more") {
-      return `ноль или более ${item}${mode}`;
-    }
-    if (quantifier === "one or more") {
-      return `один или более ${item}${mode}`;
-    }
-    return `опционально: ${item}${mode}`;
-  }
-  const rangeMatch = line.match(/^between (\d+) and (\d+) (.+)$/i);
-  if (rangeMatch) {
-    return `от ${rangeMatch[1]} до ${rangeMatch[2]}: ${rangeMatch[3]}`;
-  }
-  const startsWithMap: Record<string, string> = {
-    "must match the **entire** string": "должно совпадать со всей строкой",
-    "must start at the beginning of the string":
-      "должно начинаться с начала строки",
-    "must end at the end of the string": "должно заканчиваться в конце строки",
-    "any character except newline": "любой символ, кроме перевода строки",
-  };
-  return startsWithMap[line] ?? line;
-}
-
-function describeEscape(
-  next: string | undefined,
-  locale: RegexExplanationLocale
-): string {
-  if (!next) {
-    return isRussianLocale(locale)
-      ? "Символ экранирования"
-      : "Escape character";
-  }
-  const map: Record<string, { en: string; ru: string }> = {
-    d: { en: "Digit [0-9]", ru: "Цифра [0-9]" },
-    D: { en: "Non-digit", ru: "Не цифра" },
-    w: { en: "Word character [a-zA-Z0-9_]", ru: "Символ слова [a-zA-Z0-9_]" },
-    W: { en: "Non-word character", ru: "Не-символ слова" },
-    s: { en: "Whitespace", ru: "Пробельный символ" },
-    S: { en: "Non-whitespace", ru: "Не пробельный символ" },
-    b: { en: "Word boundary", ru: "Граница слова" },
-    B: { en: "Non-word boundary", ru: "Не граница слова" },
-    n: { en: "Newline", ru: "Перевод строки" },
-    r: { en: "Carriage return", ru: "Возврат каретки" },
-    t: { en: "Tab", ru: "Табуляция" },
-  };
-  const item = map[next];
-  if (item) {
-    return isRussianLocale(locale) ? item.ru : item.en;
-  }
-  return isRussianLocale(locale)
-    ? `Экранированный символ "${next}"`
-    : `Escaped "${next}"`;
-}
-
-interface TokenParseResult {
-  token: RegexPatternToken;
-  nextIndex: number;
-}
-
-function parseEscapeToken(
-  pattern: string,
-  start: number,
-  locale: RegexExplanationLocale
-): TokenParseResult {
-  const next = pattern[start + 1];
-  const raw = next ? `\\${next}` : "\\";
-  return {
-    token: {
-      type: "escape",
-      description: describeEscape(next, locale),
-      raw,
-      start,
-      end: start + raw.length,
-    },
-    nextIndex: start + raw.length,
-  };
-}
-
-function parseGroupToken(
-  pattern: string,
-  start: number,
-  locale: RegexExplanationLocale
-): TokenParseResult {
-  const knownPrefixes: Array<{
-    prefix: string;
-    ru: string;
-    en: string;
-  }> = [
-    { prefix: "(?:", ru: "Незахватывающая группа", en: "Non-capturing group" },
-    {
-      prefix: "(?=",
-      ru: "Позитивный просмотр вперёд",
-      en: "Positive lookahead",
-    },
-    {
-      prefix: "(?!",
-      ru: "Негативный просмотр вперёд",
-      en: "Negative lookahead",
-    },
-    {
-      prefix: "(?<=",
-      ru: "Позитивный просмотр назад",
-      en: "Positive lookbehind",
-    },
-    {
-      prefix: "(?<!",
-      ru: "Негативный просмотр назад",
-      en: "Negative lookbehind",
-    },
-  ];
-
-  const prefix = knownPrefixes.find((item) =>
-    pattern.startsWith(item.prefix, start)
-  );
-  if (prefix) {
-    const end = start + prefix.prefix.length;
-    return {
-      token: {
-        type: "group",
-        description: isRussianLocale(locale) ? prefix.ru : prefix.en,
-        raw: prefix.prefix,
-        start,
-        end,
-      },
-      nextIndex: end,
-    };
-  }
-
-  if (pattern.startsWith("(?<", start)) {
-    let cursor = start + 3;
-    while (cursor < pattern.length && pattern[cursor] !== ">") {
-      cursor++;
-    }
-    const end = Math.min(pattern.length, cursor + 1);
-    return {
-      token: {
-        type: "group",
-        description: isRussianLocale(locale)
-          ? "Именованная захватывающая группа"
-          : "Named capturing group",
-        raw: pattern.slice(start, end),
-        start,
-        end,
-      },
-      nextIndex: end,
-    };
-  }
-
-  return {
-    token: {
-      type: "group",
-      description: isRussianLocale(locale)
-        ? "Захватывающая группа"
-        : "Capturing group",
-      raw: "(",
-      start,
-      end: start + 1,
-    },
-    nextIndex: start + 1,
-  };
-}
-
-function parseCharClassToken(
-  pattern: string,
-  start: number,
-  locale: RegexExplanationLocale
-): TokenParseResult {
-  let cursor = start + 1;
-  let escaped = false;
-  while (cursor < pattern.length) {
-    const current = pattern[cursor] ?? "";
-    if (!escaped && current === "\\") {
-      escaped = true;
-      cursor++;
-      continue;
-    }
-    if (!escaped && current === "]") {
-      cursor++;
-      break;
-    }
-    escaped = false;
-    cursor++;
-  }
-
-  const end = Math.max(start + 1, cursor);
-  const raw = pattern.slice(start, end);
-  const negated = pattern[start + 1] === "^";
-  const description = isRussianLocale(locale)
-    ? `${negated ? "Отрицательный класс символов" : "Класс символов"} ${raw}`
-    : `${negated ? "Negated c" : "C"}haracter class ${raw}`;
-
-  return {
-    token: {
-      type: "charclass",
-      description,
-      raw,
-      start,
-      end,
-    },
-    nextIndex: end,
-  };
-}
-
-function parseCurlyQuantifierToken(
-  pattern: string,
-  start: number,
-  locale: RegexExplanationLocale
-): TokenParseResult {
-  let cursor = start + 1;
-  while (cursor < pattern.length && pattern[cursor] !== "}") {
-    cursor++;
-  }
-  const end = Math.min(pattern.length, cursor + 1);
-  const raw = pattern.slice(start, end);
-  return {
-    token: {
-      type: "quantifier",
-      description: isRussianLocale(locale) ? `Повтор ${raw}` : `Repeat ${raw}`,
-      raw,
-      start,
-      end,
-    },
-    nextIndex: end,
-  };
-}
-
-function parseGreedyQuantifierToken(
-  ch: "*" | "+",
-  pattern: string,
-  start: number,
-  locale: RegexExplanationLocale
-): TokenParseResult {
-  const lazy = pattern[start + 1] === "?";
-  const raw = lazy ? `${ch}?` : ch;
-  const description = isRussianLocale(locale)
-    ? ch === "*"
-      ? lazy
-        ? "Ноль или более (ленивый)"
-        : "Ноль или более (жадный)"
-      : lazy
-        ? "Один или более (ленивый)"
-        : "Один или более (жадный)"
-    : ch === "*"
-      ? lazy
-        ? "Zero or more (lazy)"
-        : "Zero or more (greedy)"
-      : lazy
-        ? "One or more (lazy)"
-        : "One or more (greedy)";
-
-  return {
-    token: {
-      type: "quantifier",
-      description,
-      raw,
-      start,
-      end: start + raw.length,
-    },
-    nextIndex: start + raw.length,
-  };
-}
-
-function parseLiteralToken(
-  pattern: string,
-  start: number,
-  specials: Set<string>,
-  locale: RegexExplanationLocale
-): TokenParseResult {
-  let cursor = start + 1;
-  while (cursor < pattern.length && !specials.has(pattern[cursor] ?? "")) {
-    cursor++;
-  }
-  const raw = pattern.slice(start, cursor);
-  return {
-    token: {
-      type: "literal",
-      description: isRussianLocale(locale)
-        ? raw.length === 1
-          ? `Символ "${raw}"`
-          : `Литерал "${raw}"`
-        : raw.length === 1
-          ? `Character "${raw}"`
-          : `Literal "${raw}"`,
-      raw,
-      start,
-      end: cursor,
-    },
-    nextIndex: cursor,
-  };
-}
-
-function parseSimpleSymbolToken(
-  ch: string,
-  start: number,
-  locale: RegexExplanationLocale
-): TokenParseResult {
-  const descriptors: Record<
-    string,
-    {
-      type: RegexPatternToken["type"];
-      ru: string;
-      en: string;
-    }
-  > = {
-    "^": { type: "anchor", ru: "Начало строки", en: "Start of string" },
-    $: { type: "anchor", ru: "Конец строки", en: "End of string" },
-    ".": { type: "meta", ru: "Любой символ", en: "Any character" },
-    ")": { type: "group", ru: "Конец группы", en: "End of group" },
-    "?": {
-      type: "quantifier",
-      ru: "Опционально (0 или 1)",
-      en: "Optional (0 or 1)",
-    },
-    "|": { type: "alternation", ru: "ИЛИ", en: "OR" },
-  };
-  const descriptor = descriptors[ch];
-  if (!descriptor) {
-    return {
-      token: {
-        type: "literal",
-        description: isRussianLocale(locale)
-          ? `Символ "${ch}"`
-          : `Character "${ch}"`,
-        raw: ch,
-        start,
-        end: start + 1,
-      },
-      nextIndex: start + 1,
-    };
-  }
-  return {
-    token: {
-      type: descriptor.type,
-      description: isRussianLocale(locale) ? descriptor.ru : descriptor.en,
-      raw: ch,
-      start,
-      end: start + 1,
-    },
-    nextIndex: start + 1,
-  };
-}
-
-function readNextToken(
-  pattern: string,
-  start: number,
-  specials: Set<string>,
-  locale: RegexExplanationLocale
-): TokenParseResult {
-  const ch = pattern[start] ?? "";
-
-  if (ch === "\\") {
-    return parseEscapeToken(pattern, start, locale);
-  }
-  if (ch === "(") {
-    return parseGroupToken(pattern, start, locale);
-  }
-  if (ch === "[") {
-    return parseCharClassToken(pattern, start, locale);
-  }
-  if (ch === "{") {
-    return parseCurlyQuantifierToken(pattern, start, locale);
-  }
-  if (ch === "*" || ch === "+") {
-    return parseGreedyQuantifierToken(ch, pattern, start, locale);
-  }
-  if (
-    ch === "^" ||
-    ch === "$" ||
-    ch === "." ||
-    ch === ")" ||
-    ch === "?" ||
-    ch === "|"
-  ) {
-    return parseSimpleSymbolToken(ch, start, locale);
-  }
-
-  return parseLiteralToken(pattern, start, specials, locale);
-}
-
-function tokenizeRegexPattern(
-  pattern: string,
-  locale: RegexExplanationLocale
-): RegexPatternToken[] {
-  const tokens: RegexPatternToken[] = [];
-  const specials = new Set([
-    "^",
-    "$",
-    ".",
-    "\\",
-    "(",
-    ")",
-    "[",
-    "]",
-    "{",
-    "}",
-    "*",
-    "+",
-    "?",
-    "|",
-  ]);
-  let i = 0;
-
-  while (i < pattern.length) {
-    const parsed = readNextToken(pattern, i, specials, locale);
-    tokens.push(parsed.token);
-    i = parsed.nextIndex;
-  }
-
-  return tokens;
-}
-
-export function explainRegex(
-  pattern: string,
-  locale: RegexExplanationLocale = "en"
-): RegexExplanation {
-  if (!pattern.trim()) {
-    return {
-      heading: null,
-      lines: [],
-      canHighlightPattern: false,
-      patternTokens: [],
-    };
-  }
-
-  try {
-    const explanation = explainWithSimplifier(pattern);
-    const normalized = normalizeExplanation(explanation, locale);
-    const patternTokens = tokenizeRegexPattern(pattern, locale);
-    const rebuiltPattern = patternTokens.map((token) => token.raw).join("");
-    const canHighlightPattern =
-      normalized.lines.length > 0 &&
-      patternTokens.length > 0 &&
-      rebuiltPattern === pattern;
-
-    return {
-      ...normalized,
-      canHighlightPattern,
-      patternTokens: canHighlightPattern ? patternTokens : [],
-    };
-  } catch {
-    return {
-      heading: null,
-      lines: [],
-      canHighlightPattern: false,
-      patternTokens: [],
-    };
   }
 }

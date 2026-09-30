@@ -159,3 +159,14 @@ describe("extractDirectSms (direct)", () => {
     });
   });
 });
+
+it("preserves significant spaces and newlines in guest and direct SMS payloads", () => {
+  const sms = "Pay  10\nAccount";
+  expect(
+    extractSms({
+      text: `/sms @zenmoneysms_bot ${sms}`,
+      entities: [{ type: "mention", offset: 5, length: 16 }],
+    })
+  ).toEqual({ kind: "sms", sms });
+  expect(extractDirectSms(sms)).toEqual({ kind: "sms", sms });
+});

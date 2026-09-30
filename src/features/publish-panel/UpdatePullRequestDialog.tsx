@@ -19,7 +19,6 @@ interface Props {
 
 export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
   const { t } = useTranslation();
-  const dialogTitleId = useId();
   const commitTitleInputId = useId();
   const commitDescriptionInputId = useId();
   const [commitTitle, setCommitTitle] = useState("");
@@ -41,11 +40,7 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
   };
 
   return (
-    <ModalDialog
-      onClose={onClose}
-      title={t("publish.updateDialogTitle")}
-      titleId={dialogTitleId}
-    >
+    <ModalDialog onClose={onClose} title={t("publish.updateDialogTitle")}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label
