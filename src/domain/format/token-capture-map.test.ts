@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { analyzeRegexPattern } from "./pattern-analysis";
 import type { RegexMatchResult } from "./regex";
 import { testRegex } from "./regex";

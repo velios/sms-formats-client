@@ -1,7 +1,7 @@
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => {
+const mocks = (() => {
   const state = {
     openPRs: [
       {
@@ -65,31 +65,31 @@ const mocks = vi.hoisted(() => {
 
   return {
     buildStoredDraftsByScope,
-    navigate: vi.fn(),
+    navigate: mock(),
     state,
   };
-});
+})();
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>
       options?.defaultValue ?? key,
   }),
 }));
 
-vi.mock("react-router-dom", () => ({
+mock.module("react-router-dom", () => ({
   useLocation: () => ({ state: null }),
   useNavigate: () => mocks.navigate,
 }));
 
-vi.mock("@/hooks/useGitHub", () => ({
+mock.module("@/hooks/useGitHub", () => ({
   useOpenPRs: () => ({
     data: mocks.state.openPRs,
     isLoading: false,
   }),
 }));
 
-vi.mock("@/store", () => {
+mock.module("@/store", () => {
   const draftStore = {
     hasHydrated: true,
     get drafts() {
@@ -113,7 +113,7 @@ vi.mock("@/store", () => {
     },
     getChangedFiles: () => mocks.state.currentDraftFiles,
     hasDrafts: () => mocks.state.currentDraftFiles.length > 0,
-    discardAll: vi.fn(),
+    discardAll: mock(),
   };
 
   return {
@@ -135,7 +135,7 @@ vi.mock("@/store", () => {
   };
 });
 
-import { Dashboard } from "./Dashboard";
+const { Dashboard } = await import("./Dashboard");
 
 describe("Dashboard", () => {
   beforeEach(() => {

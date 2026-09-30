@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   type AnswerProblemKind,
   classifyPathViolation,
@@ -61,7 +61,7 @@ describe("parseAnswer: round trip against the printed package", () => {
       if (change.kind !== "write") {
         continue;
       }
-      expect(change.content).toBe(bodies[change.path]);
+      expect(change.content).toBe(bodies[change.path]!);
     }
   });
 

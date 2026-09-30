@@ -25,11 +25,5 @@
     "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": [
-    "src",
-    "bot",
-    "scripts/*.ts",
-    "vite.config.ts",
-    "vitest.config.ts"
-  ]
+  "include": ["src", "bot", "scripts/*.ts", "vite.config.ts"]
 }

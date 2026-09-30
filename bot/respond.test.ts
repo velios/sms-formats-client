@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { compileRegexes } from "@/domain/format";
 import type { CorpusFormat } from "./corpus";
 import type { CompiledCorpus } from "./recognize";

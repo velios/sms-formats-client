@@ -1,13 +1,13 @@
+import { beforeAll, describe, expect, it, mock } from "bun:test";
 import { EditorView } from "@codemirror/view";
 import { render } from "@testing-library/react";
 import { createRef } from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   RegexPatternEditor,
   type RegexPatternEditorHandle,
 } from "./RegexPatternEditor";
 
-function setup(regex: string, onRegexChange = vi.fn()) {
+function setup(regex: string, onRegexChange = mock()) {
   const ref = createRef<RegexPatternEditorHandle>();
   const { container } = render(
     <RegexPatternEditor
@@ -34,7 +34,7 @@ function setup(regex: string, onRegexChange = vi.fn()) {
 }
 
 beforeAll(() => {
-  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  window.HTMLElement.prototype.scrollIntoView = mock();
 });
 
 describe("RegexPatternEditor.insertAtCursor", () => {

@@ -1,16 +1,15 @@
+import { describe, expect, it, mock } from "bun:test";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import type * as React from "react";
-import { describe, expect, it, vi } from "vitest";
-import { SnippetsPanel } from "./SnippetsPanel";
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: { resolvedLanguage: "ru" },
   }),
 }));
 
-vi.mock("@/components/ui/button", () => ({
+mock.module("@/components/ui/button", () => ({
   Button: ({
     children,
     ...props
@@ -19,16 +18,18 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/status-badge", () => ({
+mock.module("@/components/ui/status-badge", () => ({
   StatusBadge: ({ children }: { children: React.ReactNode }) => (
     <span>{children}</span>
   ),
 }));
 
-vi.mock("@/lib/utils", () => ({
+mock.module("@/lib/utils", () => ({
   cn: (...values: Array<string | false | null | undefined>) =>
     values.filter(Boolean).join(" "),
 }));
+
+const { SnippetsPanel } = await import("./SnippetsPanel");
 
 function getInsertButtons() {
   return screen.getAllByRole("button", { name: "snippets.insert" });
@@ -75,7 +76,7 @@ describe("SnippetsPanel", () => {
   });
 
   it("inserts the snippet pattern without any close side effect", () => {
-    const onInsert = vi.fn();
+    const onInsert = mock();
     render(<SnippetsPanel onInsert={onInsert} />);
 
     fireEvent.click(

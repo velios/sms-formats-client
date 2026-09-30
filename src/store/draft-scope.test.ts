@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { PullRequestSource, RepoRef } from "@/domain/types";
 import { isSameDraftScope, makeDraftSourceKey } from "./draft-scope";
 

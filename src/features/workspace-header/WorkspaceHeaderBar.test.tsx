@@ -1,30 +1,30 @@
+import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   draftStore: {
-    canRedo: vi.fn(() => false),
-    canUndo: vi.fn(() => false),
-    getDraft: vi.fn((_filePath?: string) => undefined as unknown),
-    markDeleted: vi.fn(),
-    redo: vi.fn(),
-    resetFileToRemote: vi.fn(),
-    undo: vi.fn(),
+    canRedo: mock(() => false),
+    canUndo: mock(() => false),
+    getDraft: mock((_filePath?: string) => undefined as unknown),
+    markDeleted: mock(),
+    redo: mock(),
+    resetFileToRemote: mock(),
+    undo: mock(),
   },
-  useWorkspaceFileContent: vi.fn((_params?: unknown) => ({
+  useWorkspaceFileContent: mock((_params?: unknown) => ({
     data: "BASE CONTENT",
     isLoading: false,
     error: null,
   })),
-}));
+}))();
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
 }));
 
-vi.mock("@/components/ui/button", () => ({
+mock.module("@/components/ui/button", () => ({
   Button: ({
     asChild,
     children,
@@ -39,24 +39,24 @@ vi.mock("@/components/ui/button", () => ({
   },
 }));
 
-vi.mock("@/components/ui/status-badge", () => ({
+mock.module("@/components/ui/status-badge", () => ({
   StatusBadge: ({
     children,
     ...props
   }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
 }));
 
-vi.mock("@/hooks/useWorkspaceFileContent", () => ({
+mock.module("@/hooks/useWorkspaceFileContent", () => ({
   useWorkspaceFileContent: (params: unknown) =>
     mocks.useWorkspaceFileContent(params),
 }));
 
-vi.mock("@/lib/utils", () => ({
+mock.module("@/lib/utils", () => ({
   cn: (...values: Array<string | false | null | undefined>) =>
     values.filter(Boolean).join(" "),
 }));
 
-vi.mock("@/store", () => ({
+mock.module("@/store", () => ({
   useDraftStore: () => mocks.draftStore,
   useSourceStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -70,7 +70,7 @@ vi.mock("@/store", () => ({
     }),
 }));
 
-import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
+const { WorkspaceHeaderBar } = await import("./WorkspaceHeaderBar");
 
 function renderHeaderBar(
   overrides: Partial<Parameters<typeof WorkspaceHeaderBar>[0]> = {}
@@ -131,8 +131,8 @@ describe("WorkspaceHeaderBar", () => {
       headContent: null,
       baselineHeadSha: "head-sha",
     });
-    const prompt = vi.spyOn(window, "prompt").mockReturnValue("renamed.txt");
-    const onRenameFile = vi.fn(() => true);
+    const prompt = spyOn(window, "prompt").mockReturnValue("renamed.txt");
+    const onRenameFile = mock(() => true);
     renderHeaderBar({ onRenameFile });
     fireEvent.click(
       screen.getByRole("button", { name: "editor.renameFormat" })

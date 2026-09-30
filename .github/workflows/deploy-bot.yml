@@ -12,7 +12,7 @@ on:
       - package.json
       - bun.lock
       - .bun-version
-      - vitest.config.ts
+      - bunfig.toml
       - biome.jsonc
       - scripts/check-secrets.sh
       - scripts/bot-roundtrip-local.sh

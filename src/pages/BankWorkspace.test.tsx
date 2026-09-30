@@ -1,14 +1,19 @@
+import { describe, expect, it, mock } from "bun:test";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/store", () => ({
+mock.module("@/store", () => ({
   useDraftStore: () => ({}),
   useSourceStore: () => ({}),
+  useUIStore: () => ({}),
+  waitForDraftStoreHydration: () => Promise.resolve(),
 }));
 
+const { resolveAutoSelectFile } = await import(
+  "@/features/workspace/auto-select"
+);
+const { FormatsPanel } = await import("@/features/workspace/WorkspacePanels");
+
 import type { BankFileRecord } from "@/features/bank-inventory/core";
-import { resolveAutoSelectFile } from "@/features/workspace/auto-select";
-import { FormatsPanel } from "@/features/workspace/WorkspacePanels";
 
 function fileRecord(
   path: string,
@@ -39,8 +44,8 @@ function renderFormatsPanel(params: {
     unsupportedSourceFiles = [],
     visibleFormats = ["banks/pumb/formats/example.txt"],
   } = params;
-  const handleSelectFile = vi.fn();
-  const onScopeIntersections = vi.fn();
+  const handleSelectFile = mock();
+  const onScopeIntersections = mock();
 
   const view = render(
     <FormatsPanel
@@ -65,9 +70,9 @@ function renderFormatsPanel(params: {
       formatSearch=""
       formatTab="all"
       handleSelectFile={handleSelectFile}
-      handleSelectSenders={vi.fn()}
+      handleSelectSenders={mock()}
       intersectionScopeFiles={null}
-      onFocusedFilePathHandled={vi.fn()}
+      onFocusedFilePathHandled={mock()}
       onScopeIntersections={onScopeIntersections}
       pendingFocusedFilePath={null}
       recentFiles={[]}
@@ -77,9 +82,9 @@ function renderFormatsPanel(params: {
       selectedFile={null}
       sendersMissing={false}
       sendersPath="banks/pumb/senders.txt"
-      setFormatSearch={vi.fn()}
-      setFormatTab={vi.fn()}
-      setShowCreateFormat={vi.fn()}
+      setFormatSearch={mock()}
+      setFormatTab={mock()}
+      setShowCreateFormat={mock()}
       showSearchIndexStatus={false}
       showSenders={false}
       t={(key) => key}

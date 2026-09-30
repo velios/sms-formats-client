@@ -1,14 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hardResetAppState } from "./hard-reset";
-import { DRAFT_STORE_STORAGE_KEY } from "./persistence";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { restoreTestGlobals, setTestGlobal } from "@/test-globals";
 
-const idbStorage = vi.hoisted(() => new Map<string, string>());
+const idbStorage = new Map<string, string>();
 
-vi.mock("idb-keyval", () => ({
-  del: vi.fn(async (key: string) => {
+mock.module("idb-keyval", () => ({
+  get: mock(),
+  set: mock(),
+  del: mock(async (key: string) => {
     idbStorage.delete(String(key));
   }),
 }));
+
+const { hardResetAppState } = await import("./hard-reset");
+const { DRAFT_STORE_STORAGE_KEY } = await import("./persistence");
 
 function createLocalStorageMock(state: Map<string, string>) {
   return {
@@ -28,7 +32,7 @@ function createLocalStorageMock(state: Map<string, string>) {
 
 describe("hardResetAppState", () => {
   let localStorageState: Map<string, string>;
-  let reloadMock: ReturnType<typeof vi.fn>;
+  let reloadMock: ReturnType<typeof mock>;
 
   beforeEach(() => {
     idbStorage.clear();
@@ -47,15 +51,15 @@ describe("hardResetAppState", () => {
       ["unrelated-key", "keep-me"],
     ]);
     idbStorage.set(DRAFT_STORE_STORAGE_KEY, '{"state":"drafts"}');
-    vi.stubGlobal("localStorage", createLocalStorageMock(localStorageState));
-    reloadMock = vi.fn();
-    vi.stubGlobal("location", {
+    setTestGlobal("localStorage", createLocalStorageMock(localStorageState));
+    reloadMock = mock();
+    setTestGlobal("location", {
       reload: reloadMock,
     });
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    restoreTestGlobals();
   });
 
   it("clears app state except the GitHub token and reloads the page", async () => {

@@ -1,30 +1,34 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { restoreTestGlobals, setTestGlobal } from "@/test-globals";
 
-const idbStorage = vi.hoisted(() => new Map<string, string>());
+let generation = 0;
+const idbStorage = new Map<string, string>();
 
-vi.mock("idb-keyval", () => ({
-  del: vi.fn(async (key: string) => {
+mock.module("idb-keyval", () => ({
+  del: mock(async (key: string) => {
     idbStorage.delete(String(key));
   }),
-  get: vi.fn(async (key: string) => idbStorage.get(String(key)) ?? null),
-  keys: vi.fn(async () => Array.from(idbStorage.keys())),
-  set: vi.fn(async (key: string, value: string) => {
+  get: mock(async (key: string) => idbStorage.get(String(key)) ?? null),
+  keys: mock(async () => Array.from(idbStorage.keys())),
+  set: mock(async (key: string, value: string) => {
     idbStorage.set(String(key), value);
   }),
 }));
 
 async function loadStores() {
-  const mod = await import("./index");
+  // Reload the store without reloading its mocked persistence dependencies.
+  const mod: typeof import("./index") = await import(
+    `./index.ts?generation=${generation++}`
+  );
   await mod.waitForDraftStoreHydration();
   return mod;
 }
 
 describe("draft store persist", () => {
   beforeEach(() => {
-    vi.resetModules();
     idbStorage.clear();
     const localStorageState = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
+    setTestGlobal("localStorage", {
       getItem: (key: string) => localStorageState.get(key) ?? null,
       removeItem: (key: string) => {
         localStorageState.delete(key);
@@ -36,7 +40,7 @@ describe("draft store persist", () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    restoreTestGlobals();
   });
 
   it("persists scoped drafts and restores them after module reload", async () => {
@@ -67,8 +71,8 @@ describe("draft store persist", () => {
       },
     ]);
 
-    vi.resetModules();
     const secondLoad = await loadStores();
+    expect(secondLoad.useDraftStore).not.toBe(firstLoad.useDraftStore);
 
     expect(
       secondLoad.useDraftStore.getState().getStoredDraftsForScope("repo:pr:123")
@@ -196,7 +200,6 @@ describe("draft store persist", () => {
           baselineHeadSha: "published",
         });
       }
-      vi.resetModules();
       const reloaded = await loadStores();
       reloaded.useDraftStore.getState().activateScope("publishing", true);
       expect(
@@ -257,7 +260,6 @@ describe("draft store persist", () => {
       useDraftStore.getState().getStoredDraftsForScope("repo:pr:123")
     ).toEqual([]);
 
-    vi.resetModules();
     const reloaded = await loadStores();
     expect(
       reloaded.useDraftStore.getState().getStoredDraftsForScope("repo:pr:123")

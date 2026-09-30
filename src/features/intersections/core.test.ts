@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { FormatIntersectionStat } from "@/domain/format";
 import type { LoadedFormat } from "@/features/workspace/bank-snapshot";
 import {

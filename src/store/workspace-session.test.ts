@@ -1,28 +1,30 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useDraftStore, waitForDraftStoreHydration } from "@/store";
-import {
-  loadWorkspaceSession,
-  saveWorkspaceSession,
-  type WorkspaceSession,
-} from "./workspace-session";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { setTestGlobal } from "@/test-globals";
 
-vi.hoisted(() => {
+import type { WorkspaceSession } from "./workspace-session";
+
+(() => {
   const values = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
+  setTestGlobal("localStorage", {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => {
       values.set(key, value);
     },
   });
-});
-const storage = vi.hoisted(() => new Map<string, string>());
-vi.mock("idb-keyval", () => ({
-  get: vi.fn(async (key: string) => storage.get(key)),
-  set: vi.fn(async (key: string, value: string) => {
+})();
+const storage = (() => new Map<string, string>())();
+mock.module("idb-keyval", () => ({
+  get: mock(async (key: string) => storage.get(key)),
+  set: mock(async (key: string, value: string) => {
     storage.set(key, value);
   }),
-  del: vi.fn(),
+  del: mock(),
 }));
+
+const { useDraftStore, waitForDraftStoreHydration } = await import("@/store");
+const { loadWorkspaceSession, saveWorkspaceSession } = await import(
+  "./workspace-session"
+);
 const repository = { owner: "zenmoney", repo: "sms-formats" };
 const session: WorkspaceSession = {
   status: "supported",

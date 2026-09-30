@@ -1,24 +1,23 @@
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setTestGlobal } from "@/test-globals";
 
-const fetchFileContentMock = vi.hoisted(() => vi.fn());
-const idbStorage = vi.hoisted(() => new Map<string, string>());
+const fetchFileContentMock = mock();
+const idbStorage = new Map<string, string>();
 
-vi.mock("idb-keyval", () => ({
-  del: vi.fn(async (key: string) => {
+mock.module("idb-keyval", () => ({
+  del: mock(async (key: string) => {
     idbStorage.delete(String(key));
   }),
-  get: vi.fn(async (key: string) => idbStorage.get(String(key)) ?? null),
-  keys: vi.fn(async () => Array.from(idbStorage.keys())),
-  set: vi.fn(async (key: string, value: string) => {
+  get: mock(async (key: string) => idbStorage.get(String(key)) ?? null),
+  keys: mock(async () => Array.from(idbStorage.keys())),
+  set: mock(async (key: string, value: string) => {
     idbStorage.set(String(key), value);
   }),
 }));
 
-vi.mock("@/infrastructure/github", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/infrastructure/github")
-  >("@/infrastructure/github");
+const actual = await import("@/infrastructure/github");
+mock.module("@/infrastructure/github", () => {
   return {
     ...actual,
     fetchFileContent: (...args: unknown[]) => fetchFileContentMock(...args),
@@ -38,12 +37,21 @@ async function loadModules() {
 
 describe("useWorkspaceFileContent", () => {
   beforeEach(async () => {
-    vi.resetModules();
+    const {
+      useDraftStore,
+      useSourceStore,
+      useUIStore,
+      waitForDraftStoreHydration,
+    } = await import("@/store");
+    await waitForDraftStoreHydration();
+    useDraftStore.setState(useDraftStore.getInitialState(), true);
+    useSourceStore.setState(useSourceStore.getInitialState(), true);
+    useUIStore.setState(useUIStore.getInitialState(), true);
     idbStorage.clear();
     fetchFileContentMock.mockReset();
     (await import("@/lib/query-client")).queryClient.clear();
     const localStorageState = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
+    setTestGlobal("localStorage", {
       getItem: (key: string) => localStorageState.get(key) ?? null,
       removeItem: (key: string) => {
         localStorageState.delete(key);

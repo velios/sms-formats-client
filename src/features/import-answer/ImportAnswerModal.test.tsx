@@ -1,3 +1,4 @@
+import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import {
   fireEvent,
   render,
@@ -5,7 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { setTestGlobal } from "@/test-globals";
 import { parseAnswer } from "./core";
 import amexAnswer from "./fixtures/amex-us.response.txt?raw";
 import sberAnswer from "./fixtures/sber-ru.response.txt?raw";
@@ -63,7 +64,7 @@ function renderModal(
 ) {
   const bodies = bodiesOf(answer);
   const draft = fakeDraftStore({ bodies, editedPaths: options.editedPaths });
-  const calculateIntersections = vi.fn(() => Promise.resolve(true));
+  const calculateIntersections = mock(() => Promise.resolve(true));
   render(
     <ImportAnswerModal
       bankName="СберБанк"
@@ -91,7 +92,7 @@ function manifest() {
 
 beforeAll(async () => {
   const stored = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
+  setTestGlobal("localStorage", {
     getItem: (key: string) => stored.get(key) ?? null,
     setItem: (key: string, value: string) => stored.set(key, value),
     removeItem: (key: string) => stored.delete(key),

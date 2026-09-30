@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "bun:test";
+import { restoreTestGlobals, setTestGlobal } from "@/test-globals";
 import { checkCrossFormatCollisions, validateFormat } from "../validation";
 import { parseFormatFile, serializeFormat } from "./parser";
 import { analyzeRegexPattern } from "./pattern-analysis";
@@ -40,7 +41,7 @@ describe("upstream regex compatibility", () => {
               .map((value) => value ?? null),
           }
         : null
-    ).toEqual(expected);
+    ).toEqual<typeof expected>(expected);
     const recognized = expected !== null;
     expect(smsesByRegex([entry.sms], entry.pattern)).toEqual({
       error: null,
@@ -110,13 +111,13 @@ describe("upstream regex compatibility", () => {
         super(pattern, flags);
       }
     }
-    vi.stubGlobal("RegExp", WithoutIndices);
+    setTestGlobal("RegExp", WithoutIndices);
     try {
       const compiled = tryCompile("(?i)^(код)$");
       expect(compiled.supportsIndices).toBe(false);
       expect(compiled.regex?.exec("КОД")?.[1]).toBe("КОД");
     } finally {
-      vi.unstubAllGlobals();
+      restoreTestGlobals();
     }
   });
 

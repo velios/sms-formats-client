@@ -1,20 +1,17 @@
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildBankInventory } from "@/features/bank-inventory/core";
 import type { BlobFetchResult, fetchBlobsByRef } from "@/infrastructure/github";
-import { queryClient } from "@/lib/query-client";
-import { PROMPT_PRESETS } from "./core";
-import {
-  type PromptPackageDraftChange,
-  type UsePromptPackageParams,
-  usePromptPackage,
+import { restoreTestGlobals, setTestGlobal } from "@/test-globals";
+
+import type {
+  PromptPackageDraftChange,
+  UsePromptPackageParams,
 } from "./use-prompt-package";
 
 const tokenState = { token: "ghp_user" as string | null };
 
-vi.mock("@/infrastructure/github", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/infrastructure/github")>();
+const actual = await import("@/infrastructure/github");
+mock.module("@/infrastructure/github", () => {
   return {
     ...actual,
     getGitHubUserToken: () => tokenState.token,
@@ -22,6 +19,11 @@ vi.mock("@/infrastructure/github", async (importOriginal) => {
     getGitHubAuthChangeVersion: () => 0,
   };
 });
+
+const { buildBankInventory } = await import("@/features/bank-inventory/core");
+const { queryClient } = await import("@/lib/query-client");
+const { PROMPT_PRESETS } = await import("./core");
+const { usePromptPackage } = await import("./use-prompt-package");
 
 const BANK_PATH = "src/TBank_123";
 const SENDERS = `${BANK_PATH}/senders.txt`;
@@ -95,7 +97,7 @@ function makeParams(
     baseSha: "base-sha",
     inventory: buildInventory(),
     draftStore: { getChangedFiles: () => DRAFT_CHANGES },
-    fetchBlobs: vi.fn(async (ref: string, paths: string[]) =>
+    fetchBlobs: mock(async (ref: string, paths: string[]) =>
       loadedBlobs(ref, paths)
     ) as unknown as typeof fetchBlobsByRef,
     ...overrides,
@@ -107,7 +109,7 @@ let localStorageState: Map<string, string>;
 beforeEach(() => {
   queryClient.clear();
   localStorageState = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
+  setTestGlobal("localStorage", {
     getItem: (key: string) => localStorageState.get(key) ?? null,
     removeItem: (key: string) => {
       localStorageState.delete(key);
@@ -120,12 +122,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  restoreTestGlobals();
 });
 
 describe("usePromptPackage layers", () => {
   it("fetches the merge-base layer and reuses captured draft head bodies", async () => {
-    const fetchBlobs = vi.fn(async (ref: string, paths: string[]) =>
+    const fetchBlobs = mock(async (ref: string, paths: string[]) =>
       loadedBlobs(ref, paths)
     ) as unknown as typeof fetchBlobsByRef;
     const { result } = renderHook(() =>
@@ -136,7 +138,7 @@ describe("usePromptPackage layers", () => {
       await result.current.build();
     });
 
-    const calls = (fetchBlobs as unknown as ReturnType<typeof vi.fn>).mock
+    const calls = (fetchBlobs as unknown as ReturnType<typeof mock>).mock
       .calls as unknown[];
     // main: head-ref composition minus files added in the PR.
     // pr: only the changed files, and b.txt is free from `headContent`.
@@ -176,7 +178,7 @@ describe("usePromptPackage layers", () => {
       localChanges: [],
       sourceChanges: [{ path: FORMAT_B, kind: "modify" }],
     });
-    const fetchBlobs = vi.fn(
+    const fetchBlobs = mock(
       async (sha: string, paths: string[]): Promise<BlobFetchResult[]> =>
         paths.map((path) => ({
           path,
@@ -237,7 +239,7 @@ describe("usePromptPackage layers", () => {
       [FORMAT_C]: formatFile("^CARD (\\d+)$", ["CARD 1"]),
       [SENDERS]: "900",
     };
-    const fetchBlobs = vi.fn(
+    const fetchBlobs = mock(
       async (_ref: string, paths: string[]): Promise<BlobFetchResult[]> =>
         paths.map((path) => ({
           path,
@@ -271,7 +273,7 @@ describe("usePromptPackage layers", () => {
   });
 
   it("keeps binary and truncated bodies out of the text and reports them as skipped", async () => {
-    const fetchBlobs = vi.fn(
+    const fetchBlobs = mock(
       async (ref: string, paths: string[]): Promise<BlobFetchResult[]> =>
         paths.map((path) => {
           if (path === FORMAT_A) {
@@ -304,7 +306,7 @@ describe("usePromptPackage layers", () => {
 
   it("does not build without a token", async () => {
     tokenState.token = null;
-    const fetchBlobs = vi.fn(async (ref: string, paths: string[]) =>
+    const fetchBlobs = mock(async (ref: string, paths: string[]) =>
       loadedBlobs(ref, paths)
     ) as unknown as typeof fetchBlobsByRef;
     const { result } = renderHook(() =>
@@ -325,7 +327,7 @@ describe("usePromptPackage layers", () => {
 describe("usePromptPackage failure", () => {
   it("gives an error and no partial text when a batch fails, and rebuilds on retry", async () => {
     let shouldFail = true;
-    const fetchBlobs = vi.fn(async (ref: string, paths: string[]) => {
+    const fetchBlobs = mock(async (ref: string, paths: string[]) => {
       if (shouldFail && ref === "head-sha") {
         throw new Error("GraphQL timeout");
       }
@@ -439,8 +441,8 @@ describe("usePromptPackage sticky state", () => {
     await act(async () => {
       await result.current.build();
     });
-    expect(result.current.task).toBe(preset?.task);
-    expect(result.current.result?.text).toContain(preset?.task);
+    expect(result.current.task).toBe(preset!.task);
+    expect(result.current.result?.text).toContain(preset!.task);
     expect(result.current.result?.text).not.toContain("старый текст");
 
     // The field stays an ordinary field after the substitution.
@@ -451,7 +453,7 @@ describe("usePromptPackage sticky state", () => {
   });
 
   it("re-assembles the package from the fetched bodies without fetching again", async () => {
-    const fetchBlobs = vi.fn(async (ref: string, paths: string[]) =>
+    const fetchBlobs = mock(async (ref: string, paths: string[]) =>
       loadedBlobs(ref, paths)
     ) as unknown as typeof fetchBlobsByRef;
     const { result } = renderHook(() =>

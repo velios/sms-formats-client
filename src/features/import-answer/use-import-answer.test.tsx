@@ -1,28 +1,28 @@
+import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  type UseImportAnswerParams,
-  useImportAnswer,
-} from "./use-import-answer";
+import { setTestGlobal } from "@/test-globals";
+import type { UseImportAnswerParams } from "./use-import-answer";
 
 // The real draft store, not a fake: undo and reset-to-remote after an import
 // are part of what stage 2 promises, and only the real per-path history can
 // answer for them. It is loaded late because the module reads `localStorage`
 // and IndexedDB while being evaluated.
-const idbStorage = vi.hoisted(() => new Map<string, string>());
+const idbStorage = new Map<string, string>();
 
-vi.mock("idb-keyval", () => ({
-  del: vi.fn((key: string) => {
+mock.module("idb-keyval", () => ({
+  del: mock((key: string) => {
     idbStorage.delete(String(key));
     return Promise.resolve(true);
   }),
-  get: vi.fn((key: string) => Promise.resolve(idbStorage.get(String(key)))),
-  keys: vi.fn(() => Promise.resolve([...idbStorage.keys()])),
-  set: vi.fn((key: string, value: string) => {
+  get: mock((key: string) => Promise.resolve(idbStorage.get(String(key)))),
+  keys: mock(() => Promise.resolve([...idbStorage.keys()])),
+  set: mock((key: string, value: string) => {
     idbStorage.set(String(key), value);
     return Promise.resolve(true);
   }),
 }));
+
+const { useImportAnswer } = await import("./use-import-answer");
 
 let useDraftStore: typeof import("@/store").useDraftStore;
 
@@ -41,8 +41,8 @@ function block(tag: "file" | "delete", path: string, body: string): string {
 }
 
 function setup(overrides: Partial<UseImportAnswerParams> = {}) {
-  const calculateIntersections = vi.fn(() => Promise.resolve(true));
-  const loadBodies = vi.fn(({ paths }: { paths: string[] }) =>
+  const calculateIntersections = mock(() => Promise.resolve(true));
+  const loadBodies = mock(({ paths }: { paths: string[] }) =>
     Promise.resolve(new Map(paths.map((path) => [path, `head of ${path}`])))
   );
   const rendered = renderHook(() =>
@@ -76,7 +76,7 @@ async function paste(
 
 beforeAll(async () => {
   const store = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
+  setTestGlobal("localStorage", {
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => store.set(key, value),
     removeItem: (key: string) => store.delete(key),
@@ -124,7 +124,7 @@ describe("useImportAnswer: bodies in force", () => {
   });
 
   it("shows nothing and refuses the import when a body fails to load", async () => {
-    const loadBodies = vi.fn(
+    const loadBodies = mock(
       (): Promise<Map<string, string>> => Promise.reject(new Error("503"))
     );
     const rendered = setup({ loadBodies });

@@ -1,12 +1,12 @@
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { loadBankSnapshotMock } = vi.hoisted(() => ({
-  loadBankSnapshotMock: vi.fn(),
-}));
+const { loadBankSnapshotMock } = {
+  loadBankSnapshotMock: mock(),
+};
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) =>
       key === "quickCheck.title"
@@ -15,13 +15,13 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/components/ModalDialog", () => ({
+mock.module("@/components/ModalDialog", () => ({
   ModalDialog: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("@/store", () => ({
+mock.module("@/store", () => ({
   useDraftStore: () => ({
-    getDraft: vi.fn(),
+    getDraft: mock(),
   }),
   useSourceStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -30,11 +30,13 @@ vi.mock("@/store", () => ({
     }),
 }));
 
-vi.mock("@/features/workspace/bank-snapshot", () => ({
+mock.module("@/features/workspace/bank-snapshot", () => ({
   loadBankSnapshot: loadBankSnapshotMock,
 }));
 
-import { QuickCheckPanel } from "@/features/quick-check/QuickCheckPanel";
+const { QuickCheckPanel } = await import(
+  "@/features/quick-check/QuickCheckPanel"
+);
 
 describe("QuickCheckPanel", () => {
   beforeEach(() => {
@@ -57,8 +59,8 @@ describe("QuickCheckPanel", () => {
       remoteFetchedCount: 1,
       cachedCount: 0,
     });
-    const onClose = vi.fn();
-    const onOpenFileInApp = vi.fn();
+    const onClose = mock();
+    const onOpenFileInApp = mock();
 
     render(
       <QuickCheckPanel

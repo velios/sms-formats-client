@@ -1,3 +1,12 @@
+import {
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   fireEvent,
@@ -6,12 +15,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { type ReactElement, type ReactNode, useState } from "react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const scrollIntoViewMock = vi.fn();
+const scrollIntoViewMock = mock();
 const localStorageState = new Map<string, string>();
 
-const mocks = vi.hoisted(() => {
+const mocks = (() => {
   const routeState = {
     location: {
       pathname: "/repo/zenmoney/sms-formats/pr/123",
@@ -22,7 +30,7 @@ const mocks = vi.hoisted(() => {
       repo: "sms-formats",
       prNumber: "123",
     },
-    navigate: vi.fn(),
+    navigate: mock(),
   };
 
   const tree = [
@@ -74,13 +82,13 @@ const mocks = vi.hoisted(() => {
     banks,
     loading: false,
     error: null as string | null,
-    setRepository: vi.fn(),
-    setSource: vi.fn(),
-    setSourceChangedFiles: vi.fn(),
-    setTree: vi.fn(),
-    setBanks: vi.fn(),
-    setLoading: vi.fn(),
-    setError: vi.fn(),
+    setRepository: mock(),
+    setSource: mock(),
+    setSourceChangedFiles: mock(),
+    setTree: mock(),
+    setBanks: mock(),
+    setLoading: mock(),
+    setError: mock(),
   };
 
   const useSourceStore = (<T,>(selector: (state: typeof sourceState) => T) =>
@@ -93,11 +101,11 @@ const mocks = vi.hoisted(() => {
     draftScopeKey: null as string | null,
     drafts: new Map<string, unknown>(),
     hasHydrated: true,
-    getStoredDraftsForScope: vi.fn(() => []),
-    activateScope: vi.fn((scopeKey: string) => {
+    getStoredDraftsForScope: mock(() => []),
+    activateScope: mock((scopeKey: string) => {
       draftState.draftScopeKey = scopeKey;
     }),
-    getChangedFiles: vi.fn<
+    getChangedFiles: mock<
       () => Array<{
         filePath: string;
         content: string;
@@ -105,7 +113,7 @@ const mocks = vi.hoisted(() => {
         baseSha: string;
       }>
     >(() => []),
-    getDeletedFiles: vi.fn<
+    getDeletedFiles: mock<
       () => Array<{
         filePath: string;
         content: string;
@@ -113,11 +121,11 @@ const mocks = vi.hoisted(() => {
         baseSha: string;
       }>
     >(() => []),
-    getDraft: vi.fn(() => undefined),
-    resetBankToRemote: vi.fn(),
-    discardAll: vi.fn(),
-    clearAll: vi.fn(),
-    renameDraft: vi.fn(),
+    getDraft: mock(() => undefined),
+    resetBankToRemote: mock(),
+    discardAll: mock(),
+    clearAll: mock(),
+    renameDraft: mock(),
   };
 
   const useDraftStore = (() => draftState) as (() => typeof draftState) & {
@@ -130,16 +138,16 @@ const mocks = vi.hoisted(() => {
   return {
     banks,
     draftState,
-    fetchPullRequestFiles: vi.fn(() => Promise.resolve([])),
-    fetchRepoTree: vi.fn(() => Promise.resolve(tree)),
+    fetchPullRequestFiles: mock(() => Promise.resolve([])),
+    fetchRepoTree: mock(() => Promise.resolve(tree)),
     fileContentStore: {
-      getCachedFileContent: vi.fn(() => undefined),
-      invalidatePullRequestFileContents: vi.fn(),
+      getCachedFileContent: mock(() => undefined),
+      invalidatePullRequestFileContents: mock(),
     },
-    getCachedPullRequestApprovalPermission: vi.fn(() => false),
-    getGitHubAuthChangeVersion: vi.fn(() => 0),
-    indexBanksFromTree: vi.fn(() => banks),
-    loadWorkspaceSession: vi.fn(() => ({
+    getCachedPullRequestApprovalPermission: mock(() => false),
+    getGitHubAuthChangeVersion: mock(() => 0),
+    indexBanksFromTree: mock(() => banks),
+    loadWorkspaceSession: mock(() => ({
       session: {
         status: "supported",
         repository: { owner: "zenmoney", repo: "sms-formats" },
@@ -165,27 +173,27 @@ const mocks = vi.hoisted(() => {
         ],
       },
     })),
-    loadBankSnapshot: vi.fn(),
-    refreshPullRequestApprovalPermission: vi.fn(() => Promise.resolve(false)),
-    resolvePullRequestWorkspace: vi.fn(() => new Promise(() => undefined)),
+    loadBankSnapshot: mock(),
+    refreshPullRequestApprovalPermission: mock(() => Promise.resolve(false)),
+    resolvePullRequestWorkspace: mock(() => new Promise(() => undefined)),
     routeState,
-    saveWorkspaceSession: vi.fn(),
+    saveWorkspaceSession: mock(),
     sourceState,
-    subscribeGitHubAuthChange: vi.fn(() => () => undefined),
-    updatePullRequestHead: vi.fn(),
+    subscribeGitHubAuthChange: mock(() => () => undefined),
+    updatePullRequestHead: mock(),
     useDraftStore,
     useSourceStore,
   };
-});
+})();
 
-vi.mock("react-i18next", () => ({
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>
       options?.defaultValue ?? key,
   }),
 }));
 
-vi.mock("react-router-dom", () => ({
+mock.module("react-router-dom", () => ({
   useLocation: () => mocks.routeState.location,
   useNavigate: () => mocks.routeState.navigate,
   useParams: () => mocks.routeState.params,
@@ -194,7 +202,7 @@ vi.mock("react-router-dom", () => ({
   ],
 }));
 
-vi.mock("@/components/ui/button", () => ({
+mock.module("@/components/ui/button", () => ({
   Button: ({
     asChild,
     children,
@@ -209,24 +217,24 @@ vi.mock("@/components/ui/button", () => ({
   },
 }));
 
-vi.mock("@/components/ui/input", () => ({
+mock.module("@/components/ui/input", () => ({
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input {...props} />
   ),
 }));
 
-vi.mock("@/components/ui/spinner", () => ({
+mock.module("@/components/ui/spinner", () => ({
   Spinner: () => <span>spinner</span>,
 }));
 
-vi.mock("@/components/ui/status-badge", () => ({
+mock.module("@/components/ui/status-badge", () => ({
   StatusBadge: ({
     children,
     ...props
   }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
 }));
 
-vi.mock("@/features/format-editor/FormatEditor", () => ({
+mock.module("@/features/format-editor/FormatEditor", () => ({
   FormatEditor: ({
     filePath,
     intersectionExamples,
@@ -271,15 +279,15 @@ vi.mock("@/features/format-editor/FormatEditor", () => ({
   ),
 }));
 
-vi.mock("@/features/workspace-header/WorkspaceHeaderBar", () => ({
+mock.module("@/features/workspace-header/WorkspaceHeaderBar", () => ({
   WorkspaceHeaderBar: () => <div data-testid="workspace-header-bar" />,
 }));
 
-vi.mock("@/features/create-entity/CreateFormatModal", () => ({
+mock.module("@/features/create-entity/CreateFormatModal", () => ({
   CreateFormatModal: () => null,
 }));
 
-vi.mock("@/features/quick-check/QuickCheckPanel", () => ({
+mock.module("@/features/quick-check/QuickCheckPanel", () => ({
   QuickCheckPanel: ({
     onOpenFileInApp,
   }: {
@@ -294,63 +302,63 @@ vi.mock("@/features/quick-check/QuickCheckPanel", () => ({
   ),
 }));
 
-vi.mock("@/features/workspace/bank-snapshot", () => ({
+const actualBankSnapshot = await import("@/features/workspace/bank-snapshot");
+mock.module("@/features/workspace/bank-snapshot", () => ({
+  ...actualBankSnapshot,
   loadBankSnapshot: (...args: unknown[]) => mocks.loadBankSnapshot(...args),
 }));
 
-vi.mock("@/features/senders-editor/SendersEditor", () => ({
+mock.module("@/features/senders-editor/SendersEditor", () => ({
   SendersEditor: () => <div data-testid="senders-editor" />,
 }));
 
-vi.mock("@/features/validation/ValidationPanel", () => ({
+mock.module("@/features/validation/ValidationPanel", () => ({
   ValidationPanel: () => null,
 }));
 
-vi.mock("@/lib/utils", () => ({
+mock.module("@/lib/utils", () => ({
   cn: (...values: Array<string | false | null | undefined>) =>
     values.filter(Boolean).join(" "),
 }));
 
-vi.mock("@/store", () => ({
+mock.module("@/store", () => ({
   useDraftStore: mocks.useDraftStore,
   useSourceStore: mocks.useSourceStore,
   waitForDraftStoreHydration: () => Promise.resolve(),
 }));
 
-vi.mock("@/store/workspace-session", async () => ({
-  ...(await vi.importActual<typeof import("@/store/workspace-session")>(
-    "@/store/workspace-session"
-  )),
+const actualWorkspaceSession = await import("@/store/workspace-session");
+mock.module("@/store/workspace-session", () => ({
+  ...actualWorkspaceSession,
   loadWorkspaceSession: mocks.loadWorkspaceSession,
   saveWorkspaceSession: mocks.saveWorkspaceSession,
 }));
 
-vi.mock("@/infrastructure/file-content", () => ({
-  loadFileContent: vi.fn(async () => ""),
+mock.module("@/infrastructure/file-content", () => ({
+  loadFileContent: mock(async () => ""),
   useFileContentStore: {
     getState: () => mocks.fileContentStore,
   },
 }));
 
-vi.mock("@/domain/bank-index", () => ({
+mock.module("@/domain/bank-index", () => ({
   indexBanksFromTree: mocks.indexBanksFromTree,
 }));
 
-vi.mock("@/infrastructure/github", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/infrastructure/github")
-  >("@/infrastructure/github");
+const actualGitHub = await import("@/infrastructure/github");
+mock.module("@/infrastructure/github", () => {
+  const actual = actualGitHub;
   return {
     ...actual,
-    approvePullRequest: vi.fn(),
-    fetchFileContent: vi.fn(() => Promise.resolve("")),
-    fetchPullRequestApprovalByCurrentUser: vi.fn(() => Promise.resolve(false)),
+    approvePullRequest: mock(),
+    fetchFileContent: mock(() => Promise.resolve("")),
+    fetchPullRequestApprovalByCurrentUser: mock(() => Promise.resolve(false)),
     fetchPullRequestFiles: mocks.fetchPullRequestFiles,
     fetchRepoTree: mocks.fetchRepoTree,
     getCachedPullRequestApprovalPermission:
       mocks.getCachedPullRequestApprovalPermission,
     getGitHubAuthChangeVersion: mocks.getGitHubAuthChangeVersion,
-    getGitHubUserToken: vi.fn(() => ""),
+    getGitHubUserToken: mock(() => ""),
     refreshPullRequestApprovalPermission:
       mocks.refreshPullRequestApprovalPermission,
     resolvePullRequestWorkspace: mocks.resolvePullRequestWorkspace,
@@ -359,7 +367,7 @@ vi.mock("@/infrastructure/github", async () => {
   };
 });
 
-import { BankWorkspace } from "./BankWorkspace";
+const { BankWorkspace } = await import("./BankWorkspace");
 
 function QueryWrapper({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -646,7 +654,7 @@ describe("BankWorkspace intersections behavior", () => {
       expect(getFormatRow("current.txt")).toHaveTextContent("2 / 2 / 1")
     );
 
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = spyOn(window, "confirm").mockReturnValue(true);
 
     fireEvent.click(
       screen.getByRole("button", { name: "quickCheck.calculateIntersections" })

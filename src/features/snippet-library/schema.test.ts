@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { REGEX_SNIPPETS } from "@/content/snippets.generated";
 import {
   filterSnippets,
@@ -31,24 +31,24 @@ describe("filterSnippets", () => {
   });
 
   it("matches on the pattern", () => {
-    expect(filterSnippets(sample, "[A-Z]")).toEqual([sample[1]]);
+    expect(filterSnippets(sample, "[A-Z]")).toEqual([sample[1]!]);
   });
 
   it("matches on the group key and description, case-insensitively", () => {
-    expect(filterSnippets(sample, "AMOUNT")).toEqual([sample[0]]);
-    expect(filterSnippets(sample, "валюты")).toEqual([sample[1]]);
+    expect(filterSnippets(sample, "AMOUNT")).toEqual([sample[0]!]);
+    expect(filterSnippets(sample, "валюты")).toEqual([sample[1]!]);
   });
 
   it("matches on the trigger", () => {
-    expect(filterSnippets(sample, "копеек")).toEqual([sample[0]]);
+    expect(filterSnippets(sample, "копеек")).toEqual([sample[0]!]);
   });
 });
 
 describe("groupSnippets", () => {
   it("preserves encounter order and buckets by group", () => {
     expect(groupSnippets(sample)).toEqual([
-      { group: "amount", snippets: [sample[0]] },
-      { group: "currency", snippets: [sample[1]] },
+      { group: "amount", snippets: [sample[0]!] },
+      { group: "currency", snippets: [sample[1]!] },
     ]);
   });
 });
