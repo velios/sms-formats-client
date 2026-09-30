@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { parseFormatFile, serializeFormat } from "@/domain/format";
+import { parseFormatFile, serializeFormat, tryCompile } from "@/domain/format";
 import { RegexLab } from "@/features/regex-lab/RegexLab";
 import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
 import { useDraftStore, useSourceStore } from "@/store";
@@ -34,15 +34,6 @@ interface Props {
     examples: string[];
     activeExampleIndex: number;
   }) => void;
-}
-
-function isRegexValid(value: string): boolean {
-  try {
-    new RegExp(value);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function FormatEditor({
@@ -92,7 +83,7 @@ export function FormatEditor({
   );
   const parseErrors = [
     ...structuralIssues,
-    ...(regex && !isRegexValid(regex) ? [t("editor.invalidRegex")] : []),
+    ...(regex && !tryCompile(regex).regex ? [t("editor.invalidRegex")] : []),
   ];
   const canEditStructured = !parsed.parseIssues.some(
     (issue) =>

@@ -60,6 +60,15 @@ describe("one document across editor views", () => {
       .setSource({ type: "pr", name: "pr-1", prNumber: 1, sha: "head" });
     fixture.content = serializeFormat("^(A)$", ["comment"], ["A"]);
   });
+  it("accepts the inline execution flag without rewriting the document", () => {
+    fixture.content = serializeFormat("(?i)^(код)$", ["comment"], ["КОД"]);
+    render(<FormatEditor filePath={path} mode="structured" />);
+    expect(screen.queryByText("editor.invalidRegex")).not.toBeInTheDocument();
+    expect(fixture.props?.regex).toBe("(?i)^(код)$");
+    expect(
+      useDraftStore.getState().getDraft(path)?.content ?? fixture.content
+    ).toBe(fixture.content);
+  });
   it("shares raw and structured edits in one undo/redo history", () => {
     const view = render(<FormatEditor filePath={path} mode="raw" />);
     const rawEdit = serializeFormat("^(B)$", ["comment"], ["B"]);

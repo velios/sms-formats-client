@@ -1,3 +1,5 @@
+import { prepareBrowserRegex } from "./regex-compiler";
+
 const REGEX101_BASE_URL = "https://regex101.com/";
 
 interface BuildRegex101UrlOptions {
@@ -9,14 +11,16 @@ export function buildRegex101Url(
   testString: string,
   options: BuildRegex101UrlOptions = {}
 ): string {
+  const { source, flags } = prepareBrowserRegex(regex);
   const params = new URLSearchParams({
-    regex,
+    regex: source,
     testString,
     flavor: "javascript",
   });
 
-  if (options.flags) {
-    params.set("flags", options.flags);
+  const combinedFlags = [...new Set(`${options.flags ?? ""}${flags}`)].join("");
+  if (combinedFlags) {
+    params.set("flags", combinedFlags);
   }
 
   return `${REGEX101_BASE_URL}?${params.toString()}`;

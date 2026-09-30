@@ -1,3 +1,5 @@
+import { tryCompile } from "./regex-compiler";
+
 export type RegexPatternLocale = "en" | "ru";
 export interface RegexPatternAnalysis {
   canHighlightPattern: boolean;
@@ -76,6 +78,20 @@ function parseGroupToken(
   start: number,
   locale: RegexPatternLocale
 ): TokenParseResult {
+  if (start === 0 && pattern.startsWith("(?i)")) {
+    return {
+      token: {
+        type: "flag",
+        description: isRussianLocale(locale)
+          ? "Без учёта регистра"
+          : "Case-insensitive",
+        raw: "(?i)",
+        start,
+        end: 4,
+      },
+      nextIndex: 4,
+    };
+  }
   const knownPrefixes: Array<{
     prefix: string;
     ru: string;
@@ -411,9 +427,7 @@ export function analyzeRegexPattern(
   if (!pattern.trim()) {
     return { canHighlightPattern: false, patternTokens: [] };
   }
-  try {
-    new RegExp(pattern);
-  } catch {
+  if (!tryCompile(pattern).regex) {
     return { canHighlightPattern: false, patternTokens: [] };
   }
   const patternTokens = tokenizeRegexPattern(pattern, locale);

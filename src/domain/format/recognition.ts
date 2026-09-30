@@ -1,4 +1,5 @@
-import { normalizeSmsText, tryCompile } from "./regex";
+import { normalizeSmsText } from "./regex";
+import { tryCompile } from "./regex-compiler";
 
 export interface SmsRecognition {
   matched: boolean;

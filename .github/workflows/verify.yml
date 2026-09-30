@@ -14,6 +14,10 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - run: python scripts/check-regex-compatibility.py
       - run: bun run verify
       - run: bun run build
       - run: bun run bot:build
