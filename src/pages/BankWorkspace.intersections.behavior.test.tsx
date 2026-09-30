@@ -122,8 +122,10 @@ const mocks = vi.hoisted(() => {
 
   const useDraftStore = (() => draftState) as (() => typeof draftState) & {
     getState: () => typeof draftState;
+    subscribe: () => () => void;
   };
   useDraftStore.getState = () => draftState;
+  useDraftStore.subscribe = () => () => undefined;
 
   return {
     banks,

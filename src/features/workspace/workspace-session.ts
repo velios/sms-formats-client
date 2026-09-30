@@ -85,6 +85,7 @@ function revisionChanges(
 
 export class WorkspaceSessionController {
   private generation = 0;
+  private unsubscribeDraftStore?: () => void;
   private readonly listeners = new Set<() => void>();
   private selectedFile: string | null = null;
   private readonly scopeKey: string;
@@ -134,6 +135,8 @@ export class WorkspaceSessionController {
   }
 
   deactivate(): void {
+    this.unsubscribeDraftStore?.();
+    this.unsubscribeDraftStore = undefined;
     this.generation += 1;
   }
 
@@ -200,14 +203,24 @@ export class WorkspaceSessionController {
   private apply(
     session: WorkspaceSession,
     tree: FileEntry[],
-    discard = false,
-    pendingPublishedHeadSha?: string
+    options: {
+      discard?: boolean;
+      pendingPublishedHeadSha?: string;
+      completedPublicationSha?: string;
+    } = {}
   ): boolean {
+    const { discard, pendingPublishedHeadSha, completedPublicationSha } =
+      options;
     const pending = loadWorkspaceSession(
       this.repository,
       this.prNumber
     )?.pendingPublishedHeadSha;
-    if (pending && pending !== session.headSha && !pendingPublishedHeadSha) {
+    if (
+      pending &&
+      pending !== session.headSha &&
+      pending !== pendingPublishedHeadSha &&
+      pending !== completedPublicationSha
+    ) {
       this.update({ block: "sync-pending", nextSession: null });
       return false;
     }
@@ -217,6 +230,18 @@ export class WorkspaceSessionController {
     }
     if (discard) {
       useDraftStore.getState().discardAll();
+    }
+    const activeDrafts = useDraftStore.getState();
+    const changedPaths = new Set(
+      activeDrafts.getChangedFiles().map((draft) => draft.filePath)
+    );
+    for (const draft of activeDrafts.drafts.values()) {
+      if (
+        draft.baselineHeadSha !== session.headSha &&
+        !changedPaths.has(draft.filePath)
+      ) {
+        activeDrafts.removeDraft(draft.filePath);
+      }
     }
     const source = useSourceStore.getState();
     source.setRepository(this.repository);
@@ -273,19 +298,48 @@ export class WorkspaceSessionController {
 
   open = async (): Promise<void> => {
     const generation = ++this.generation;
+    this.unsubscribeDraftStore?.();
     this.update({ operation: "opening", error: null });
     try {
       await waitForDraftStoreHydration();
       if (!this.isCurrent(generation)) {
         return;
       }
+      this.unsubscribeDraftStore = useDraftStore.subscribe(
+        (state, previous) => {
+          const pending =
+            state.workspaceSessionsByScope[this.scopeKey]
+              ?.pendingPublishedHeadSha;
+          if (
+            pending &&
+            pending !==
+              previous.workspaceSessionsByScope[this.scopeKey]
+                ?.pendingPublishedHeadSha
+          ) {
+            const reading =
+              this.state.operation === "opening" ||
+              this.state.operation === "checking" ||
+              this.state.operation === "discarding";
+            if (reading) {
+              this.generation += 1;
+            }
+            this.update({
+              block: "sync-pending",
+              nextSession: null,
+              ...(reading ? { operation: null } : {}),
+            });
+          }
+        }
+      );
       const saved = loadWorkspaceSession(this.repository, this.prNumber);
       if (saved?.pendingPublishedHeadSha && !this.state.session) {
         const tree = await this.prepare(saved.session, generation);
         if (!tree) {
           return;
         }
-        this.apply(saved.session, tree, false, saved.pendingPublishedHeadSha);
+        this.apply(saved.session, tree, {
+          pendingPublishedHeadSha: saved.pendingPublishedHeadSha,
+        });
       }
       const resolution = await resolvePullRequestWorkspace(
         this.prNumber,
@@ -359,12 +413,9 @@ export class WorkspaceSessionController {
     if (!tree) {
       return;
     }
-    const applied = this.apply(
-      session,
-      tree,
-      false,
-      saved?.pendingPublishedHeadSha
-    );
+    const applied = this.apply(session, tree, {
+      pendingPublishedHeadSha: saved?.pendingPublishedHeadSha,
+    });
     if (applied && !saved?.pendingPublishedHeadSha) {
       this.observe(resolution);
     }
@@ -420,7 +471,7 @@ export class WorkspaceSessionController {
       if (!discard && this.hasDrafts()) {
         this.observe(resolution);
       } else {
-        this.apply(resolution, tree, true);
+        this.apply(resolution, tree, { discard: true });
       }
     } catch (error) {
       if (this.isCurrent(generation)) {
@@ -470,11 +521,11 @@ export class WorkspaceSessionController {
     resolution: WorkspaceSession,
     generation: number,
     publishedSha: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     const saved = loadWorkspaceSession(this.repository, this.prNumber);
     if (resolution.headSha !== publishedSha && this.hasDrafts()) {
       if (!saved) {
-        return;
+        return false;
       }
       const published = {
         ...saved.session,
@@ -484,26 +535,31 @@ export class WorkspaceSessionController {
       };
       const baseTree = await fetchRepoTree(published.baseSha, this.repository);
       if (!this.isCurrent(generation)) {
-        return;
+        return false;
       }
       const tree = await this.prepare(published, generation);
       if (!tree) {
-        return;
+        return false;
       }
       const changedFiles = revisionChanges(published.bankPath, baseTree, tree);
-      this.apply({ ...published, changedFiles }, tree);
-      this.update({ block: "stale", nextSession: resolution });
-      return;
+      const applied = this.apply({ ...published, changedFiles }, tree, {
+        completedPublicationSha: publishedSha,
+      });
+      if (applied) {
+        this.update({ block: "stale", nextSession: resolution });
+      }
+      return applied;
     }
     const tree = await this.prepare(resolution, generation);
-    if (tree) {
-      this.apply(resolution, tree);
-    }
+    return Boolean(
+      tree &&
+        this.apply(resolution, tree, { completedPublicationSha: publishedSha })
+    );
   }
 
   syncPublication = async (ticket?: PublicationTicket): Promise<boolean> => {
     if (ticket && !this.isCurrent(ticket.generation)) {
-      return true;
+      return false;
     }
     if (!ticket && this.state.operation) {
       return false;
@@ -521,19 +577,19 @@ export class WorkspaceSessionController {
         { forceFresh: true }
       );
       if (!this.isCurrent(generation)) {
-        return true;
+        return false;
       }
       if (resolution.status !== "supported") {
         this.update({ error: resolution.reason });
         return false;
       }
-      await this.syncResolved(
+      const applied = await this.syncResolved(
         resolution,
         generation,
         saved.pendingPublishedHeadSha
       );
       await waitForDraftPersistence();
-      return true;
+      return applied;
     } catch (error) {
       if (this.isCurrent(generation)) {
         this.update({ error: errorMessage(error) });

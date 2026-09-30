@@ -77,6 +77,7 @@ export function useBankPublishAction(params: {
   const { bank, controller, t } = params;
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
+  const isOpening = controller.getSnapshot().operation === "opening";
   const isPublishing =
     controller.getSnapshot().operation === "publishing" ||
     controller.getSnapshot().operation === "syncing";
@@ -84,7 +85,7 @@ export function useBankPublishAction(params: {
   useEffect(() => {
     setPublishError(null);
     setIsUpdateDialogOpen(false);
-  }, [controller]);
+  }, [controller, isOpening]);
 
   const runPreflight = async (ticket: PublicationTicket) => {
     const { session, scopeKey } = ticket;

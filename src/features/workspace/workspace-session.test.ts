@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileEntry } from "@/domain/types";
 import {
   useDraftStore,
@@ -65,8 +65,19 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
-async function open(prNumber = 1) {
+const controllers: WorkspaceSessionController[] = [];
+function makeController(prNumber: number) {
   const controller = new WorkspaceSessionController(repository, prNumber);
+  controllers.push(controller);
+  return controller;
+}
+afterEach(() => {
+  for (const controller of controllers.splice(0)) {
+    controller.deactivate();
+  }
+});
+async function open(prNumber = 1) {
+  const controller = makeController(prNumber);
   controller.selectFile(path);
   await controller.open();
   return controller;
@@ -108,7 +119,7 @@ describe("workspace lifecycle", () => {
       reading.resolve();
       return content.promise;
     });
-    const controller = new WorkspaceSessionController(repository, 1);
+    const controller = makeController(1);
     controller.selectFile(path);
     const pending = controller.open();
     await reading.promise;
@@ -133,7 +144,7 @@ describe("workspace lifecycle", () => {
   it("ignores the first A response after A → B → A", async () => {
     const response = deferred<WorkspaceSession>();
     mocks.resolve.mockReturnValueOnce(response.promise);
-    const first = new WorkspaceSessionController(repository, 1);
+    const first = makeController(1);
     const pending = first.open();
     await Promise.resolve();
     first.deactivate();
@@ -157,7 +168,7 @@ describe("workspace lifecycle", () => {
       started.resolve();
       return response.promise;
     });
-    const first = new WorkspaceSessionController(repository, 1);
+    const first = makeController(1);
     const pending = first.open();
     await started.promise;
     first.deactivate();
@@ -409,7 +420,7 @@ describe("workspace lifecycle", () => {
       started.resolve();
       return first.promise;
     });
-    const controller = new WorkspaceSessionController(repository, 1);
+    const controller = makeController(1);
     controller.selectFile(path);
     const pending = controller.open();
     await started.promise;
@@ -508,7 +519,7 @@ describe("workspace lifecycle", () => {
       started.resolve();
       return response.promise;
     });
-    const second = new WorkspaceSessionController(repository, 1);
+    const second = makeController(1);
     const opening = second.open();
     await started.promise;
     useDraftStore.getState().applyUserEdit(path, "later", "head", "original");
@@ -532,6 +543,126 @@ describe("workspace lifecycle", () => {
     expect(second.getSnapshot()).toMatchObject({
       block: null,
       session: { headSha: "published" },
+    });
+  });
+  it.each([false, true])(
+    "syncs an external head without late drafts after a failed read (reopen: %s)",
+    async (reopen) => {
+      let controller = await open();
+      edit();
+      const files = useDraftStore.getState().getChangedFiles();
+      const ticket = controller.beginPublication()!;
+      controller.recordPublication(ticket, "published");
+      useDraftStore
+        .getState()
+        .acknowledgePublished(files, "published", ticket.scopeKey);
+      mocks.resolve.mockRejectedValueOnce(new Error("offline"));
+      expect(await controller.syncPublication(ticket)).toBe(false);
+      mocks.resolve.mockResolvedValue(session("external"));
+      if (reopen) {
+        controller.deactivate();
+        useSourceStore.setState({ sourceRef: null, tree: [] });
+        controller = await open();
+      } else {
+        expect(await controller.syncPublication()).toBe(true);
+      }
+      expect(controller.getSnapshot()).toMatchObject({
+        block: null,
+        session: { headSha: "external" },
+      });
+      expect(useSourceStore.getState().sourceRef?.sha).toBe("external");
+      expect(
+        loadWorkspaceSession(repository, 1)?.pendingPublishedHeadSha
+      ).toBeUndefined();
+    }
+  );
+
+  it.each([false, true])(
+    "blocks a receipt after reopening has completed (new instance: %s)",
+    async (newInstance) => {
+      const first = await open();
+      edit();
+      const files = useDraftStore.getState().getChangedFiles();
+      const ticket = first.beginPublication()!;
+      first.deactivate();
+      let current = first;
+      let other: WorkspaceSessionController | undefined;
+      if (newInstance) {
+        other = await open(2);
+        other.deactivate();
+        current = await open();
+      } else {
+        await current.open();
+      }
+      const otherState = other?.getSnapshot();
+      first.recordPublication(ticket, "published");
+      useDraftStore
+        .getState()
+        .acknowledgePublished(files, "published", ticket.scopeKey);
+      expect(await first.syncPublication(ticket)).toBe(false);
+      expect(current.getSnapshot()).toMatchObject({
+        block: "sync-pending",
+        operation: null,
+        session: { headSha: "head" },
+      });
+      expect(other?.getSnapshot()).toBe(otherState);
+      expect(current.beginPublication()).toBeNull();
+      mocks.resolve.mockResolvedValueOnce(session("published"));
+      expect(await current.syncPublication()).toBe(true);
+      expect(current.getSnapshot()).toMatchObject({
+        block: null,
+        session: { headSha: "published" },
+      });
+    }
+  );
+
+  it("drops unchanged old documents on reopen while keeping same-revision document history", async () => {
+    const controller = await open();
+    const senders = "src/Bank/senders.txt";
+    useDraftStore.getState().ensureDraft(path, "original", "head", "original");
+    useDraftStore
+      .getState()
+      .ensureDraft(senders, "original senders", "head", "original senders");
+    useDraftStore.getState().applyUserEdit(path, "edited", "head", "original");
+    useDraftStore.getState().undo(path);
+    expect(useDraftStore.getState().canRedo(path)).toBe(true);
+    await controller.open();
+    expect(useDraftStore.getState().canRedo(path)).toBe(true);
+    controller.deactivate();
+    mocks.resolve.mockResolvedValueOnce(session("new-head"));
+    await controller.open();
+    expect(controller.getSnapshot().session?.headSha).toBe("new-head");
+    expect(useDraftStore.getState().getDraft(path)).toBeUndefined();
+    expect(useDraftStore.getState().getDraft(senders)).toBeUndefined();
+    useDraftStore
+      .getState()
+      .ensureDraft(path, "new format", "new-head", "new format");
+    useDraftStore
+      .getState()
+      .ensureDraft(senders, "new senders", "new-head", "new senders");
+    expect(useDraftStore.getState().getDraft(path)).toMatchObject({
+      content: "new format",
+      baselineHeadSha: "new-head",
+    });
+    expect(useDraftStore.getState().getDraft(senders)).toMatchObject({
+      content: "new senders",
+      baselineHeadSha: "new-head",
+    });
+  });
+
+  it("keeps modified documents at their old revision on authorization reopen", async () => {
+    const controller = await open();
+    edit();
+    mocks.resolve.mockResolvedValueOnce(session("new-head"));
+    controller.deactivate();
+    await controller.open();
+    expect(controller.getSnapshot()).toMatchObject({
+      block: "stale",
+      session: { headSha: "head" },
+    });
+    expect(useDraftStore.getState().getDraft(path)).toMatchObject({
+      content: "edited",
+      baselineHeadSha: "head",
     });
   });
 });

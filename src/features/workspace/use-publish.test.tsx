@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useSyncExternalStore } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { serializeFormat } from "@/domain/format";
@@ -205,5 +205,37 @@ describe("publish a validated document snapshot", () => {
     expect(useDraftStore.getState().getDraft(a)?.content).toBe(later);
     expect(useDraftStore.getState().getStoredDraftsForScope(scope)).toEqual([]);
     expect(useSourceStore.getState().sourceRef?.prNumber).toBe(2);
+  });
+  it("closes the obsolete publication dialog when authorization reopens the session during a write", async () => {
+    const { result, controller } = await setup();
+    await act(async () => result.current.onPublish());
+    await waitFor(() => expect(result.current.isUpdateDialogOpen).toBe(true));
+    const write = deferred<{ headSha: string }>();
+    const started = deferred<void>();
+    mocks.update.mockImplementation(() => {
+      started.resolve();
+      return write.promise;
+    });
+    let publishing!: Promise<void>;
+    await act(async () => {
+      publishing = result.current.submitUpdate(null);
+      await started.promise;
+    });
+    const resolution = deferred<PullRequestWorkspaceResolution>();
+    mocks.resolve.mockReturnValueOnce(resolution.promise);
+    let opening!: Promise<void>;
+    act(() => {
+      controller.deactivate();
+      opening = controller.open();
+    });
+    expect(result.current.isUpdateDialogOpen).toBe(false);
+    await act(async () => {
+      resolution.resolve(supported());
+      await opening;
+      write.resolve({ headSha: "published" });
+      await publishing;
+    });
+    expect(controller.getSnapshot().block).toBe("sync-pending");
+    expect(result.current.isUpdateDialogOpen).toBe(false);
   });
 });
