@@ -735,3 +735,31 @@ it("switches restored readonly experiments to separate publish scope when rights
       ?.content
   ).toBe("edited");
 });
+it("retains experiment scope when a readonly PR closes before reload", async () => {
+  await waitForDraftStoreHydration();
+  useDraftStore.setState({
+    drafts: new Map(),
+    storedDraftsByScope: {},
+    workspaceSessionsByScope: {},
+    draftScopeKey: null,
+  });
+  mocks.tree.mockResolvedValue(tree);
+  mocks.content.mockResolvedValue("original");
+  mocks.resolve.mockResolvedValue({
+    ...session(),
+    writable: false,
+    readOnlyReason: "no-write-access",
+  });
+  const first = await open();
+  edit();
+  first.deactivate();
+  mocks.resolve.mockResolvedValue({ status: "unavailable", reason: "closed" });
+  const next = await open();
+  expect(next.getSnapshot().experiment).toBe(true);
+  expect(next.getSnapshot().block).toBe("closed");
+  expect(useDraftStore.getState().draftScopeKey).toBe(
+    "experiment:zenmoney/sms-formats:pr:1"
+  );
+  expect(useDraftStore.getState().getDraft(path)?.content).toBe("edited");
+  expect(next.beginPublication()).toBeNull();
+});

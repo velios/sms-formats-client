@@ -644,17 +644,25 @@ function latestResolutionExperiment(
   resolution: PullRequestWorkspaceResolution,
   saved: SavedWorkspaceSession | null
 ): boolean {
-  return (
-    resolution.status === "supported" &&
-    !resolution.writable &&
-    !saved?.session.writable &&
-    !(
-      resolution.status === "supported" &&
-      useDraftStore
-        .getState()
-        .getStoredDraftsForScope(
-          workspaceScope(resolution.repository, resolution.prNumber)
-        ).length
-    )
-  );
+  const session =
+    resolution.status === "supported" ? resolution : saved?.session;
+  if (
+    !session ||
+    saved?.session.writable ||
+    useDraftStore
+      .getState()
+      .getStoredDraftsForScope(
+        workspaceScope(session.repository, session.prNumber)
+      ).length
+  ) {
+    return false;
+  }
+  if (resolution.status === "supported") {
+    return !resolution.writable;
+  }
+  const scope = experimentScope(session.repository, {
+    type: "pr",
+    prNumber: session.prNumber,
+  });
+  return useDraftStore.getState().getStoredDraftsForScope(scope).length > 0;
 }
