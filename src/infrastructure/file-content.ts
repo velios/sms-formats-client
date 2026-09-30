@@ -51,6 +51,7 @@ export function fileContentOptions({
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 30 * 60_000,
     retry: false,
+    retryOnMount: false,
   });
 }
 

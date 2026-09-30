@@ -172,7 +172,7 @@ function WorkspaceFileControls({
   const draft = draftStore.getDraft(filePath);
   const { data: headContent } = useWorkspaceFileContent({
     filePath,
-    enabled: draft?.headContent !== null,
+    enabled: !localOnly && draft?.headContent !== null,
   });
 
   const remoteBaseline = draft ? draft.headContent : (headContent ?? null);
