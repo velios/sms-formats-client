@@ -4,31 +4,26 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-md)] border font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
+        success: "border-success bg-success text-white hover:bg-success/90",
         default: "border-border bg-card text-foreground hover:bg-muted",
         primary:
           "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
         secondary:
           "border-border bg-secondary text-secondary-foreground hover:bg-secondary/90",
-        ghost: "border-transparent bg-transparent hover:bg-muted",
+        ghost:
+          "border-transparent bg-transparent hover:bg-muted hover:text-primary",
         destructive:
           "border-destructive bg-destructive/10 text-destructive hover:bg-destructive/15",
-        success:
-          "border-[color:var(--c-success)] bg-[color:var(--c-success)] text-white hover:bg-[color:var(--c-success-strong)]",
-        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        xs: "h-6 rounded-sm px-2 text-xs",
-        sm: "h-8 px-3 text-xs",
-        lg: "h-10 px-5 text-sm",
+        default: "min-h-8 px-3 py-1 text-sm",
+        sm: "min-h-7 px-2 py-1 text-xs",
         icon: "size-8",
-        "icon-xs": "size-6 rounded-sm",
         "icon-sm": "size-7",
-        "icon-lg": "size-9",
       },
     },
     defaultVariants: {

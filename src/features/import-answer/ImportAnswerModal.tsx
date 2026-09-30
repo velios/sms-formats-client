@@ -60,11 +60,11 @@ function PasteView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="font-semibold text-[11px] text-[color:var(--c-text-dim)] uppercase tracking-[0.5px]">
+      <div className="font-semibold text-muted-foreground text-xs uppercase tracking-[0.5px]">
         {t("importAnswer.answerLabel")}
       </div>
       <Textarea
-        className="min-h-0 flex-1 font-mono text-[12px] leading-[1.6]"
+        className="min-h-0 flex-1 font-mono text-xs leading-[1.6]"
         onChange={(event) => {
           onChange(event.target.value);
           if (pastedRef.current) {
@@ -78,7 +78,7 @@ function PasteView({
         placeholder={t("importAnswer.answerPlaceholder")}
         value={text}
       />
-      <div className="flex items-center gap-3 border-[color:var(--c-border)] border-t pt-4">
+      <div className="flex items-center gap-3 border-border border-t pt-4">
         <Button
           disabled={text.trim() === ""}
           onClick={onShowChanges}
@@ -260,14 +260,14 @@ export function ImportAnswerModal({
           )}
 
           {importAnswer.loadError !== null && (
-            <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[color:var(--c-error)] bg-[color:var(--c-error-soft)] p-3">
+            <div className="flex items-center gap-3 rounded-md border border-destructive bg-destructive-soft p-3">
               <StatusBadge variant="error">
                 {t(`importAnswer.error.${importAnswer.loadError}`)}
               </StatusBadge>
               {importAnswer.loadError === "load-failed" && (
                 <Button
                   onClick={importAnswer.retry}
-                  size="xs"
+                  size="sm"
                   type="button"
                   variant="secondary"
                 >
@@ -291,7 +291,7 @@ export function ImportAnswerModal({
             />
 
             <div
-              className="min-w-0 flex-1 overflow-y-auto rounded-[var(--radius-md)] border border-[color:var(--c-border)] p-4"
+              className="min-w-0 flex-1 overflow-y-auto rounded-md border border-border p-4"
               ref={detailRef}
             >
               {(() => {
@@ -306,7 +306,7 @@ export function ImportAnswerModal({
                 }
                 if (importAnswer.isLoadingBodies) {
                   return (
-                    <div className="flex items-center gap-2 text-[13px] text-[color:var(--c-text-muted)]">
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
                       <Spinner />
                       {t("importAnswer.loading")}
                     </div>
@@ -316,7 +316,7 @@ export function ImportAnswerModal({
                   return <ProsePanel t={t} text={parsed?.prose ?? ""} />;
                 }
                 return selectedRow === null ? (
-                  <div className="text-[13px] text-[color:var(--c-text-dim)]">
+                  <div className="text-muted-foreground text-sm">
                     {t("importAnswer.pickRow")}
                   </div>
                 ) : (
@@ -326,7 +326,7 @@ export function ImportAnswerModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 border-[color:var(--c-border)] border-t pt-3">
+          <div className="flex items-center gap-3 border-border border-t pt-3">
             {!imported && (
               <>
                 <Button
@@ -337,10 +337,10 @@ export function ImportAnswerModal({
                 >
                   {t("importAnswer.writeAction")}
                 </Button>
-                <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] has-disabled:cursor-default has-disabled:text-[color:var(--c-text-dim)]">
+                <label className="flex cursor-pointer select-none items-center gap-2 text-sm has-disabled:cursor-default has-disabled:text-muted-foreground">
                   <input
                     checked={importAnswer.recalculateIntersections}
-                    className="accent-[color:var(--c-border-focus)]"
+                    className="accent-[color:var(--ring)]"
                     disabled={!importAnswer.canImport}
                     onChange={(event) =>
                       importAnswer.setRecalculateIntersections(
@@ -352,7 +352,7 @@ export function ImportAnswerModal({
                   {t("importAnswer.recalculate")}
                 </label>
                 {!(importAnswer.canImport || blocked) && (
-                  <span className="text-[12px] text-[color:var(--c-text-muted)]">
+                  <span className="text-muted-foreground text-xs">
                     {t("importAnswer.nothingToWrite")}
                   </span>
                 )}

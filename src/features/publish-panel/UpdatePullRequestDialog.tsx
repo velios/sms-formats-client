@@ -44,7 +44,7 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label
-            className="text-[color:var(--c-text-muted)] text-xs"
+            className="text-muted-foreground text-xs"
             htmlFor={commitTitleInputId}
           >
             {t("publish.commitTitleLabel")}
@@ -59,7 +59,7 @@ export function UpdatePullRequestDialog({ isBusy, onClose, onSubmit }: Props) {
         </div>
         <div className="flex flex-col gap-1">
           <label
-            className="text-[color:var(--c-text-muted)] text-xs"
+            className="text-muted-foreground text-xs"
             htmlFor={commitDescriptionInputId}
           >
             {t("publish.commitDescriptionLabel")}

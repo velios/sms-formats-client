@@ -65,16 +65,16 @@ export function MatchOverlayTextarea({
   }, []);
 
   return (
-    <div className="relative overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]">
+    <div className="relative overflow-hidden rounded-md border border-border bg-card focus-within:border-ring">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 min-h-[60px] overflow-auto px-3 py-2 text-[13px] text-[color:var(--c-text)] leading-[1.6] [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap]"
+        className="pointer-events-none absolute inset-0 min-h-[60px] overflow-auto px-3 py-2 text-foreground text-sm leading-[1.6] [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap]"
         ref={highlightsRef}
       >
         {renderHighlightedText(segments)}
       </div>
       <textarea
-        className="relative z-[1] min-h-[60px] w-full resize-y border-none bg-transparent px-3 py-2 text-[13px] text-transparent leading-[1.6] caret-[color:var(--c-text)] outline-none [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] selection:bg-[color:var(--c-accent-soft)]"
+        className="relative z-[1] min-h-[60px] w-full resize-y border-none bg-transparent px-3 py-2 text-sm text-transparent leading-[1.6] caret-foreground outline-none [font-family:var(--font-mono)] [overflow-wrap:break-word] [tab-size:4] [white-space:pre-wrap] selection:bg-primary-soft"
         onChange={(e) => onTextChange(e.target.value)}
         onScroll={(e) =>
           handleScroll(e.currentTarget.scrollTop, e.currentTarget.scrollLeft)
@@ -386,12 +386,12 @@ export function MatchInfoPanel({
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
+    <div className="ui-panel-body flex h-full min-h-0 flex-col overflow-y-auto">
       {issues.length > 0 ? (
         <div className="flex flex-col gap-1">
           {issues.map((issue, i) => (
             <div
-              className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs"
+              className="rounded-md bg-destructive-soft px-3 py-2 text-destructive text-xs"
               key={i}
             >
               {issue}
@@ -403,8 +403,8 @@ export function MatchInfoPanel({
           {result.matched ? (
             <div
               className={cn(
-                "flex items-center gap-2 rounded-[var(--radius-sm)] border border-transparent px-2 py-1",
-                hoveredGroup === 0 && "bg-[color:var(--c-accent-soft)]"
+                "flex items-center gap-2 rounded-md border border-transparent px-2 py-1",
+                hoveredGroup === 0 && "bg-primary-soft"
               )}
               onMouseEnter={() => onGroupHover(0)}
               onMouseLeave={() => onGroupHover(null)}
@@ -413,38 +413,36 @@ export function MatchInfoPanel({
                 className="inline-block h-3 w-3 shrink-0 rounded-full"
                 style={{ background: "var(--c-group-border-0)" }}
               />
-              <span className="text-[color:var(--c-text-muted)] text-sm">
+              <span className="text-muted-foreground text-sm">
                 {t("editor.fullMatch")}:
               </span>
-              <span className="rounded-[3px] bg-[color:var(--c-bg-input)] px-1.5 py-0.5 font-mono text-sm">
+              <span className="rounded-md bg-card px-1.5 py-0.5 font-mono text-sm">
                 {result.fullMatch}
               </span>
             </div>
           ) : (
-            <div className="text-[color:var(--c-text-muted)] text-sm">
+            <div className="text-muted-foreground text-sm">
               {t("editor.noMatch")}
             </div>
           )}
           {captureGroups.length > 0 && (
             <>
               {hasMissingColumnMappings && (
-                <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
+                <div className="rounded-md bg-destructive-soft px-3 py-2 text-destructive text-xs">
                   {t("columns.missingMappings")}
                 </div>
               )}
-              <div className="mt-1 font-medium text-[color:var(--c-text-muted)] text-sm">
+              <div className="mt-1 font-medium text-muted-foreground text-sm">
                 {t("editor.groups")}:
               </div>
               <table className="w-full border-collapse text-xs">
                 <thead>
-                  <tr className="text-left text-[color:var(--c-text-dim)]">
-                    <th className="px-1.5 py-[3px]" />
-                    <th className="px-1.5 py-[3px]">#</th>
-                    <th className="px-1.5 py-[3px]">
-                      {t("regex.captureValue")}
-                    </th>
-                    <th className="px-1.5 py-[3px]">{t("editor.columns")}</th>
-                    <th className="px-1.5 py-[3px]" />
+                  <tr className="text-left text-muted-foreground">
+                    <th className="px-1.5 py-1" />
+                    <th className="px-1.5 py-1">#</th>
+                    <th className="px-1.5 py-1">{t("regex.captureValue")}</th>
+                    <th className="px-1.5 py-1">{t("editor.columns")}</th>
+                    <th className="px-1.5 py-1" />
                   </tr>
                 </thead>
                 <tbody>
@@ -461,29 +459,28 @@ export function MatchInfoPanel({
                     return (
                       <tr
                         className={cn(
-                          "rounded-[var(--radius-sm)]",
-                          hoveredGroup === g.index &&
-                            "bg-[color:var(--c-accent-soft)]",
+                          "rounded-md",
+                          hoveredGroup === g.index && "bg-primary-soft",
                           activeCaptureGroup === g.index &&
-                            "outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]"
+                            "outline outline-2 outline-primary outline-offset-[-1px]"
                         )}
                         key={g.index}
                         onMouseEnter={() => onGroupHover(g.index)}
                         onMouseLeave={() => onGroupHover(null)}
                       >
-                        <td className="px-1.5 py-[3px]">
+                        <td className="px-1.5 py-1">
                           <span
                             className="inline-block h-3 w-3 rounded-full"
                             style={{ background: getGroupColor(g.index) }}
                           />
                         </td>
-                        <td className="px-1.5 py-[3px] text-[color:var(--c-text-muted)]">
+                        <td className="px-1.5 py-1 text-muted-foreground">
                           {g.index}
                         </td>
-                        <td className="px-1.5 py-[3px] font-mono">
+                        <td className="px-1.5 py-1 font-mono">
                           {g.match?.value ?? "—"}
                         </td>
-                        <td className="px-1.5 py-[3px]">
+                        <td className="px-1.5 py-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <Button
                               className="max-w-full"
@@ -523,14 +520,13 @@ export function MatchInfoPanel({
                             )}
                           </div>
                         </td>
-                        <td className="px-1.5 py-[3px] text-right">
+                        <td className="px-1.5 py-1 text-right">
                           <Button
                             aria-label={t("editor.selectGroup")}
                             aria-pressed={selectedGroupIndex === g.index}
                             className={cn(
-                              "px-1.5 py-0.5 text-[13px]",
-                              selectedGroupIndex === g.index &&
-                                "text-[color:var(--c-accent)]"
+                              "px-1.5 py-0.5 text-sm",
+                              selectedGroupIndex === g.index && "text-primary"
                             )}
                             disabled={!groupSelectionEnabled}
                             onClick={() => onSelectGroup(g.index)}

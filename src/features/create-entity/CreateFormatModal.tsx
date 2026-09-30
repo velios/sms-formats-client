@@ -58,7 +58,7 @@ export function CreateFormatModal({
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <label
-            className="text-[color:var(--c-text-muted)] text-xs"
+            className="text-muted-foreground text-xs"
             htmlFor={formatNameInputId}
           >
             {t("bank.formatName")} *
@@ -74,7 +74,7 @@ export function CreateFormatModal({
 
         <div className="flex flex-col gap-1">
           <label
-            className="text-[color:var(--c-text-muted)] text-xs"
+            className="text-muted-foreground text-xs"
             htmlFor={formatIdInputId}
           >
             {t("bank.formatId")}

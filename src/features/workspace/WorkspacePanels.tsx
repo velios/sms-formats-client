@@ -16,41 +16,25 @@ import { extractFormatFileName } from "@/features/workspace/use-bank-search";
 import type { WorkspaceEditorMode } from "@/features/workspace-header/WorkspaceHeaderBar";
 import { cn } from "@/lib/utils";
 
-const workspacePanelHeaderClassName =
-  "flex min-h-10 items-center justify-between border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-4 py-1 text-[12px] font-semibold tracking-[0.5px] text-[color:var(--c-text-muted)] uppercase";
-
-const workspaceTabsClassName =
-  "flex gap-0 border-b border-[color:var(--c-border)]";
-
-const workspaceTabClassName = (isActive: boolean) =>
-  cn(
-    "cursor-pointer border-x-0 border-t-0 border-b-2 border-solid px-4 py-2 font-medium font-sans text-[13px] transition-[color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)] focus-visible:ring-offset-[-2px]",
-    isActive
-      ? "border-b-[color:var(--c-accent)] bg-[color:var(--c-bg-surface)] text-[color:var(--c-accent)] shadow-[inset_0_-1px_0_var(--c-accent-soft)]"
-      : "border-b-transparent text-[color:var(--c-text-muted)] hover:border-b-[color:var(--c-accent-soft)] hover:bg-[color:var(--c-bg-surface)] hover:text-[color:var(--c-accent)]"
-  );
-
 const workspaceFileRowClassName = (params: {
   isDeleted: boolean;
   isSelected: boolean;
 }) =>
   cn(
-    "flex cursor-pointer items-center gap-2 px-3 py-2 text-[13px]",
-    params.isSelected
-      ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
-      : "hover:bg-[color:var(--c-bg-hover)]",
+    "ui-list-row",
+    params.isSelected ? "bg-accent text-primary" : "hover:bg-accent",
     params.isDeleted &&
       "line-through decoration-1 decoration-current opacity-80"
   );
 
 const workspaceExternalLinkClassName =
-  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
+  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-xs text-muted-foreground no-underline hover:bg-primary-soft hover:text-primary hover:no-underline";
 
 const workspaceActionButtonClassName =
-  "min-h-8 w-full justify-start whitespace-normal px-2.5 py-1.5 text-left text-[13px] leading-[1.3]";
+  "w-full justify-start whitespace-normal text-left leading-[1.3]";
 
 const workspaceActionsDividerClassName =
-  "mx-0.5 my-2 h-px shrink-0 bg-[color:var(--c-border-soft,var(--c-border))]";
+  "mx-0.5 my-2 h-px shrink-0 bg-[color:var(--border)]";
 
 export function renderWorkspaceContent(params: {
   showSenders: boolean;
@@ -104,7 +88,7 @@ export function renderWorkspaceContent(params: {
     );
   }
   return (
-    <div className="flex h-full items-center justify-center text-[color:var(--c-text-muted)]">
+    <div className="flex h-full items-center justify-center text-muted-foreground">
       {t("bank.files")}: {t("bank.noResults")}
     </div>
   );
@@ -170,9 +154,9 @@ export function BankActionsPanel(params: {
   } = params;
 
   return (
-    <div className="flex shrink-0 flex-col gap-0.5 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] p-2.5">
+    <div className="ui-panel flex shrink-0 flex-col gap-0.5 p-2">
       <Button
-        className="min-h-9 w-full justify-center whitespace-normal px-3 py-1.5 text-center font-semibold text-[13px] leading-[1.3]"
+        className="w-full justify-center whitespace-normal text-center font-semibold leading-[1.3]"
         disabled={publishDisabled || isPublishing}
         onClick={onPublish}
         type="button"
@@ -286,7 +270,7 @@ export function BankActionsPanel(params: {
       <Button
         className={cn(
           workspaceActionButtonClassName,
-          "text-[color:var(--c-error)] hover:bg-[color:var(--c-error-soft)] hover:text-[color:var(--c-error)]"
+          "text-destructive hover:bg-destructive-soft hover:text-destructive"
         )}
         disabled={!canResetToSource}
         onClick={onResetToSource}
@@ -441,11 +425,11 @@ export function FormatsPanel(params: {
   ]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]">
-      <div className={workspacePanelHeaderClassName}>
+    <div className="ui-panel flex min-h-0 flex-1 flex-col">
+      <div className="ui-panel-heading">
         <span>
           {t("bank.files")}{" "}
-          <span className="text-[color:var(--c-text-muted)] text-xs">
+          <span className="text-muted-foreground text-xs">
             ({totalFilesCount})
           </span>
         </span>
@@ -460,38 +444,40 @@ export function FormatsPanel(params: {
           +
         </Button>
       </div>
-      <div className={workspaceTabsClassName}>
+      <div className="ui-tabs">
         <button
-          className={workspaceTabClassName(formatTab === "all")}
+          className="ui-tab"
+          data-active={formatTab === "all"}
           onClick={() => setFormatTab("all")}
         >
           {t("bank.allFiles")}
         </button>
         <button
-          className={workspaceTabClassName(formatTab === "recent")}
+          className="ui-tab"
+          data-active={formatTab === "recent"}
           onClick={() => setFormatTab("recent")}
         >
           {t("bank.recentFiles")}
         </button>
         {intersectionScopeFiles && (
           <button
-            className={workspaceTabClassName(formatTab === "intersections")}
+            className="ui-tab"
+            data-active={formatTab === "intersections"}
             onClick={() => setFormatTab("intersections")}
           >
             {t("bank.intersectionsTab")}
           </button>
         )}
       </div>
-      <div className="border-[color:var(--c-border)] border-b p-2">
+      <div className="border-border border-b p-2">
         <Input
           aria-label={t("bank.searchFile")}
-          className="h-7 px-2 py-1 text-xs"
           onChange={(e) => setFormatSearch(e.target.value)}
           placeholder={t("bank.searchFile")}
           value={formatSearch}
         />
         {showSearchIndexStatus && (
-          <div className="mt-1.5 text-[color:var(--c-text-muted)] text-xs">
+          <div className="mt-1.5 text-muted-foreground text-xs">
             {searchIndexingLabel}
           </div>
         )}
@@ -544,7 +530,7 @@ export function FormatsPanel(params: {
                   isSelected,
                 }),
                 !isInteractive &&
-                  "cursor-default text-[color:var(--c-error)] hover:bg-transparent"
+                  "cursor-default text-destructive hover:bg-transparent"
               )}
               data-file-path={path}
               key={path}
@@ -584,11 +570,11 @@ export function FormatsPanel(params: {
               tabIndex={isInteractive ? 0 : undefined}
             >
               <div className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate font-mono text-sm">
+                <span className="truncate font-mono text-xs">
                   {displayName}
                 </span>
                 {intersectionStats && (
-                  <span className="shrink-0 rounded border border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-1.5 py-0.5 font-mono text-[11px] text-[color:var(--c-text-muted)] tabular-nums leading-none">
+                  <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-muted-foreground text-xs tabular-nums leading-none">
                     <FormatIntersectionMetric
                       tone={ownExamplesTone}
                       value={intersectionStats.totalExamples}
@@ -656,7 +642,7 @@ export function FormatsPanel(params: {
           );
         })}
         {showNoResults && (
-          <div className="p-4 text-[color:var(--c-text-muted)] text-xs">
+          <div className="p-4 text-muted-foreground text-xs">
             {t("bank.noResults")}
           </div>
         )}

@@ -178,7 +178,7 @@ export function QuickReference() {
       <div
         style={{
           padding: "6px 10px",
-          borderBottom: "1px solid var(--c-border)",
+          borderBottom: "1px solid var(--border)",
         }}
       >
         <Input
@@ -189,15 +189,15 @@ export function QuickReference() {
           value={search}
         />
       </div>
-      <div className="grid h-full min-h-0 flex-1 overflow-hidden border-[color:var(--c-border)] border-t [grid-template-columns:140px_1fr]">
-        <div className="overflow-y-auto border-[color:var(--c-border)] border-r">
+      <div className="grid h-full min-h-0 flex-1 overflow-hidden border-border border-t [grid-template-columns:140px_1fr]">
+        <div className="overflow-y-auto border-border border-r">
           {CATEGORIES.map((cat) => (
             <button
               className={cn(
-                "block w-full border-0 border-[color:var(--c-border)] border-b bg-transparent px-2.5 py-1.5 text-left text-xs transition-colors",
+                "block w-full border-0 border-border border-b bg-transparent px-2.5 py-1.5 text-left text-xs transition-colors",
                 activeCat === cat.id
-                  ? "bg-[color:var(--c-bg-elevated)] font-semibold text-[color:var(--c-accent)]"
-                  : "text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-bg-hover)] hover:text-[color:var(--c-text)]"
+                  ? "bg-muted font-semibold text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
               )}
               key={cat.id}
               onClick={() => {
@@ -213,21 +213,19 @@ export function QuickReference() {
         <div className="overflow-y-auto p-1">
           {filteredItems.map((it, i) => (
             <div
-              className="flex gap-2 rounded-[var(--radius-sm)] px-2 py-1 text-xs hover:bg-[color:var(--c-bg-hover)]"
+              className="flex gap-2 rounded-md px-2 py-1 text-xs hover:bg-accent"
               key={i}
             >
-              <span className="min-w-[60px] font-medium font-mono text-[color:var(--c-accent)]">
+              <span className="min-w-[60px] font-medium font-mono text-primary">
                 {it.token}
               </span>
-              <span className="text-[color:var(--c-text-muted)]">
+              <span className="text-muted-foreground">
                 {it.desc[lang] ?? it.desc.en}
               </span>
             </div>
           ))}
           {filteredItems.length === 0 && (
-            <div className="p-4 text-[color:var(--c-text-muted)] text-sm">
-              —
-            </div>
+            <div className="p-4 text-muted-foreground text-xs">—</div>
           )}
         </div>
       </div>

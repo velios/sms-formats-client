@@ -64,7 +64,7 @@ export function ColumnPickerModal({
         placeholder={t("columns.search")}
         value={search}
       />
-      <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--c-border)]">
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
         {filteredColumns.map((column) => {
           const isUsedByOtherGroup = usedBaseNames.has(column.name);
           const isCurrent = currentBaseName === column.name;
@@ -72,9 +72,9 @@ export function ColumnPickerModal({
           return (
             <button
               className={cn(
-                "flex w-full items-center gap-2 border-[color:var(--c-border)] border-b bg-[color:var(--c-bg-surface)] px-3 py-2 text-left last:border-b-0",
-                isCurrent && "bg-[color:var(--c-accent-soft)]",
-                !isDisabled && "hover:bg-[color:var(--c-bg-hover)]",
+                "flex w-full items-center gap-2 border-border border-b bg-card px-3 py-2 text-left last:border-b-0",
+                isCurrent && "bg-primary-soft",
+                !isDisabled && "hover:bg-accent",
                 isDisabled && "cursor-not-allowed opacity-55"
               )}
               disabled={isDisabled}
@@ -89,7 +89,7 @@ export function ColumnPickerModal({
               type="button"
             >
               <span className="font-medium font-mono">{column.name}</span>
-              <span className="text-[color:var(--c-text-muted)] text-sm">
+              <span className="text-muted-foreground text-sm">
                 {column.description[lang] ?? column.description.en}
               </span>
               {column.parameterized && (
@@ -106,7 +106,7 @@ export function ColumnPickerModal({
           );
         })}
         {filteredColumns.length === 0 && (
-          <div className="p-4 text-[color:var(--c-text-muted)] text-sm">—</div>
+          <div className="p-4 text-muted-foreground text-sm">—</div>
         )}
       </div>
       <div className="mt-6 flex justify-end gap-2">

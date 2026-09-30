@@ -79,11 +79,9 @@ export function FormatIntersectionMetric(params: {
   const { value, tone, ariaLabel, onClick } = params;
   const className = cn(
     formatIntersectionMetricClassName,
-    tone === "success"
-      ? "text-[color:var(--c-success)]"
-      : "bg-[color:var(--c-error)] text-white",
+    tone === "success" ? "text-success" : "bg-destructive text-white",
     onClick &&
-      "cursor-pointer appearance-none border-0 transition-[color,background-color,opacity,box-shadow] duration-150 [font:inherit] hover:bg-[color:var(--c-error-soft)] hover:text-[color:var(--c-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-border-focus)]"
+      "cursor-pointer appearance-none border-0 transition-[color,background-color,opacity,box-shadow] duration-150 [font:inherit] hover:bg-destructive-soft hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
   );
 
   if (onClick) {

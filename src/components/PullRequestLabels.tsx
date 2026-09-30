@@ -94,14 +94,14 @@ export function PullRequestLabels({
         if (isExpandable) {
           return (
             <Button
-              className="h-5 max-w-[180px] rounded-full px-2 font-semibold text-[11px]"
+              className="h-5 max-w-[180px] rounded-full px-2 font-semibold text-xs"
               key={label.name}
               onClick={(event) => {
                 stopEvent(event);
                 setIsExpanded(true);
               }}
               onKeyDown={stopEvent}
-              size="xs"
+              size="sm"
               style={chipStyle}
               title={label.name}
               type="button"
@@ -114,7 +114,7 @@ export function PullRequestLabels({
 
         return (
           <span
-            className="inline-flex h-5 max-w-[180px] items-center overflow-hidden rounded-full px-2 font-semibold text-[11px]"
+            className="inline-flex h-5 max-w-[180px] items-center overflow-hidden rounded-full px-2 font-semibold text-xs"
             key={label.name}
             style={chipStyle}
             title={label.name}
@@ -125,13 +125,13 @@ export function PullRequestLabels({
       })}
       {hiddenCount > 0 && !isExpanded && (
         <Button
-          className="h-5 rounded-full px-2 text-[11px]"
+          className="h-5 rounded-full px-2 text-xs"
           onClick={(event) => {
             stopEvent(event);
             setIsExpanded(true);
           }}
           onKeyDown={stopEvent}
-          size="xs"
+          size="sm"
           title={allLabelsTitle}
           type="button"
           variant="ghost"

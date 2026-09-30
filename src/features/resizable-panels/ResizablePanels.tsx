@@ -24,7 +24,7 @@ export function PanelResizeToggle() {
     <Button
       aria-label={t("panels.resize")}
       aria-pressed={enabled}
-      className="size-9 rounded-full"
+      className="rounded-md"
       onClick={toggle}
       size="icon"
       title={enabled ? t("panels.finishResize") : t("panels.resize")}
@@ -58,7 +58,9 @@ export function ResizablePanels({
     const available = container.current?.clientWidth ?? 1200;
     const maximum = Math.max(
       160,
-      available - (side === "left" ? 480 : 320) - 16
+      available -
+        (side === "left" ? 480 : 320) -
+        (container.current?.children[1]?.clientWidth ?? 12)
     );
     const next = value < 100 ? 32 : Math.min(maximum, Math.max(160, value));
     if (next > 32) {
@@ -77,7 +79,7 @@ export function ResizablePanels({
       {collapsed && (
         <button
           aria-label={t("panels.expand", { panel: label })}
-          className="flex flex-col items-center gap-4 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)] py-3 text-[color:var(--c-accent)]"
+          className="flex flex-col items-center gap-4 rounded-md border border-border bg-card py-3 text-primary"
           onClick={() => resize(expandedWidth.current)}
           title={t("panels.expand", { panel: label })}
           type="button"
@@ -97,8 +99,8 @@ export function ResizablePanels({
       style={{
         gridTemplateColumns:
           side === "left"
-            ? `${size} 16px minmax(0,1fr)`
-            : `minmax(0,1fr) 16px ${size}`,
+            ? `${size} var(--panel-gap) minmax(0,1fr)`
+            : `minmax(0,1fr) var(--panel-gap) ${size}`,
       }}
     >
       {side === "left" ? pane : parts[0]}
@@ -106,7 +108,7 @@ export function ResizablePanels({
         {enabled && (
           <button
             aria-label={t("panels.width", { panel: label })}
-            className="absolute inset-0 flex touch-none select-none items-center justify-center text-[color:var(--c-accent)] hover:bg-[color:var(--c-accent-soft)] focus-visible:outline-2"
+            className="absolute inset-y-0 -right-0.5 -left-0.5 z-10 flex touch-none select-none items-center justify-center text-primary hover:bg-primary-soft focus-visible:outline-2"
             onDoubleClick={() => resize(collapsed ? expandedWidth.current : 32)}
             onLostPointerCapture={() => {
               drag.current = null;

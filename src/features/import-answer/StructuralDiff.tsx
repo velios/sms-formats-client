@@ -41,22 +41,18 @@ function Line(props: {
   const { label, text, runs, tone } = props;
   return (
     <div className="flex gap-2">
-      <span className="w-12 shrink-0 pt-0.5 text-[11px] text-[color:var(--c-text-dim)]">
+      <span className="w-12 shrink-0 pt-0.5 text-muted-foreground text-xs">
         {label}
       </span>
       <code
-        className={`min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[12px] leading-[1.55] ${
-          tone === "before"
-            ? "text-[color:var(--c-text-dim)]"
-            : "text-[color:var(--c-text)]"
+        className={`min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-xs leading-[1.55] ${
+          tone === "before" ? "text-muted-foreground" : "text-foreground"
         }`}
       >
         {runs
           ? runs.map(([run, changed], index) => (
               <span
-                className={
-                  changed ? "bg-[color:var(--c-accent-soft)]" : undefined
-                }
+                className={changed ? "bg-primary-soft" : undefined}
                 key={index}
               >
                 {run}
@@ -77,7 +73,7 @@ function Section({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className="font-semibold text-[11px] text-[color:var(--c-text-dim)] uppercase tracking-[0.5px]">
+      <div className="font-semibold text-muted-foreground text-xs uppercase tracking-[0.5px]">
         {title}
       </div>
       {children}
@@ -94,19 +90,19 @@ function DeletionDetails({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-2 text-[13px]">
-      <div className="text-[color:var(--c-text-muted)]">
+    <div className="flex flex-col gap-2 text-sm">
+      <div className="text-muted-foreground">
         {t("importAnswer.diff.deleting")}
       </div>
-      <div className="border-[color:var(--c-border)] border-l-2 pl-3 text-[color:var(--c-text)]">
+      <div className="border-border border-l-2 pl-3 text-foreground">
         {reason || t("importAnswer.diff.noReason")}
       </div>
       {before !== null && (
         <details>
-          <summary className="cursor-pointer text-[12px] text-[color:var(--c-text-dim)]">
+          <summary className="cursor-pointer text-muted-foreground text-xs">
             {t("importAnswer.diff.currentBody")}
           </summary>
-          <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] text-[color:var(--c-text-dim)]">
+          <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap break-all font-mono text-muted-foreground text-xs">
             {before}
           </pre>
         </details>
@@ -128,28 +124,22 @@ function SendersDiff({
   const added = afterLines.filter((line) => !beforeLines.includes(line));
   const removed = beforeLines.filter((line) => !afterLines.includes(line));
   return (
-    <div className="flex flex-col gap-1 text-[13px]">
-      <div className="text-[color:var(--c-text-muted)]">
+    <div className="flex flex-col gap-1 text-sm">
+      <div className="text-muted-foreground">
         {t("importAnswer.diff.senders")}
       </div>
       {added.map((line) => (
-        <div
-          className="font-mono text-[12px] text-[color:var(--c-success)]"
-          key={`+${line}`}
-        >
+        <div className="font-mono text-success text-xs" key={`+${line}`}>
           + {line}
         </div>
       ))}
       {removed.map((line) => (
-        <div
-          className="font-mono text-[12px] text-[color:var(--c-error)]"
-          key={`-${line}`}
-        >
+        <div className="font-mono text-destructive text-xs" key={`-${line}`}>
           − {line}
         </div>
       ))}
       {added.length === 0 && removed.length === 0 && (
-        <div className="text-[color:var(--c-text-dim)]">
+        <div className="text-muted-foreground">
           {t("importAnswer.diff.unchanged")}
         </div>
       )}
@@ -189,7 +179,7 @@ function FormatDiff({
     parsedBefore.columns.join(";") !== parsedAfter.columns.join(";");
 
   return (
-    <div className="flex flex-col gap-3 text-[13px]">
+    <div className="flex flex-col gap-3 text-sm">
       <Section title={t("importAnswer.diff.regex")}>
         {parsedBefore !== null && (
           <Line
@@ -244,7 +234,7 @@ function FormatDiff({
       <Section title={t("importAnswer.diff.examples")}>
         {addedExamples.map((example) => (
           <div
-            className="font-mono text-[11px] text-[color:var(--c-success)] leading-[1.5]"
+            className="font-mono text-success text-xs leading-[1.5]"
             key={`+${example}`}
           >
             + {example}
@@ -252,14 +242,14 @@ function FormatDiff({
         ))}
         {removedExamples.map((example) => (
           <div
-            className="font-mono text-[11px] text-[color:var(--c-error)] leading-[1.5]"
+            className="font-mono text-destructive text-xs leading-[1.5]"
             key={`-${example}`}
           >
             − {example}
           </div>
         ))}
         {addedExamples.length === 0 && removedExamples.length === 0 && (
-          <div className="text-[color:var(--c-text-dim)]">
+          <div className="text-muted-foreground">
             {t("importAnswer.diff.examplesUnchanged", {
               count: parsedAfter.examples.length,
             })}

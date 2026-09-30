@@ -6,14 +6,7 @@ import { SnippetsPanel } from "@/features/snippet-library/SnippetsPanel";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store";
 
-import {
-  getPatternBlockToneClass,
-  getRegexTokenClass,
-  regexLabPanelClassName,
-  regexLabPanelHeaderClassName,
-  regexLabTabClassName,
-  regexLabTabListClassName,
-} from "./regex-styles";
+import { getPatternBlockToneClass, getRegexTokenClass } from "./regex-styles";
 export function PatternExplanationPane({
   activePatternTokenIndex,
   errorMessage,
@@ -36,14 +29,13 @@ export function PatternExplanationPane({
   const setRightPaneTab = useUIStore((state) => state.setRightPaneTab);
 
   return (
-    <div className={cn(regexLabPanelClassName, "flex min-h-0 flex-col")}>
-      <div
-        className={cn(regexLabPanelHeaderClassName, "justify-start px-0 py-0")}
-      >
-        <div className={cn(regexLabTabListClassName, "w-full border-b-0")}>
+    <div className={cn("ui-panel", "flex min-h-0 flex-col")}>
+      <div className={cn("ui-panel-heading", "justify-start px-0 py-0")}>
+        <div className={cn("ui-tabs", "w-full border-b-0")}>
           {!readOnly && (
             <button
-              className={regexLabTabClassName(rightPaneTab === "snippets")}
+              className="ui-tab"
+              data-active={rightPaneTab === "snippets"}
               onClick={() => setRightPaneTab("snippets")}
               type="button"
             >
@@ -51,14 +43,16 @@ export function PatternExplanationPane({
             </button>
           )}
           <button
-            className={regexLabTabClassName(rightPaneTab === "explanation")}
+            className="ui-tab"
+            data-active={rightPaneTab === "explanation"}
             onClick={() => setRightPaneTab("explanation")}
             type="button"
           >
             {t("editor.explanation").toUpperCase()}
           </button>
           <button
-            className={regexLabTabClassName(rightPaneTab === "quickref")}
+            className="ui-tab"
+            data-active={rightPaneTab === "quickref"}
             onClick={() => setRightPaneTab("quickref")}
             type="button"
           >
@@ -112,25 +106,25 @@ function ExplanationPanel({
   }, [activePatternTokenIndex]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
+    <div className="ui-panel-body flex h-full min-h-0 flex-col overflow-y-auto text-xs leading-[18px]">
       {errorMessage ? (
-        <div className="rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-2 text-[color:var(--c-error)] text-xs">
+        <div className="rounded-md bg-destructive-soft px-3 py-2 text-destructive text-xs">
           {cleanRegexErrorReason(errorMessage)}
         </div>
       ) : explanation.patternTokens.length === 0 ? (
-        <div className="text-[color:var(--c-text-muted)] text-sm">—</div>
+        <div className="text-muted-foreground text-xs">—</div>
       ) : (
         <div className="flex flex-col gap-1">
-          <div className="font-medium text-[color:var(--c-text-muted)] text-sm">
+          <div className="font-medium text-muted-foreground text-xs">
             {t("editor.patternParts")}
           </div>
           {explanation.patternTokens.map((token, index) => (
             <div
               className={cn(
-                "flex cursor-pointer items-start gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors",
+                "flex cursor-pointer items-start gap-2 rounded-md border p-2 transition-colors",
                 getPatternBlockToneClass(token.type),
                 index === activePatternTokenIndex &&
-                  "outline outline-2 outline-[color:var(--c-accent)] outline-offset-[-1px]"
+                  "outline outline-2 outline-primary outline-offset-[-1px]"
               )}
               key={`${token.start}-${token.end}-${index}`}
               onBlur={() => onPatternTokenHover(null)}
@@ -158,7 +152,7 @@ function ExplanationPanel({
               <code className={cn("font-mono", getRegexTokenClass(token.type))}>
                 {token.raw}
               </code>
-              <span className="min-w-0 flex-1 text-sm">
+              <span className="min-w-0 flex-1 text-xs">
                 {token.description}
               </span>
             </div>

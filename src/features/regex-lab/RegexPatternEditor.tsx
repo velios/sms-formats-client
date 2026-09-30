@@ -336,10 +336,10 @@ export const RegexPatternEditor = forwardRef<
 
   return (
     <div
-      className="flex items-stretch overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--c-border)] bg-[color:var(--c-bg-input)] focus-within:border-[color:var(--c-border-focus)]"
+      className="flex items-stretch overflow-hidden rounded-md border border-border bg-card focus-within:border-ring"
       onBlur={onBlur}
     >
-      <span className="select-none px-1.5 pt-2 pb-2 font-[var(--font-mono)] text-[15px] text-[color:var(--c-text-dim)]">
+      <span className="select-none px-1.5 pt-2 pb-2 font-[var(--font-mono)] text-base text-muted-foreground">
         /
       </span>
       <div className="relative min-w-0 flex-1">
@@ -354,7 +354,7 @@ export const RegexPatternEditor = forwardRef<
           ref={containerRef}
         />
       </div>
-      <span className="select-none px-3 pt-2 pb-2 font-[var(--font-mono)] text-[color:var(--c-text-dim)] text-sm">
+      <span className="select-none px-3 pt-2 pb-2 font-[var(--font-mono)] text-muted-foreground text-sm">
         /
       </span>
     </div>

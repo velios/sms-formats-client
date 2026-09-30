@@ -27,21 +27,19 @@ interface OpenPullRequestItem {
 }
 
 const dashboardPanelClassName =
-  "flex h-full min-h-0 w-full max-w-[1280px] flex-col overflow-hidden rounded-lg border border-[color:var(--c-border)] bg-[color:var(--c-bg-surface)]";
+  "flex h-full min-h-0 w-full max-w-[1280px] flex-col overflow-hidden rounded-lg border border-border bg-card";
 
 const dashboardPanelHeaderClassName =
-  "flex h-[52px] shrink-0 items-center gap-2.5 border-b border-[color:var(--c-border)] bg-[color:var(--c-bg-elevated)] px-5";
+  "flex h-[52px] shrink-0 items-center gap-2.5 border-b border-border bg-muted px-5";
 
 const dashboardRowClassName = (isActive: boolean) =>
   cn(
-    "grid cursor-pointer grid-cols-[52px_minmax(0,1fr)_280px_116px] items-center gap-x-4 border-[color:var(--c-border)] border-b px-5 py-2.5 text-[13px]",
-    isActive
-      ? "bg-[color:var(--c-bg-hover)] text-[color:var(--c-accent)]"
-      : "hover:bg-[color:var(--c-bg-hover)]"
+    "grid cursor-pointer grid-cols-[52px_minmax(0,1fr)_280px_116px] items-center gap-x-4 border-border border-b px-5 py-2.5 text-sm",
+    isActive ? "bg-accent text-primary" : "hover:bg-accent"
   );
 
 const dashboardIconLinkClassName =
-  "inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded text-[11px] leading-none text-[color:var(--c-text-dim)] no-underline hover:bg-[color:var(--c-accent-soft)] hover:text-[color:var(--c-accent)] hover:no-underline";
+  "inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded text-xs leading-none text-muted-foreground no-underline hover:bg-primary-soft hover:text-primary hover:no-underline";
 
 function sortPRs(prs: OpenPullRequestItem[] | undefined) {
   return [...(prs ?? [])].sort((a, b) => {
@@ -164,10 +162,10 @@ export function Dashboard() {
     <div className="flex h-full min-h-0 justify-center">
       <div className={dashboardPanelClassName}>
         <div className={dashboardPanelHeaderClassName}>
-          <span className="font-semibold text-[color:var(--c-text-muted)] text-xs uppercase tracking-[0.5px]">
+          <span className="font-semibold text-muted-foreground text-xs uppercase tracking-[0.5px]">
             {t("source.pullRequest", { defaultValue: "Pull Requests" })}
           </span>
-          <span className="inline-flex h-[18px] items-center rounded-full bg-[color:var(--c-border)] px-[7px] font-semibold text-[11px] text-[color:var(--c-text-muted)] tabular-nums">
+          <span className="inline-flex h-[18px] items-center rounded-full bg-border px-[7px] font-semibold text-muted-foreground text-xs tabular-nums">
             {sortedPRs.length}
           </span>
           <div className="flex-1" />
@@ -175,7 +173,7 @@ export function Dashboard() {
             aria-label={t("source.search", {
               defaultValue: "Search pull requests",
             })}
-            className="w-[340px] bg-[color:var(--c-bg-input)] px-3 text-[13px]"
+            className="w-[340px] bg-card px-3 text-sm"
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("source.search", {
               defaultValue: "Search by title, branch, or PR number",
@@ -186,7 +184,7 @@ export function Dashboard() {
 
         <div className="min-h-0 overflow-y-auto">
           {isLoading ? (
-            <div className="flex items-center gap-2 p-4 text-[color:var(--c-text-muted)] text-sm">
+            <div className="flex items-center gap-2 p-4 text-muted-foreground text-sm">
               <Spinner />
               <span>{t("app.loading")}</span>
             </div>
@@ -200,7 +198,7 @@ export function Dashboard() {
               </Button>
             </div>
           ) : visiblePRs.length === 0 ? (
-            <div className="p-4 text-[color:var(--c-text-muted)] text-sm">
+            <div className="p-4 text-muted-foreground text-sm">
               {normalizedQuery
                 ? t("bank.noResults")
                 : t("source.empty", {
@@ -248,17 +246,17 @@ export function Dashboard() {
                   role="button"
                   tabIndex={0}
                 >
-                  <span className="text-[color:var(--c-text-dim)] text-xs tabular-nums">
+                  <span className="text-muted-foreground text-xs tabular-nums">
                     #{pullRequest.number}
                   </span>
-                  <div className="flex min-w-0 flex-col gap-[3px]">
+                  <div className="flex min-w-0 flex-col gap-1">
                     <div className="flex min-w-0 items-center gap-1.5">
                       <span className="min-w-0 truncate font-medium text-sm">
                         {pullRequest.title}
                       </span>
                       {hasLocalDrafts && (
                         <span
-                          className="inline-flex h-2 w-2 shrink-0 rounded-full bg-[color:var(--c-warning)]"
+                          className="inline-flex h-2 w-2 shrink-0 rounded-full bg-warning"
                           title={localDraftsTitle}
                         />
                       )}
@@ -274,7 +272,7 @@ export function Dashboard() {
                         ↗
                       </a>
                     </div>
-                    <span className="truncate font-mono text-[color:var(--c-text-dim)] text-xs">
+                    <span className="truncate font-mono text-muted-foreground text-xs">
                       {pullRequest.headRef}
                     </span>
                   </div>
@@ -285,7 +283,7 @@ export function Dashboard() {
                     />
                     {pullRequest.lastCommitAuthorLogin && (
                       <span
-                        className="inline-flex h-5 max-w-[160px] items-center truncate whitespace-nowrap rounded-full px-2 font-semibold text-[11px] text-[color:var(--c-text-muted)] leading-none shadow-[inset_0_0_0_1px_var(--c-border)]"
+                        className="inline-flex h-5 max-w-[160px] items-center truncate whitespace-nowrap rounded-full px-2 font-semibold text-muted-foreground text-xs leading-none shadow-[inset_0_0_0_1px_var(--border)]"
                         title={pullRequest.lastCommitAuthorLogin}
                       >
                         {pullRequest.lastCommitAuthorLogin}

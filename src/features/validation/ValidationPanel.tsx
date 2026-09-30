@@ -128,8 +128,8 @@ export function ValidationPanel({ bankPath, bank, onClose }: Props) {
               <div
                 className={
                   issue.level === "error"
-                    ? "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-error-soft)] px-3 py-1.5 text-[color:var(--c-error)] text-xs"
-                    : "flex gap-2 rounded-[var(--radius-sm)] bg-[color:var(--c-warning-soft)] px-3 py-1.5 text-[color:var(--c-warning)] text-xs"
+                    ? "flex gap-2 rounded-md bg-destructive-soft px-3 py-1.5 text-destructive text-xs"
+                    : "flex gap-2 rounded-md bg-warning-soft px-3 py-1.5 text-warning text-xs"
                 }
                 key={i}
               >

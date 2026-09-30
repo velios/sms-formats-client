@@ -4,19 +4,16 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border border-transparent px-2 py-0.5 font-medium text-[11px] transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 [&>svg]:pointer-events-none [&>svg]:size-3",
+  "inline-flex w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-transparent px-2 py-0.5 font-medium text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       variant: {
         default: "bg-muted text-muted-foreground",
-        success:
-          "bg-[color:var(--c-success-soft)] text-[color:var(--c-success)]",
-        warning:
-          "bg-[color:var(--c-warning-soft)] text-[color:var(--c-warning)]",
-        error: "bg-[color:var(--c-error-soft)] text-[color:var(--c-error)]",
-        info: "bg-[color:var(--c-info-soft)] text-[color:var(--c-info)]",
-        modified:
-          "bg-[color:var(--c-accent-soft)] text-[color:var(--c-accent)]",
+        success: "bg-success-soft text-success",
+        warning: "bg-warning-soft text-warning",
+        error: "bg-destructive-soft text-destructive",
+        info: "bg-primary-soft text-primary",
+        modified: "bg-primary-soft text-primary",
         outline: "border-border bg-card text-foreground",
       },
     },
