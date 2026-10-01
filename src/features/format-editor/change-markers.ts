@@ -13,6 +13,14 @@ export interface FormatChangeMarkers {
   examples: ChangeMarker[];
 }
 
+function reorderedExamplePositions(positions: ExamplePositions): Set<number> {
+  const retained = positions.filter((position) => position !== null);
+  const sorted = retained.toSorted((left, right) => left - right);
+  return new Set(
+    retained.filter((position, index) => position !== sorted[index])
+  );
+}
+
 export function getFormatChangeMarkers(
   content: string,
   headContent: string | null,
@@ -35,6 +43,8 @@ export function getFormatChangeMarkers(
         );
   const marker = (local: boolean, published: boolean): ChangeMarker =>
     local ? "local" : published ? "source" : null;
+  const localReordered = reorderedExamplePositions(currentPositions);
+  const sourceReordered = reorderedExamplePositions(sourcePositions);
   return {
     regex: marker(
       !head || current.regex !== head.regex,
@@ -50,10 +60,13 @@ export function getFormatChangeMarkers(
       const headIndex = (currentPositions[index] ?? 0) - 1;
       const sourceIndex = (sourcePositions[headIndex] ?? 0) - 1;
       return marker(
-        !head || text !== head.examples[headIndex],
+        !head ||
+          text !== head.examples[headIndex] ||
+          localReordered.has(headIndex + 1),
         sourceContent !== undefined &&
           (!source ||
-            head?.examples[headIndex] !== source.examples[sourceIndex])
+            head?.examples[headIndex] !== source.examples[sourceIndex] ||
+            sourceReordered.has(sourceIndex + 1))
       );
     }),
   };

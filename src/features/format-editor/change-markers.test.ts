@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { serializeFormat } from "@/domain/format";
+import {
+  initialExamplePositions,
+  reconcileExamplePositions,
+  serializeFormat,
+} from "@/domain/format";
 import { getFormatChangeMarkers } from "./change-markers";
 
 const format = (
@@ -57,6 +61,42 @@ describe("format change markers", () => {
       getFormatChangeMarkers(duplicates, base, base, [1, null, 2]).examples
     ).toEqual([null, "local", null]);
   });
+
+  it.each([
+    { examples: ["Beta", "Alpha", "Gamma"], changed: [true, true, false] },
+    {
+      examples: ["Beta", "Alpha", "New", "Gamma"],
+      changed: [true, true, true, false],
+    },
+    { examples: ["Gamma", "Alpha"], changed: [true, true] },
+    { examples: ["Beta", "Gamma"], changed: [false, false] },
+    {
+      examples: ["Alpha", "New", "Beta", "Gamma"],
+      changed: [false, true, false, false],
+    },
+  ])(
+    "tracks relative example order independently of other field edits: $examples",
+    ({ examples, changed }) => {
+      const original = format(["Alpha", "Beta", "Gamma"]);
+      const edited = format([...examples], "^(.+)$", ["account"]);
+      const positions = reconcileExamplePositions(
+        original,
+        edited,
+        initialExamplePositions(original)
+      );
+      expect(
+        getFormatChangeMarkers(edited, original, undefined, positions).examples
+      ).toEqual(changed.map((value) => (value ? "local" : null)));
+      expect(
+        getFormatChangeMarkers(
+          edited,
+          edited,
+          original,
+          initialExamplePositions(edited)
+        ).examples
+      ).toEqual(changed.map((value) => (value ? "source" : null)));
+    }
+  );
 
   it("compares literal example text and column order", () => {
     const head = format(["A\nB", "B"], "^(.*)$", ["comment", "account"]);
