@@ -559,6 +559,13 @@ export function PullRequestBankWorkspace() {
             isCheckingPullRequestApproval={isCheckingPullRequestApproval}
             isPublishing={isPublishingQuickUpdate}
             isPullRequestApproved={isPullRequestApproved}
+            normalization={{
+              filePaths: inventory.liveFormatPaths,
+              repository,
+              headSha: sourceHeadSha ?? undefined,
+              readOnly:
+                workspaceReadOnly || routeInitState.block === "sync-pending",
+            }}
             onApprovePullRequest={() => {
               void handleApprovePullRequest();
             }}

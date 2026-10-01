@@ -95,6 +95,8 @@
     "openBankFolderInRepo": "Открыть папку банка в GitHub"
   },
   "editor": {
+    "normalizeExample": "Нормализовать СМС",
+    "normalizeAllExamples": "Нормализовать все примеры СМС",
     "localChange": "Локальные изменения",
     "sourceChange": "Изменено в PR",
     "changeComparisonFailed": "Не удалось загрузить базу сравнения изменений PR",
