@@ -44,6 +44,7 @@ interface Props {
   activeExampleIndex: number;
   onActiveExampleChange: (i: number) => void;
   onExampleChange: (index: number, value: string) => void;
+  onNormalizeExample: (index: number) => void;
   onAddExample: () => void;
   onRemoveExample: (index: number) => void;
   columns: string[];
@@ -116,6 +117,7 @@ export function RegexLab({
   activeExampleIndex,
   onActiveExampleChange,
   onExampleChange,
+  onNormalizeExample,
   onAddExample,
   onRemoveExample,
   columns,
@@ -613,6 +615,18 @@ export function RegexLab({
                   variant="ghost"
                 >
                   {t("quickCheck.openTemplateBySms")}
+                </Button>
+                <Button
+                  disabled={
+                    isExampleInputReadOnly ||
+                    activeExample === activeExample.normalize("NFC")
+                  }
+                  onClick={() => onNormalizeExample(activeExampleIndex)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  {t("editor.normalizeExample")}
                 </Button>
                 <Button asChild size="sm" variant="ghost">
                   <a
