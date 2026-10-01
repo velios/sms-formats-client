@@ -155,6 +155,7 @@
     "deleted": "Deleted",
     "deleteFormatConfirmModified": "This format has local edits. Deleting it will discard those edits. Continue?",
     "structuredUnavailable": "Fix section markers in the source text to open the structured editor.",
+    "reservedSmsDelimiter": "SMS was not imported: a standalone -----EXAMPLE----- line is reserved as the upstream Example delimiter.",
     "invalidSmsPayload": "Invalid SMS payload",
     "invalidExampleNumber": "Invalid Example number",
     "exampleMissing": "Example #{{number}} is missing",

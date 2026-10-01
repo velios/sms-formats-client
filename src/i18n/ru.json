@@ -153,6 +153,7 @@
     "convertTemplateRough": "Преобразовать из Template (базово)",
     "convertTemplateAccurate": "Преобразовать из Template (точно)",
     "structuredUnavailable": "Исправьте маркеры секций в исходном тексте, чтобы открыть структурированный редактор.",
+    "reservedSmsDelimiter": "SMS не импортирован: отдельная строка -----EXAMPLE----- зарезервирована как разделитель примеров в формате upstream.",
     "invalidSmsPayload": "Некорректный SMS в ссылке",
     "invalidExampleNumber": "Некорректный номер Example",
     "exampleMissing": "Example №{{number}} отсутствует",

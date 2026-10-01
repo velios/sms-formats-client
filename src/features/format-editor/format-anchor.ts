@@ -48,6 +48,10 @@ export function resolveFormatAnchor(
     const sms = decodeSmsPayload(hash.get("add-sms") ?? "");
     if (sms === null) {
       notices.push({ key: "editor.invalidSmsPayload" });
+    } else if (
+      sms.split("\n").some((line) => line.trim() === "-----EXAMPLE-----")
+    ) {
+      notices.push({ key: "editor.reservedSmsDelimiter" });
     } else {
       const index = examples.indexOf(sms);
       if (index >= 0) {

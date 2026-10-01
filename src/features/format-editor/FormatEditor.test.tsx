@@ -45,7 +45,7 @@ mock.module("@/features/regex-lab/RegexLab", () => ({
   },
 }));
 
-const { serializeFormat } = await import("@/domain/format");
+const { encodeSmsPayload, serializeFormat } = await import("@/domain/format");
 const { useDraftStore, useSourceStore, waitForDraftStoreHydration } =
   await import("@/store");
 const { FormatEditor } = await import("./FormatEditor");
@@ -531,4 +531,44 @@ it("selects the imported Example on the first StrictMode mount without duplicati
   );
   expect(fixture.props?.examples).toEqual(["A", "B", "C", "NEW"]);
   expect(fixture.props).toMatchObject({ activeExampleIndex: 3 });
+});
+
+it("rejects reserved SMS lines without changing restored document, positions or history", () => {
+  fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B"]);
+  useDraftStore.getState().discardAll();
+  useDraftStore.getState().activateScope("reserved-import-test", false);
+  useDraftStore
+    .getState()
+    .applyUserEdit(
+      path,
+      serializeFormat("^(.*)$", ["comment"], ["A", "local", "edited B"]),
+      "head",
+      fixture.content,
+      [1, null, 2]
+    );
+  const before = useDraftStore.getState().getDraft(path);
+  const sms = "hello\r\n \t-----EXAMPLE----- \t\r\nworld";
+  const navigation = {
+    key: "first",
+    hash: `#add-sms=${encodeSmsPayload(sms)}&show-example=2`,
+    select: mock(),
+  };
+  const view = render(
+    <FormatEditor filePath={path} mode="structured" navigation={navigation} />
+  );
+  expect(screen.getByText("editor.reservedSmsDelimiter")).toBeInTheDocument();
+  expect(fixture.props).toMatchObject({ activeExampleIndex: 2 });
+  expect(useDraftStore.getState().getDraft(path)).toBe(before);
+  view.unmount();
+  render(
+    <FormatEditor
+      filePath={path}
+      mode="structured"
+      navigation={{ ...navigation, key: "reopened" }}
+    />
+  );
+  expect(fixture.props?.examples).toEqual(["A", "local", "edited B"]);
+  expect(useDraftStore.getState().getDraft(path)).toBe(before);
+  act(() => fixture.props?.onUndo());
+  expect(fixture.props?.examples).toEqual(["A", "B"]);
 });
