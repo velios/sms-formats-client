@@ -1,3 +1,4 @@
+import { normalizeSmsText } from "./regex";
 import { prepareBrowserRegex } from "./regex-compiler";
 
 const REGEX101_BASE_URL = "https://regex101.com/";
@@ -14,7 +15,7 @@ export function buildRegex101Url(
   const { source, flags } = prepareBrowserRegex(regex);
   const params = new URLSearchParams({
     regex: source,
-    testString,
+    testString: normalizeSmsText(testString),
     flavor: "javascript",
   });
 

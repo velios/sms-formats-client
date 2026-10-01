@@ -2,6 +2,20 @@ import { describe, expect, it } from "bun:test";
 import { calculateFormatIntersectionStats } from "./intersections";
 
 describe("calculateFormatIntersectionStats", () => {
+  it("matches NFC for own examples and intersections but reports the original text", () => {
+    const example = "lu\u0301c";
+    const formats = [
+      { filePath: "a.txt", regex: "^lúc$", examples: [example] },
+      { filePath: "b.txt", regex: "^lúc$", examples: [example] },
+    ];
+    const stats = calculateFormatIntersectionStats(formats);
+    expect(stats.get("a.txt")).toMatchObject({
+      ownMatchedExamples: 1,
+      intersectingExamples: [{ filePath: "b.txt", example }],
+      ownUnmatchedExamples: [],
+    });
+    expect(formats[0]?.examples).toEqual([example]);
+  });
   it("counts own examples and intersections with other formats", () => {
     const stats = calculateFormatIntersectionStats([
       {

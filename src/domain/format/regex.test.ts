@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { parseFormatFile, serializeFormat } from "./parser";
 import { analyzeRegexPattern } from "./pattern-analysis";
 import {
   countCaptureGroups,
@@ -8,6 +9,12 @@ import {
 } from "./regex";
 
 describe("normalizeSmsText", () => {
+  it("normalizes canonically equivalent Unicode without compatibility folding", () => {
+    expect(
+      normalizeSmsText("\n е\u0308 lu\u0301c \u1100\u1161 \u212b \r")
+    ).toBe("ё lúc 가 Å");
+    expect(normalizeSmsText("１２３ ﬁ")).toBe("１２３ ﬁ");
+  });
   it("collapses a single newline run to one space", () => {
     expect(normalizeSmsText("a\nb")).toBe("a b");
   });
@@ -34,6 +41,57 @@ describe("normalizeSmsText", () => {
 });
 
 describe("testRegex", () => {
+  it("matches NFC while preserving the serialized example and original group bounds", () => {
+    const original = " \nе\u0308\r\nlu\u0301c 10 ";
+    const regex = "^(ё) (lúc) (10)$";
+    const raw = serializeFormat(regex, [], [original]);
+    const parsed = parseFormatFile(raw);
+    const result = testRegex(parsed.regex, parsed.examples[0]!);
+    expect(result.matched).toBe(true);
+    expect(result.fullMatch).toBe("ё lúc 10");
+    expect(result.groups.map((g) => g.value)).toEqual(["ё", "lúc", "10"]);
+    expect(result.groups.map((g) => original.slice(g.start, g.end))).toEqual([
+      "е\u0308",
+      "lu\u0301c",
+      "10",
+    ]);
+    expect(original.slice(result.matchStart!, result.matchEnd!)).toBe(
+      "е\u0308\r\nlu\u0301c 10"
+    );
+    expect(serializeFormat(parsed.regex, parsed.columns, parsed.examples)).toBe(
+      raw
+    );
+    expect(testRegex("^е\u0308$", "е\u0308").matched).toBe(false);
+  });
+
+  it("maps Hangul, reordered marks, NFC expansion and astral characters", () => {
+    for (const original of [
+      "\u1100\u1161",
+      "a\u0315\u0300",
+      "\u0344",
+      "😀e\u0301",
+    ]) {
+      const result = testRegex(
+        `^(${original.normalize("NFC")})(X)$`,
+        `${original}X`
+      );
+      expect(result.matched).toBe(true);
+      expect(result.groups[0]).toMatchObject({
+        start: 0,
+        end: original.length,
+      });
+      expect(result.groups[1]).toMatchObject({
+        start: original.length,
+        end: original.length + 1,
+      });
+    }
+    const partial = testRegex("^(ä)(.*)$", "a\u0308\u0301");
+    expect(partial.groups[0]).toMatchObject({ start: 0, end: 3 });
+    expect(partial.groups[1]).toMatchObject({ start: 0, end: 3 });
+    const empty = testRegex("(?<=ä)()", "a\u0308\u0301");
+    expect(empty.matchEnd).toBe(empty.matchStart);
+    expect(empty.groups[0]!.end).toBe(empty.groups[0]!.start);
+  });
   it("returns matched result for matching pattern", () => {
     const result = testRegex("^(\\d+) руб\\. (.+)$", "1000 руб. Магазин");
     expect(result.matched).toBe(true);
@@ -132,6 +190,16 @@ describe("testRegex", () => {
 });
 
 describe("recognitionProgress", () => {
+  it("maps an NFC prefix onto the unchanged example", () => {
+    const original = " \nе\u0308 10 tail";
+    const progress = recognitionProgress("^(ё) (10) missing$", original)!;
+    expect(original.slice(progress.prefixStart, progress.prefixEnd)).toBe(
+      "е\u0308 10"
+    );
+    expect(progress.groups[0]).toMatchObject({ value: "ё", start: 2, end: 4 });
+    expect(progress.groups[1]).toMatchObject({ value: "10", start: 5, end: 7 });
+    expect(progress.textExhausted).toBe(false);
+  });
   it("returns null for an empty pattern", () => {
     expect(recognitionProgress("", "anything")).toBeNull();
   });

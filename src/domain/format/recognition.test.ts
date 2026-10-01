@@ -8,6 +8,19 @@ import {
 } from "./recognition";
 
 describe("recognizeSms", () => {
+  it("uses NFC consistently across all recognition entry points without changing inputs", () => {
+    const regex = "^lúc$";
+    const original = "lu\u0301c";
+    const examples = [original, "lúc"];
+    expect(recognizeSms(regex, original).matched).toBe(true);
+    expect(regexesBySms([regex], original)[0]?.matched).toBe(true);
+    expect(
+      recognizeWithCompiled(compileRegexes([regex]), original)[0]?.matched
+    ).toBe(true);
+    expect(smsesByRegex(examples, regex).matched).toEqual([true, true]);
+    expect(examples).toEqual(["lu\u0301c", "lúc"]);
+    expect(recognizeSms("^lu\u0301c$", original).matched).toBe(false);
+  });
   it("matches a regex against an SMS", () => {
     expect(recognizeSms("^PAY (\\d+)$", "PAY 100")).toEqual({
       matched: true,

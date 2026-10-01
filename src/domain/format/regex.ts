@@ -16,12 +16,46 @@ type ExecMatchWithIndices = RegExpExecArray & {
 };
 
 export function normalizeSmsText(text: string): string {
-  return text.replace(/[\n\r]+/g, " ").trim();
+  return text
+    .replace(/[\n\r]+/g, " ")
+    .trim()
+    .normalize("NFC");
 }
 
 interface NormalizedTextMapping {
   normalized: string;
-  toOriginal: (offset: number) => number;
+  toOriginal: (offset: number, edge?: "start" | "end") => number;
+}
+
+function buildNfcMapping(text: string): NormalizedTextMapping {
+  const normalized = text.normalize("NFC");
+  if (normalized === text) {
+    return { normalized, toOriginal: (offset) => offset };
+  }
+
+  const starts: number[] = [0];
+  const ends: number[] = [0];
+  let offset = 0;
+  for (const { segment, index } of new Intl.Segmenter(undefined, {
+    granularity: "grapheme",
+  }).segment(text)) {
+    const nfc = segment.normalize("NFC");
+    for (let i = 1; i <= nfc.length; i++) {
+      const boundary = i === nfc.length;
+      // Changed clusters are indivisible in the original display, including reordered marks.
+      starts[offset + i] =
+        segment === nfc || boundary
+          ? index + (boundary ? segment.length : i)
+          : index;
+      ends[offset + i] = segment === nfc ? index + i : index + segment.length;
+    }
+    offset += nfc.length;
+  }
+  return {
+    normalized,
+    toOriginal: (position, edge = "start") =>
+      (edge === "end" ? ends : starts)[position]!,
+  };
 }
 
 // Keep normalized offsets mapped to the original SMS.
@@ -53,13 +87,16 @@ function buildNormalizedTextMapping(text: string): NormalizedTextMapping {
     trimStart,
     collapsed.length - (trailingMatch ? trailingMatch[0].length : 0)
   );
-  const normalized = collapsed.slice(trimStart, trimEnd);
+  const nfcMapping = buildNfcMapping(collapsed.slice(trimStart, trimEnd));
+  const normalized = nfcMapping.normalized;
 
   return {
     normalized,
-    toOriginal: (offset: number) => {
+    toOriginal: (offset: number, edge = "start") => {
       const clamped = Math.max(0, Math.min(offset, normalized.length));
-      return collapsedToOriginal[trimStart + clamped]!;
+      return collapsedToOriginal[
+        trimStart + nfcMapping.toOriginal(clamped, edge)
+      ]!;
     },
   };
 }
@@ -163,12 +200,15 @@ export function testRegex(pattern: string, testStr: string): RegexMatchResult {
     matched: true,
     fullMatch,
     matchStart: mapping.toOriginal(normMatchStart),
-    matchEnd: mapping.toOriginal(normMatchEnd),
+    matchEnd: mapping.toOriginal(normMatchEnd, fullMatch ? "end" : "start"),
     groups: normGroups.map((group) => ({
       index: group.index,
       value: group.value,
       start: mapping.toOriginal(group.start),
-      end: mapping.toOriginal(group.end),
+      end: mapping.toOriginal(
+        group.end,
+        group.start === group.end ? "start" : "end"
+      ),
     })),
     error: null,
   };
@@ -262,13 +302,16 @@ export function recognitionProgress(
 
   return {
     prefixStart: mapping.toOriginal(best.start),
-    prefixEnd: mapping.toOriginal(best.end),
+    prefixEnd: mapping.toOriginal(best.end, "end"),
     prefixPatternEnd: best.patternEnd,
     groups: normGroups.map((group) => ({
       index: group.index,
       value: group.value,
       start: mapping.toOriginal(group.start),
-      end: mapping.toOriginal(group.end),
+      end: mapping.toOriginal(
+        group.end,
+        group.start === group.end ? "start" : "end"
+      ),
     })),
     textExhausted: best.end === normalized.length,
   };
