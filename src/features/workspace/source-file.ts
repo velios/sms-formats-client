@@ -48,9 +48,7 @@ export async function resolveSourceHead(
     Date.now() - stored.checkedAt < SOURCE_HEAD_TTL;
   const head = useStored
     ? stored
-    : await fetchSourceHead(request.source, request.repository, {
-        forceFresh: true,
-      });
+    : await fetchSourceHead(request.source, request.repository);
   if (
     !useStored &&
     authVersion === getGitHubAuthChangeVersion() &&

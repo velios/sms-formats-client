@@ -310,15 +310,8 @@ export class SourceExperimentController {
       const tree = this.fullBank
         ? await fetchRepoTree(head.sourceRef.sha, this.repository)
         : [];
-      let selected: string | null;
-      let content: string | null;
-      do {
-        selected = this.selectedFile;
-        content = selected ? await this.content(head, selected) : null;
-        if (!this.current(generation, auth)) {
-          return;
-        }
-      } while (selected !== this.selectedFile);
+      const selected = this.selectedFile;
+      const content = selected ? await this.content(head, selected) : null;
       if (!this.current(generation, auth)) {
         return;
       }

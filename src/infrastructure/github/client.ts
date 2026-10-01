@@ -984,8 +984,7 @@ async function sourceRequest<T>(request: () => Promise<T>): Promise<T> {
 
 export async function fetchSourceHead(
   source: SourceTarget,
-  repository: RepoRef,
-  options?: { forceFresh?: boolean }
+  repository: RepoRef
 ): Promise<CheckedSourceHead> {
   if (source.type === "main") {
     const response = await sourceRequest(() =>
@@ -993,7 +992,7 @@ export async function fetchSourceHead(
         owner: repository.owner,
         repo: repository.repo,
         branch: "main",
-        ...cacheBustParam(options?.forceFresh),
+        ...cacheBustParam(true),
       })
     );
     return {
@@ -1006,7 +1005,7 @@ export async function fetchSourceHead(
       owner: repository.owner,
       repo: repository.repo,
       pull_number: source.prNumber,
-      ...cacheBustParam(options?.forceFresh),
+      ...cacheBustParam(true),
     })
   );
   return {
