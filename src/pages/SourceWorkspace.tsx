@@ -18,6 +18,7 @@ import {
   decodeRequestedFileValue,
 } from "@/features/workspace/file-selection";
 import { SourceExperimentController } from "@/features/workspace/source-experiment";
+import { watchWorkspaceVisibility } from "@/features/workspace/workspace-visibility";
 import {
   type WorkspaceEditorMode,
   WorkspaceHeaderBar,
@@ -63,7 +64,14 @@ export function SourceWorkspace() {
   const drafts = useDraftStore((store) => store.drafts);
   useEffect(() => {
     void controller.open(requested);
-    return () => controller.deactivate();
+    const stopWatching =
+      controller.source.type === "pr"
+        ? watchWorkspaceVisibility(controller.checkFreshness)
+        : () => undefined;
+    return () => {
+      stopWatching();
+      controller.deactivate();
+    };
   }, [controller]);
   useEffect(() => {
     if (requested) {
@@ -134,6 +142,15 @@ export function SourceWorkspace() {
         sendersPath={`${bankPath}/senders.txt`}
         showSenders={showSenders}
       />
+      {state.freshness && (
+        <div className="ui-notice" data-tone="warning">
+          {t(
+            state.freshness === "stale"
+              ? "workspace.cachedStaleNotice"
+              : `workspace.unavailable.${state.freshness}`
+          )}
+        </div>
+      )}
       {state.error && (
         <div className="flex shrink-0 items-center gap-2">
           <StatusBadge variant="error">

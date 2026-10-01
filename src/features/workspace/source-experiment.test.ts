@@ -36,7 +36,13 @@ const content = mock(
   async ({ commitSha, filePath }: { commitSha: string; filePath: string }) =>
     `${commitSha}:${filePath}`
 );
+const freshness = mock(async () => ({
+  headSha: "A",
+  closed: false,
+  merged: false,
+}));
 mock.module("@/infrastructure/github", () => ({
+  fetchPullRequestFreshness: freshness,
   fetchRepoTree: tree,
   getGitHubAuthChangeVersion: () => auth,
 }));
@@ -67,6 +73,9 @@ beforeEach(async () => {
     draftScopeKey: null,
   });
   useSourceStore.setState({ repository, sourceRef: null, tree: [], banks: [] });
+  freshness
+    .mockReset()
+    .mockResolvedValue({ headSha: "A", closed: false, merged: false });
   head.mockClear();
   tree.mockClear();
   content
@@ -275,4 +284,91 @@ it("cancels pending refresh when navigation changes file and preserves confirmed
   expect(useSourceStore.getState().sourceRef?.sha).toBe("A");
   expect(useDraftStore.getState().getDraft(a)?.content).toBe(`edited:${a}`);
   expect(useDraftStore.getState().getDraft(b)?.content).toBe(`edited:${b}`);
+});
+
+it.each([false, true])(
+  "PR experiment probe preserves working state with edits=%s",
+  async (edited) => {
+    const controller = new SourceExperimentController(
+      repository,
+      { type: "pr", prNumber: 46 },
+      false
+    );
+    await controller.open(a);
+    if (edited) {
+      edit();
+    }
+    const source = useSourceStore.getState();
+    const drafts = useDraftStore.getState();
+    const working = controller.getSnapshot();
+    freshness.mockResolvedValue({ headSha: "B", closed: false, merged: false });
+    await controller.checkFreshness();
+    expect(controller.getSnapshot()).toEqual({
+      ...working,
+      freshness: "stale",
+    });
+    expect(useSourceStore.getState()).toBe(source);
+    expect(useDraftStore.getState()).toBe(drafts);
+    expect(head).toHaveBeenCalledTimes(1);
+    expect(content).toHaveBeenCalledTimes(1);
+    expect(tree).not.toHaveBeenCalled();
+    controller.deactivate();
+  }
+);
+
+it("late PR probe does not finish an in-flight file selection", async () => {
+  const controller = new SourceExperimentController(
+    repository,
+    { type: "pr", prNumber: 46 },
+    false
+  );
+  await controller.open(a);
+  const probe = deferred<{
+    headSha: string;
+    closed: boolean;
+    merged: boolean;
+  }>();
+  freshness.mockReturnValue(probe.promise);
+  const checking = controller.checkFreshness();
+  const body = deferred<string>();
+  content.mockReturnValue(body.promise);
+  const selecting = controller.select(b);
+  probe.resolve({ headSha: "A", closed: false, merged: false });
+  await checking;
+  expect(controller.getSnapshot().operation).toBe("selecting");
+  body.resolve("selected");
+  await selecting;
+  expect(controller.getSnapshot()).toMatchObject({
+    filePath: b,
+    operation: null,
+  });
+  controller.deactivate();
+});
+
+it("clears an experiment notice when PR matches again", async () => {
+  const controller = new SourceExperimentController(
+    repository,
+    { type: "pr", prNumber: 46 },
+    false
+  );
+  await controller.open(a);
+  const originalNow = Date.now;
+  let now = originalNow();
+  Date.now = () => now;
+  try {
+    freshness.mockResolvedValue({ headSha: "A", closed: true, merged: false });
+    await controller.checkFreshness();
+    expect(controller.getSnapshot().freshness).toBe("closed");
+    now += 60_000;
+    freshness.mockRejectedValue(new Error("offline"));
+    await controller.checkFreshness();
+    expect(controller.getSnapshot().freshness).toBe("closed");
+    now += 60_000;
+    freshness.mockResolvedValue({ headSha: "A", closed: false, merged: false });
+    await controller.checkFreshness();
+    expect(controller.getSnapshot().freshness).toBeNull();
+  } finally {
+    Date.now = originalNow;
+    controller.deactivate();
+  }
 });

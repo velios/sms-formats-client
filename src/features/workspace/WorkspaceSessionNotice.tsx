@@ -26,7 +26,11 @@ export function WorkspaceSessionNotice({
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
       <div className="flex flex-col gap-2">
-        {notice && <StatusBadge variant="warning">{notice}</StatusBadge>}
+        {notice && (
+          <div className="ui-notice" data-tone="warning">
+            {notice}
+          </div>
+        )}
         {state.error && (
           <StatusBadge variant="error">
             {t("app.error")}:{" "}
@@ -37,7 +41,8 @@ export function WorkspaceSessionNotice({
         )}
       </div>
       <div className="flex gap-2">
-        {state.block === "stale" && state.nextSession && (
+        {(state.block === "stale" ||
+          (!state.block && state.freshness === "stale")) && (
           <Button
             disabled={busy}
             onClick={() => {
@@ -78,13 +83,17 @@ function noticeText(
   state: WorkspaceState,
   t: (key: string) => string
 ): string | null {
-  return state.block === "stale"
-    ? t("workspace.cachedStaleNotice")
-    : state.block === "sync-pending"
-      ? t("publish.updatedRefreshFailed")
-      : state.block
-        ? t(`workspace.unavailable.${state.block}`)
-        : !state.experiment && state.session?.writable === false
-          ? t("publish.readOnly")
-          : null;
+  const status = state.block ?? state.freshness;
+  if (status === "stale") {
+    return t("workspace.cachedStaleNotice");
+  }
+  if (status === "sync-pending") {
+    return t("publish.updatedRefreshFailed");
+  }
+  if (status) {
+    return t(`workspace.unavailable.${status}`);
+  }
+  return !state.experiment && state.session?.writable === false
+    ? t("publish.readOnly")
+    : null;
 }

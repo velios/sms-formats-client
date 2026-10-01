@@ -8,6 +8,7 @@ export {
   fetchFileContent,
   fetchOpenPRs,
   fetchPullRequestApprovalByCurrentUser,
+  fetchPullRequestFreshness,
   fetchPullRequestMetadata,
   fetchRepoTree,
   fetchSourceHead,

@@ -7,6 +7,7 @@ import type {
 } from "@/domain/types";
 import { loadFileContent } from "@/infrastructure/file-content";
 import {
+  fetchPullRequestFreshness,
   fetchRepoTree,
   getGitHubAuthChangeVersion,
 } from "@/infrastructure/github";
@@ -19,6 +20,7 @@ import { experimentScope } from "@/store/draft-scope";
 import { resolveSourceHead } from "./source-file";
 
 export interface ExperimentState {
+  freshness?: "stale" | "closed" | "merged" | null;
   head: CheckedSourceHead | null;
   nextHead: CheckedSourceHead | null;
   tree: FileEntry[];
@@ -30,6 +32,8 @@ export interface ExperimentState {
 
 export class SourceExperimentController {
   private generation = 0;
+  private lastFreshnessCheck = Number.NEGATIVE_INFINITY;
+  private freshnessInFlight = false;
   private fileGeneration = 0;
   private readonly listeners = new Set<() => void>();
   private state: ExperimentState = {
@@ -104,7 +108,12 @@ export class SourceExperimentController {
     const generation = ++this.generation;
     const auth = getGitHubAuthChangeVersion();
     this.fileGeneration += 1;
-    this.update({ operation: "opening", filePath, error: null });
+    this.update({
+      operation: "opening",
+      filePath,
+      error: null,
+      freshness: null,
+    });
     try {
       await waitForDraftStoreHydration();
       if (!this.current(generation, auth)) {
@@ -256,8 +265,54 @@ export class SourceExperimentController {
       }
     }
   };
+  checkFreshness = async (): Promise<void> => {
+    if (
+      this.source.type !== "pr" ||
+      !this.state.head ||
+      this.state.operation ||
+      this.freshnessInFlight ||
+      Date.now() - this.lastFreshnessCheck < 60_000
+    ) {
+      return;
+    }
+    const generation = this.generation;
+    const auth = getGitHubAuthChangeVersion();
+    this.lastFreshnessCheck = Date.now();
+    this.freshnessInFlight = true;
+    this.update({ operation: "checking" });
+    try {
+      const latest = await fetchPullRequestFreshness(
+        this.source.prNumber,
+        this.repository
+      );
+      if (!this.current(generation, auth)) {
+        return;
+      }
+      const prState = latest.merged
+        ? "merged"
+        : latest.closed
+          ? "closed"
+          : "open";
+      const changed =
+        latest.headSha !== this.state.head?.sourceRef.sha ||
+        prState !== (this.state.head?.prState ?? "open");
+      this.update({
+        freshness: changed ? (prState === "open" ? "stale" : prState) : null,
+      });
+    } catch {
+      // A failed probe must not change the working data or their freshness.
+    } finally {
+      this.freshnessInFlight = false;
+      if (
+        this.current(generation, auth) &&
+        this.state.operation === "checking"
+      ) {
+        this.update({ operation: null });
+      }
+    }
+  };
   checkUpdates = async (): Promise<void> => {
-    if (this.state.operation) {
+    if (this.state.operation || this.freshnessInFlight) {
       return;
     }
     const generation = this.generation;
@@ -292,7 +347,7 @@ export class SourceExperimentController {
     }
   };
   refresh = async (): Promise<void> => {
-    if (this.state.operation) {
+    if (this.state.operation || this.freshnessInFlight) {
       return;
     }
     const generation = ++this.generation;
@@ -331,6 +386,7 @@ export class SourceExperimentController {
       this.applySource(head, tree);
       this.update({
         head,
+        freshness: null,
         nextHead: null,
         tree,
         filePath: selected,

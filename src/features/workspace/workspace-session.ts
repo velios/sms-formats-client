@@ -3,6 +3,7 @@ import type { PullRequestWorkspaceResolution } from "@/domain/pull-request-works
 import type { FileEntry, RepoRef } from "@/domain/types";
 import { loadFileContent } from "@/infrastructure/file-content";
 import {
+  fetchPullRequestFreshness,
   fetchRepoTree,
   resolvePullRequestWorkspace,
 } from "@/infrastructure/github";
@@ -30,6 +31,7 @@ export type WorkspaceBlock =
     >["reason"];
 
 export interface WorkspaceState {
+  freshness?: "stale" | "closed" | "merged" | null;
   session: WorkspaceSession | null;
   experiment?: boolean;
   nextSession: WorkspaceSession | null;
@@ -87,6 +89,7 @@ function revisionChanges(
 
 export class WorkspaceSessionController {
   private generation = 0;
+  private lastFreshnessCheck = Number.NEGATIVE_INFINITY;
   private unsubscribeDraftStore?: () => void;
   private readonly listeners = new Set<() => void>();
   private selectedFile: string | null = null;
@@ -278,6 +281,7 @@ export class WorkspaceSessionController {
     this.update({
       session,
       nextSession: null,
+      freshness: null,
       block: pendingPublishedHeadSha ? "sync-pending" : null,
       error: null,
     });
@@ -311,7 +315,13 @@ export class WorkspaceSessionController {
         readOnlyReason: resolution.readOnlyReason,
       };
       saveWorkspaceSession({ session });
-      this.update({ session, block: null, nextSession: null, error: null });
+      this.update({
+        session,
+        block: null,
+        nextSession: null,
+        freshness: null,
+        error: null,
+      });
     }
   }
 
@@ -442,10 +452,50 @@ export class WorkspaceSessionController {
     }
   }
 
+  checkFreshness = async (): Promise<void> => {
+    if (
+      !this.state.session ||
+      this.state.operation ||
+      this.state.block ||
+      Date.now() - this.lastFreshnessCheck < 60_000
+    ) {
+      return;
+    }
+    const generation = this.generation;
+    this.lastFreshnessCheck = Date.now();
+    this.update({ operation: "checking" });
+    try {
+      const latest = await fetchPullRequestFreshness(
+        this.prNumber,
+        this.repository
+      );
+      if (!this.isCurrent(generation)) {
+        return;
+      }
+      this.update({
+        freshness: latest.merged
+          ? "merged"
+          : latest.closed
+            ? "closed"
+            : latest.headSha !== this.state.session?.headSha
+              ? "stale"
+              : null,
+      });
+    } catch {
+      // A failed probe says nothing about freshness; keep the working revision.
+    } finally {
+      if (this.isCurrent(generation)) {
+        this.update({ operation: null });
+      }
+    }
+  };
+
   checkUpdates = (): Promise<void> => this.refresh(false);
 
   discardAndRefresh = (): Promise<void> =>
-    this.state.block === "stale" ? this.refresh(true) : Promise.resolve();
+    this.state.block === "stale" || this.state.freshness === "stale"
+      ? this.refresh(true)
+      : Promise.resolve();
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Lifecycle commands preserve publication receipts and draft scopes across permission changes.
   private async refresh(discard: boolean): Promise<void> {

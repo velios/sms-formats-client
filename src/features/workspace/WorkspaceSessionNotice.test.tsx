@@ -83,3 +83,16 @@ describe("WorkspaceSessionNotice", () => {
     }
   });
 });
+
+it("shows background freshness as a notice without lifecycle recovery controls", () => {
+  render(
+    <WorkspaceSessionNotice
+      controller={controller}
+      state={{ ...readyState, freshness: "closed" }}
+    />
+  );
+  expect(screen.getByText("workspace.unavailable.closed")).toHaveClass(
+    "ui-notice"
+  );
+  expect(screen.queryByRole("button")).toBeNull();
+});
