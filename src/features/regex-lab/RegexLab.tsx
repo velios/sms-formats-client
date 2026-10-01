@@ -722,13 +722,15 @@ export function RegexLab({
 
           <div className={cn("ui-panel", "flex min-h-0 flex-1 flex-col")}>
             <div className="ui-panel-heading">
-              {t("editor.matchInfo").toUpperCase()}
+              <span>
+                {t("editor.matchInfo").toUpperCase()}
+                <ChangeIndicator marker={changeMarkers?.columns} />
+              </span>
             </div>
             <MatchInfoPanel
               activeCaptureGroup={activeCaptureGroup}
               captureGroups={captureGroups}
               columns={columns}
-              columnsChange={changeMarkers?.columns}
               groupSelectionEnabled={highlightMode === "groups"}
               hasMissingColumnMappings={hasMissingColumnMappings}
               hoveredGroup={hoveredGroup}
