@@ -160,6 +160,7 @@
     "invalidExampleNumber": "Invalid Example number",
     "exampleMissing": "Example #{{number}} is missing",
     "exampleDeleted": "Example #{{number}} was deleted locally",
+    "smsAlreadyExists": "SMS is already in the format; Example #{{number}} selected.",
     "importReadOnly": "Import is unavailable in a protected document"
   },
   "columns": {

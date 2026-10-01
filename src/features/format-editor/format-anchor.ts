@@ -55,7 +55,10 @@ export function resolveFormatAnchor(
     } else {
       const index = examples.indexOf(sms);
       if (index >= 0) {
-        return { index, notices: [] };
+        return {
+          index,
+          notices: [{ key: "editor.smsAlreadyExists", number: index + 1 }],
+        };
       }
       if (!readOnly) {
         return { index: examples.length, notices: [], append: sms };

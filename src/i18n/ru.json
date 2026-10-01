@@ -158,6 +158,7 @@
     "invalidExampleNumber": "Некорректный номер Example",
     "exampleMissing": "Example №{{number}} отсутствует",
     "exampleDeleted": "Example №{{number}} локально удалён",
+    "smsAlreadyExists": "SMS уже есть в формате; выбран Example №{{number}}.",
     "importReadOnly": "Импорт недоступен в защищённом документе"
   },
   "columns": {
