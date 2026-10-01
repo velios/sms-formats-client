@@ -641,6 +641,15 @@ export function PullRequestBankWorkspace() {
               routeInitState.operation !== "opening" &&
               routeInitState.operation !== "discarding" &&
               routeInitState.operation !== "syncing",
+            sourceComparison:
+              activeSession && selectedFile
+                ? {
+                    baseSha: activeSession.baseSha,
+                    status:
+                      inventory.recordsByPath.get(selectedFile)?.source ??
+                      "unchanged",
+                  }
+                : undefined,
             showSenders,
             bankPath,
             readOnly: workspaceReadOnly,

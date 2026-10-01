@@ -13,6 +13,8 @@ import {
   resolveTokenMatchRange,
   testRegex,
 } from "@/domain/format";
+import { ChangeIndicator } from "@/features/format-editor/ChangeIndicator";
+import type { FormatChangeMarkers } from "@/features/format-editor/change-markers";
 import { ResizablePanels } from "@/features/resizable-panels/ResizablePanels";
 import { CookbookModal } from "@/features/snippet-library/CookbookModal";
 import { FormatRulesModal } from "@/features/snippet-library/FormatRulesModal";
@@ -25,6 +27,7 @@ import {
 import { useGroupSelection } from "./use-group-selection";
 
 interface Props {
+  changeMarkers?: FormatChangeMarkers;
   regex: string;
   structuralIssues?: string[];
   readOnly?: boolean;
@@ -100,6 +103,7 @@ function shouldShowGroupPointer(
 }
 
 export function RegexLab({
+  changeMarkers,
   regex,
   structuralIssues = [],
   readOnly = false,
@@ -483,7 +487,10 @@ export function RegexLab({
           <div className={cn("ui-panel", "shrink-0")}>
             <div className="ui-panel-heading">
               <div className="flex items-center gap-3">
-                <span>{t("editor.regex")}</span>
+                <span>
+                  {t("editor.regex")}
+                  <ChangeIndicator marker={changeMarkers?.regex} />
+                </span>
                 <div
                   aria-label={t("editor.highlightModeLabel")}
                   className="ui-segmented"
@@ -653,6 +660,9 @@ export function RegexLab({
                         {exampleMatchStates[i]?.matched ? "✓" : "✗"}
                       </span>
                     )}
+                    {!isShowingIntersectionExamples && (
+                      <ChangeIndicator marker={changeMarkers?.examples[i]} />
+                    )}
                   </button>
                   {isShowingIntersectionExamples &&
                     intersectionExamples[i]?.filePath &&
@@ -718,6 +728,7 @@ export function RegexLab({
               activeCaptureGroup={activeCaptureGroup}
               captureGroups={captureGroups}
               columns={columns}
+              columnsChange={changeMarkers?.columns}
               groupSelectionEnabled={highlightMode === "groups"}
               hasMissingColumnMappings={hasMissingColumnMappings}
               hoveredGroup={hoveredGroup}

@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { RecognitionProgress, RegexMatchResult } from "@/domain/format";
 import { ALLOWED_COLUMNS } from "@/domain/types";
+import { ChangeIndicator } from "@/features/format-editor/ChangeIndicator";
+import type { ChangeMarker } from "@/features/format-editor/change-markers";
 import { cn } from "@/lib/utils";
 
 import {
@@ -344,6 +346,7 @@ function getProgressGroupClass(groupIndex: number): string {
 }
 
 export function MatchInfoPanel({
+  columnsChange,
   result,
   hoveredGroup,
   activeCaptureGroup,
@@ -360,6 +363,7 @@ export function MatchInfoPanel({
   structuralIssues,
   readOnly = false,
 }: {
+  columnsChange?: ChangeMarker;
   result: RegexMatchResult;
   hoveredGroup: number | null;
   activeCaptureGroup: number | null;
@@ -438,7 +442,10 @@ export function MatchInfoPanel({
                     <th className="px-1.5 py-1" />
                     <th className="px-1.5 py-1">#</th>
                     <th className="px-1.5 py-1">{t("regex.captureValue")}</th>
-                    <th className="px-1.5 py-1">{t("editor.columns")}</th>
+                    <th className="px-1.5 py-1">
+                      {t("editor.columns")}
+                      <ChangeIndicator marker={columnsChange} />
+                    </th>
                     <th className="px-1.5 py-1" />
                   </tr>
                 </thead>

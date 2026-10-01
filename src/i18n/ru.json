@@ -95,6 +95,9 @@
     "openBankFolderInRepo": "Открыть папку банка в GitHub"
   },
   "editor": {
+    "localChange": "Локальные изменения",
+    "sourceChange": "Изменено в PR",
+    "changeComparisonFailed": "Не удалось загрузить базу сравнения изменений PR",
     "raw": "Итоговый файл",
     "structured": "Редактор",
     "saveStructured": "Сохранить структуру",

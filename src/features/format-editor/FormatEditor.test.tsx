@@ -12,7 +12,10 @@ const fixture = (() => {
   });
   return {
     content: "",
+    sourceContent: undefined as string | undefined,
+    sourceError: null as string | null,
     props: null as null | {
+      changeMarkers: import("./change-markers").FormatChangeMarkers;
       regex: string;
       columns: string[];
       examples: string[];
@@ -28,10 +31,10 @@ const fixture = (() => {
 })();
 mock.module("idb-keyval", () => ({ get: mock(), set: mock(), del: mock() }));
 mock.module("@/hooks/useWorkspaceFileContent", () => ({
-  useWorkspaceFileContent: () => ({
-    data: fixture.content,
+  useWorkspaceFileContent: (params: { contentRefName?: string }) => ({
+    data: params.contentRefName ? fixture.sourceContent : fixture.content,
     isLoading: false,
-    error: null,
+    error: params.contentRefName ? fixture.sourceError : null,
   }),
 }));
 mock.module("react-i18next", () => ({
@@ -83,7 +86,66 @@ describe("one document across editor views", () => {
     useSourceStore
       .getState()
       .setSource({ type: "pr", name: "pr-1", prNumber: 1, sha: "head" });
+    fixture.sourceContent = undefined;
+    fixture.sourceError = null;
     fixture.content = serializeFormat("^(A)$", ["comment"], ["A"]);
+  });
+  it("updates section markers through edits, undo and main navigation", () => {
+    fixture.sourceContent = serializeFormat("^(.*)$", ["comment"], ["A"]);
+    const comparison = { baseSha: "base", status: "changed" as const };
+    const view = render(
+      <FormatEditor
+        filePath={path}
+        mode="structured"
+        sourceComparison={comparison}
+      />
+    );
+    expect(fixture.props?.changeMarkers).toEqual({
+      regex: "source",
+      columns: null,
+      examples: [null],
+    });
+    act(() => fixture.props?.onExampleChange(0, "edited"));
+    expect(fixture.props?.changeMarkers.examples).toEqual(["local"]);
+    act(() => fixture.props?.onUndo());
+    expect(fixture.props?.changeMarkers.examples).toEqual([null]);
+    act(() => fixture.props?.onRegexChange("^(.+)$"));
+    expect(fixture.props?.changeMarkers.regex).toBe("local");
+    act(() => fixture.props?.onUndo());
+    expect(fixture.props?.changeMarkers.regex).toBe("source");
+    act(() =>
+      useSourceStore
+        .getState()
+        .setSource({ type: "main", name: "main", sha: "head" })
+    );
+    view.rerender(
+      <FormatEditor
+        filePath={path}
+        mode="structured"
+        sourceComparison={comparison}
+      />
+    );
+    expect(fixture.props?.changeMarkers).toEqual({
+      regex: null,
+      columns: null,
+      examples: [null],
+    });
+  });
+  it("keeps unknown PR bases unmarked and reports comparison failures", () => {
+    fixture.sourceError = "network unavailable";
+    render(
+      <FormatEditor
+        filePath={path}
+        mode="structured"
+        sourceComparison={{ baseSha: "base", status: "changed" }}
+      />
+    );
+    expect(fixture.props?.changeMarkers).toEqual({
+      regex: null,
+      columns: null,
+      examples: [null],
+    });
+    expect(screen.getByText(/editor.changeComparisonFailed/)).toBeTruthy();
   });
   it.each([1, 2])(
     "preserves raw original positions with native duplicate insertion at boundary %s",
