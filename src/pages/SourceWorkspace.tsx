@@ -259,27 +259,33 @@ export function SourceWorkspace() {
               )}
               {inventory.unsupportedFiles.map((path) => (
                 <a
-                  className="ui-list-row block text-xs"
+                  className="ui-list-row"
                   href={`https://github.com/${controller.repository.owner}/${controller.repository.repo}/blob/${state.head?.sourceRef.sha}/${path}`}
                   key={path}
                   rel="noreferrer"
                   target="_blank"
+                  title={path.slice(bankPath.length + 1)}
                 >
-                  {path.slice(bankPath.length + 1)}
+                  <span className="truncate font-mono text-xs">
+                    {path.slice(bankPath.length + 1)}
+                  </span>
                 </a>
               ))}
               {inventory.formatFiles.map((path) => (
                 <button
-                  className="ui-list-row w-full text-left text-xs"
+                  className="ui-list-row w-full text-left"
                   disabled={state.operation === "refreshing"}
                   key={path}
                   onClick={() => select(path)}
+                  title={path.split("/").pop()}
                   type="button"
                 >
-                  {path.split("/").pop()}
-                  {inventory.recordsByPath.get(path)?.local === "changed"
-                    ? " *"
-                    : ""}
+                  <span className="truncate font-mono text-xs">
+                    {path.split("/").pop()}
+                  </span>
+                  {inventory.recordsByPath.get(path)?.local === "changed" && (
+                    <span className="shrink-0">*</span>
+                  )}
                 </button>
               ))}
             </div>
