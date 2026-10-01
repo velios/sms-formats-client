@@ -13,10 +13,12 @@ import {
   serializeFormat,
   tryCompile,
 } from "@/domain/format";
+import type { SourceFileStatus } from "@/features/bank-inventory/core";
 import { RegexLab } from "@/features/regex-lab/RegexLab";
 import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
 import { getGitHubAuthChangeVersion } from "@/infrastructure/github";
 import { useDraftStore, useSourceStore } from "@/store";
+import { getFormatChangeMarkers } from "./change-markers";
 
 import { resolveFormatAnchor } from "./format-anchor";
 
@@ -24,6 +26,7 @@ type EditorMode = "structured" | "raw";
 
 interface Props {
   anchorReady?: boolean;
+  sourceComparison?: { baseSha: string; status: SourceFileStatus };
   navigation?: {
     key: string;
     hash: string;
@@ -79,6 +82,7 @@ function RoutedFormatEditor(props: Props) {
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Editor composition and document mutations.
 function FormatEditorCore({
   anchorReady = true,
+  sourceComparison,
   navigation,
   filePath,
   mode,
@@ -120,6 +124,26 @@ function FormatEditorCore({
       currentContent,
       initialExamplePositions(remoteBaseline)
     );
+  const compareSource = sourceRef?.type === "pr" && sourceComparison;
+  const { data: sourceContent, error: sourceContentError } =
+    useWorkspaceFileContent({
+      filePath,
+      contentRefName: sourceComparison?.baseSha,
+      enabled: Boolean(compareSource && sourceComparison.status === "changed"),
+    });
+  const sourceBaseline = compareSource
+    ? sourceComparison.status === "added"
+      ? null
+      : sourceComparison.status === "unchanged"
+        ? remoteBaseline
+        : sourceContent
+    : undefined;
+  const changeMarkers = getFormatChangeMarkers(
+    currentContent,
+    remoteBaseline,
+    sourceBaseline,
+    positions
+  );
   const structuralIssues = parsed.parseIssues.map((issue) =>
     t(`validation.issue.${issue.code}`, issue.params)
   );
@@ -351,6 +375,14 @@ function FormatEditorCore({
         <StatusBadge variant="error">{headContentError}</StatusBadge>
       )}
 
+      {compareSource &&
+        sourceComparison.status === "changed" &&
+        sourceContentError && (
+          <div className="ui-notice" data-tone="warning">
+            {t("editor.changeComparisonFailed")}: {sourceContentError}
+          </div>
+        )}
+
       {mode === "raw" && parseErrors.length > 0 && (
         <div className="flex flex-col gap-1">
           {parseErrors.map((err, i) => (
@@ -364,6 +396,7 @@ function FormatEditorCore({
       {mode === "structured" && canEditStructured && (
         <RegexLab
           activeExampleIndex={selectedExampleIndex}
+          changeMarkers={changeMarkers}
           columns={columns}
           examples={examples}
           intersectionExamples={intersectionExamples}

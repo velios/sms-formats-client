@@ -38,6 +38,7 @@ const workspaceActionsDividerClassName =
 
 export function renderWorkspaceContent(params: {
   anchorReady?: boolean;
+  sourceComparison?: Parameters<typeof FormatEditor>[0]["sourceComparison"];
   showSenders: boolean;
   bankPath: string;
   readOnly: boolean;
@@ -86,6 +87,7 @@ export function renderWorkspaceContent(params: {
         onRegexBlurAfterEdit={onFormatRegexBlurAfterEdit}
         onSearchContextChange={onFormatSearchContextChange}
         readOnly={readOnly}
+        sourceComparison={params.sourceComparison}
       />
     );
   }

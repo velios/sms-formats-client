@@ -95,6 +95,9 @@
     "resetToSource": "Discard all local changes"
   },
   "editor": {
+    "localChange": "Local changes",
+    "sourceChange": "Changed in PR",
+    "changeComparisonFailed": "Could not load the PR comparison base",
     "raw": "Final File",
     "structured": "Text Editor",
     "saveStructured": "Save Structured",
