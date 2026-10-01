@@ -68,3 +68,22 @@ it("imports an inline delimiter without changing SMS bytes", () => {
     )
   ).toEqual({ index: 1, notices: [], append: sms });
 });
+
+it.each([false, true])(
+  "reports an existing exact SMS without appending it (readOnly=%s)",
+  (readOnly) => {
+    const sms = " \nКод 😀\r\n ";
+    expect(
+      resolveFormatAnchor(
+        `#add-sms=${encodeSmsPayload(sms)}&show-example=1`,
+        ["A", sms],
+        [1, null],
+        1,
+        readOnly
+      )
+    ).toEqual({
+      index: 1,
+      notices: [{ key: "editor.smsAlreadyExists", number: 2 }],
+    });
+  }
+);

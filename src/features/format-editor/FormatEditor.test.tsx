@@ -392,8 +392,12 @@ it("imports exact SMS once per entry, allows reimport after edits, and follows p
   const view = render(<FormatEditor {...props("first")} />);
   expect(fixture.props?.examples).toEqual(["A", "B", sms]);
   expect(fixture.props).toMatchObject({ activeExampleIndex: 2 });
+  const documentBeforeReopening = useDraftStore.getState().getDraft(path);
   view.rerender(<FormatEditor {...props("again")} />);
   expect(fixture.props?.examples).toEqual(["A", "B", sms]);
+  expect(fixture.props).toMatchObject({ activeExampleIndex: 2 });
+  expect(screen.getByText("editor.smsAlreadyExists")).toBeInTheDocument();
+  expect(useDraftStore.getState().getDraft(path)).toBe(documentBeforeReopening);
   act(() => fixture.props?.onExampleChange(2, "edited SMS"));
   view.rerender(<FormatEditor {...props("reimport")} />);
   expect(fixture.props?.examples).toEqual(["A", "B", "edited SMS", sms]);
