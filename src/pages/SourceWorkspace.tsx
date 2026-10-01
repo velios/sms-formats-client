@@ -215,7 +215,9 @@ export function SourceWorkspace() {
                     {path.split("/").pop()}
                   </span>
                   {inventory.recordsByPath.get(path)?.local === "changed" && (
-                    <span className="shrink-0">*</span>
+                    <StatusBadge className="text-xs" variant="modified">
+                      ●
+                    </StatusBadge>
                   )}
                 </button>
               ))}
