@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { StrictMode } from "react";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { setTestGlobal } from "@/test-globals";
 
 const fixture = (() => {
@@ -20,6 +21,8 @@ const fixture = (() => {
       onColumnsChange: (columns: string[]) => void;
       onUndo: () => void;
       onRedo: () => void;
+      onActiveExampleChange: (index: number) => void;
+      onAddExample: () => void;
     },
   };
 })();
@@ -337,12 +340,11 @@ it("applies source anchors after restored raw edits, and never restores a delete
   useDraftStore
     .getState()
     .applyUserEdit(path, edited, "head", fixture.content, [1, null, 2, 3]);
-  const select = mock();
   const view = render(
     <FormatEditor
       filePath={path}
       mode="structured"
-      navigation={{ key: "first", hash: "#show-example=2", select }}
+      navigation={{ key: "first", hash: "#show-example=2" }}
     />
   );
   expect(fixture.props).toMatchObject({ activeExampleIndex: 2 });
@@ -361,7 +363,7 @@ it("applies source anchors after restored raw edits, and never restores a delete
     <FormatEditor
       filePath={path}
       mode="structured"
-      navigation={{ key: "deleted", hash: "#show-example=2", select }}
+      navigation={{ key: "deleted", hash: "#show-example=2" }}
     />
   );
   expect(fixture.props).toMatchObject({ activeExampleIndex: 0 });
@@ -382,11 +384,10 @@ it("imports exact SMS once per entry, allows reimport after edits, and follows p
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replace(/[=]+$/, "");
-  const select = mock();
   const props = (key: string) => ({
     filePath: path,
     mode: "structured" as const,
-    navigation: { key, hash: `#show-example=1&add-sms=${payload}`, select },
+    navigation: { key, hash: `#show-example=1&add-sms=${payload}` },
   });
   const view = render(<FormatEditor {...props("first")} />);
   expect(fixture.props?.examples).toEqual(["A", "B", sms]);
@@ -408,7 +409,6 @@ it("reports malformed anchors, falls back to first Example and keeps an empty li
   useDraftStore.getState().discardAll();
   useDraftStore.getState().activateScope("invalid-test", false);
   fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B"]);
-  const select = mock();
   const view = render(
     <FormatEditor
       filePath={path}
@@ -416,7 +416,6 @@ it("reports malformed anchors, falls back to first Example and keeps an empty li
       navigation={{
         key: "invalid",
         hash: "#show-example=2&add-sms=_w",
-        select,
       }}
     />
   );
@@ -427,7 +426,7 @@ it("reports malformed anchors, falls back to first Example and keeps an empty li
       <FormatEditor
         filePath={path}
         mode="structured"
-        navigation={{ key: value, hash: `#show-example=${value}`, select }}
+        navigation={{ key: value, hash: `#show-example=${value}` }}
       />
     );
     expect(fixture.props).toMatchObject({ activeExampleIndex: 0 });
@@ -447,7 +446,7 @@ it("reports malformed anchors, falls back to first Example and keeps an empty li
     <FormatEditor
       filePath={path}
       mode="structured"
-      navigation={{ key: "empty", hash: "", select }}
+      navigation={{ key: "empty", hash: "" }}
     />
   );
   expect(fixture.props?.examples).toEqual([]);
@@ -458,7 +457,6 @@ it("waits for the target file and protects an existing PR document from imports"
   fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B"]);
   useDraftStore.getState().discardAll();
   useDraftStore.getState().activateScope("protected-test", false);
-  const select = mock();
   const view = render(
     <FormatEditor
       filePath={path}
@@ -467,7 +465,6 @@ it("waits for the target file and protects an existing PR document from imports"
         key: "late",
         hash: "#add-sms=TkVX",
         targetFile: "other.txt",
-        select,
       }}
     />
   );
@@ -480,7 +477,6 @@ it("waits for the target file and protects an existing PR document from imports"
         key: "protected",
         hash: "#add-sms=TkVX",
         targetFile: path,
-        select,
       }}
       readOnly
     />
@@ -493,7 +489,7 @@ it("waits for PR session readiness before importing into a temporarily protected
   fixture.content = serializeFormat("^(.*)$", ["comment"], ["A"]);
   useDraftStore.getState().discardAll();
   useDraftStore.getState().activateScope("ready-test", false);
-  const navigation = { key: "ready", hash: "#add-sms=TkVX", select: mock() };
+  const navigation = { key: "ready", hash: "#add-sms=TkVX" };
   const view = render(
     <FormatEditor
       anchorReady={false}
@@ -525,7 +521,7 @@ it("selects the imported Example on the first StrictMode mount without duplicati
       <FormatEditor
         filePath={path}
         mode="structured"
-        navigation={{ key: "first", hash: "#add-sms=TkVX", select: mock() }}
+        navigation={{ key: "first", hash: "#add-sms=TkVX" }}
       />
     </StrictMode>
   );
@@ -551,7 +547,6 @@ it("rejects reserved SMS lines without changing restored document, positions or 
   const navigation = {
     key: "first",
     hash: `#add-sms=${encodeSmsPayload(sms)}&show-example=2`,
-    select: mock(),
   };
   const view = render(
     <FormatEditor filePath={path} mode="structured" navigation={navigation} />
@@ -572,3 +567,36 @@ it("rejects reserved SMS lines without changing restored document, positions or 
   act(() => fixture.props?.onUndo());
   expect(fixture.props?.examples).toEqual(["A", "B"]);
 });
+
+function EditorLocation() {
+  const location = useLocation();
+  return <output data-testid="location">{location.hash}</output>;
+}
+
+it.each(["", "#show-example=2"])(
+  "keeps URL %s unchanged when selecting or adding an Example",
+  (hash) => {
+    fixture.content = serializeFormat("^(.*)$", ["comment"], ["A", "B"]);
+    useDraftStore.getState().discardAll();
+    useDraftStore.getState().activateScope("selection-only", false);
+    render(
+      <MemoryRouter
+        initialEntries={[`/format?file=${encodeURIComponent(path)}${hash}`]}
+      >
+        <FormatEditor filePath={path} mode="structured" />
+        <EditorLocation />
+      </MemoryRouter>
+    );
+    expect(fixture.props).toMatchObject({ activeExampleIndex: hash ? 1 : 0 });
+    expect(
+      screen.queryByRole("button", { name: "editor.copyLink" })
+    ).toBeNull();
+    act(() => fixture.props?.onActiveExampleChange(hash ? 0 : 1));
+    expect(fixture.props).toMatchObject({ activeExampleIndex: hash ? 0 : 1 });
+    expect(screen.getByTestId("location").textContent).toBe(hash);
+    act(() => fixture.props?.onAddExample());
+    expect(fixture.props).toMatchObject({ activeExampleIndex: 2 });
+    expect(fixture.props?.examples).toEqual(["A", "B", ""]);
+    expect(screen.getByTestId("location").textContent).toBe(hash);
+  }
+);

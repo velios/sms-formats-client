@@ -18,8 +18,8 @@ export function WorkspaceSessionNotice({
   const pending = state.block === "sync-pending";
   const notice = noticeText(state, t);
 
-  const canRetry = pending || !state.session;
-  if (!(notice || state.error || canRetry || state.session)) {
+  const canRetry = pending || !state.session || Boolean(state.error);
+  if (!(notice || state.error || canRetry)) {
     return null;
   }
 
@@ -37,18 +37,6 @@ export function WorkspaceSessionNotice({
         )}
       </div>
       <div className="flex gap-2">
-        {state.session && !pending && (
-          <Button
-            disabled={busy}
-            onClick={() => {
-              void controller.checkUpdates();
-            }}
-            type="button"
-            variant="ghost"
-          >
-            {t("workspace.checkUpdates")}
-          </Button>
-        )}
         {state.block === "stale" && state.nextSession && (
           <Button
             disabled={busy}
@@ -69,6 +57,8 @@ export function WorkspaceSessionNotice({
             onClick={() => {
               if (pending) {
                 void controller.syncPublication();
+              } else if (state.session) {
+                void controller.checkUpdates();
               } else {
                 void controller.open();
               }
@@ -94,7 +84,7 @@ function noticeText(
       ? t("publish.updatedRefreshFailed")
       : state.block
         ? t(`workspace.unavailable.${state.block}`)
-        : state.session?.writable === false
-          ? t(state.experiment ? "experiment.localOnly" : "publish.readOnly")
+        : !state.experiment && state.session?.writable === false
+          ? t("publish.readOnly")
           : null;
 }

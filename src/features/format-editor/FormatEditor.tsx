@@ -1,12 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useInRouterContext, useLocation, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { useInRouterContext, useLocation } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  buildFormatUrl,
   type ExamplePositions,
   initialExamplePositions,
   parseFormatFile,
@@ -30,7 +28,6 @@ interface Props {
     key: string;
     hash: string;
     targetFile?: string | null;
-    select: (position: number | null) => void;
   };
   filePath: string;
   mode: EditorMode;
@@ -67,7 +64,6 @@ export function FormatEditor(props: Props) {
 
 function RoutedFormatEditor(props: Props) {
   const location = useLocation();
-  const navigate = useNavigate();
   return (
     <FormatEditorCore
       {...props}
@@ -75,11 +71,6 @@ function RoutedFormatEditor(props: Props) {
         key: location.key,
         hash: location.hash,
         targetFile: new URLSearchParams(location.search).get("file"),
-        select: (position) =>
-          navigate(
-            `${location.pathname}${location.search}${position ? `#show-example=${position}` : ""}`,
-            { replace: true }
-          ),
       }}
     />
   );
@@ -100,7 +91,6 @@ function FormatEditorCore({
   onSearchContextChange,
 }: Props) {
   const { t } = useTranslation();
-  const repository = useSourceStore((s) => s.repository);
   const scopeKey = useDraftStore((s) => s.draftScopeKey);
   const sourceRef = useSourceStore((s) => s.sourceRef);
   const draft = useDraftStore((state) => state.drafts.get(filePath));
@@ -271,12 +261,6 @@ function FormatEditorCore({
   };
   const [anchorNotice, setAnchorNotice] = useState<string | null>(null);
   const appliedAnchor = useRef<string | null>(null);
-  const manualSelection = useRef<{
-    hash: string;
-    index: number;
-    context: string;
-  } | null>(null);
-  const selectionContext = `${filePath}:${scopeKey}`;
   const anchorKey = `${navigation?.key ?? ""}:${navigation?.hash ?? ""}:${filePath}:${scopeKey}:${getGitHubAuthChangeVersion()}`;
   useEffect(() => {
     if (
@@ -289,16 +273,6 @@ function FormatEditorCore({
       return;
     }
     appliedAnchor.current = anchorKey;
-    const selected = manualSelection.current;
-    manualSelection.current = null;
-    if (
-      selected?.hash === navigation.hash &&
-      selected.context === selectionContext
-    ) {
-      setActiveExampleIndex(selected.index);
-      setAnchorNotice(null);
-      return;
-    }
     const result = resolveFormatAnchor(
       navigation.hash,
       examples,
@@ -321,7 +295,6 @@ function FormatEditorCore({
   }, [
     anchorKey,
     anchorReady,
-    selectionContext,
     draft,
     headContent,
     isLoading,
@@ -337,24 +310,7 @@ function FormatEditorCore({
   const selectExample = (index: number) => {
     setActiveExampleIndex(index);
     setAnchorNotice(null);
-    // Selection replaces the current history entry; local Examples have no URL position.
-    const position = positions[index] ?? null;
-    manualSelection.current = {
-      hash: position ? `#show-example=${position}` : "",
-      index,
-      context: selectionContext,
-    };
-    navigation?.select(position);
   };
-  const shareUrl = sourceRef
-    ? buildFormatUrl({
-        origin: window.location.origin,
-        repository,
-        source: sourceRef,
-        filePath,
-        showExample: positions[selectedExampleIndex] ?? null,
-      })
-    : null;
   const undo = () => {
     if (!isMutationBlocked) {
       useDraftStore.getState().undo(filePath);
@@ -389,17 +345,6 @@ function FormatEditorCore({
       {anchorNotice && (
         <div className="ui-notice" data-tone="warning">
           {anchorNotice}
-        </div>
-      )}
-      {shareUrl && navigation && (
-        <div className="flex shrink-0 justify-end">
-          <Button
-            onClick={() => navigator.clipboard.writeText(shareUrl)}
-            size="sm"
-            variant="ghost"
-          >
-            {t("editor.copyLink")}
-          </Button>
         </div>
       )}
       {headContentError && (
