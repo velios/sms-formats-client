@@ -788,6 +788,24 @@ export async function fetchPullRequestMetadata(
   return { ...pr, approvedCount, ...validation, lastCommitAuthorLogin };
 }
 
+// A freshness probe must not resolve files, permissions or the merge base.
+export async function fetchPullRequestFreshness(
+  prNumber: number,
+  repo: RepoRef
+) {
+  const { data } = await publicOctokit.pulls.get({
+    owner: repo.owner,
+    repo: repo.repo,
+    pull_number: prNumber,
+    ...cacheBustParam(true),
+  });
+  return {
+    headSha: data.head.sha,
+    closed: data.state !== "open",
+    merged: data.merged === true,
+  };
+}
+
 export async function resolvePullRequestWorkspace(
   prNumber: number,
   repoRef?: RepoRef,

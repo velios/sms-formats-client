@@ -15,6 +15,7 @@ import type { WorkspaceSessionController as WorkspaceSessionControllerType } fro
 })();
 const mocks = (() => ({
   resolve: mock(),
+  freshness: mock(),
   tree: mock(),
   content: mock(),
   storage: new Map<string, string>(),
@@ -28,6 +29,7 @@ mock.module("idb-keyval", () => ({
 }));
 mock.module("@/infrastructure/github", () => ({
   resolvePullRequestWorkspace: mocks.resolve,
+  fetchPullRequestFreshness: mocks.freshness,
   fetchRepoTree: mocks.tree,
 }));
 mock.module("@/infrastructure/file-content", () => ({
@@ -107,8 +109,144 @@ describe("workspace lifecycle", () => {
       .mockImplementation(async (prNumber: number) =>
         session("head", prNumber)
       );
+    mocks.freshness
+      .mockReset()
+      .mockResolvedValue({ headSha: "head", closed: false, merged: false });
     mocks.tree.mockReset().mockResolvedValue(tree);
     mocks.content.mockReset().mockResolvedValue("original");
+  });
+
+  it.each([false, true])(
+    "only observes metadata, preserving working data with drafts=%s",
+    async (withDrafts) => {
+      const controller = await open();
+      if (withDrafts) {
+        edit();
+      }
+      const source = useSourceStore.getState();
+      const drafts = useDraftStore.getState();
+      const revision = controller.getSnapshot().session;
+      const saved = loadWorkspaceSession(repository, 1);
+      mocks.freshness.mockResolvedValue({
+        headSha: "new-head",
+        closed: false,
+        merged: false,
+      });
+      await controller.checkFreshness();
+      expect(controller.getSnapshot()).toMatchObject({
+        block: null,
+        freshness: "stale",
+        nextSession: null,
+        session: revision,
+      });
+      expect(useSourceStore.getState()).toBe(source);
+      expect(useDraftStore.getState()).toBe(drafts);
+      expect(loadWorkspaceSession(repository, 1)).toEqual(saved);
+      expect(mocks.resolve).toHaveBeenCalledTimes(1);
+      expect(mocks.tree).toHaveBeenCalledTimes(1);
+      expect(mocks.content).toHaveBeenCalledTimes(1);
+      await controller.checkFreshness();
+      expect(mocks.freshness).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each([
+    { headSha: "head", closed: false, merged: false, block: null },
+    { headSha: "head", closed: true, merged: false, block: "closed" },
+    { headSha: "head", closed: true, merged: true, block: "merged" },
+  ])("observes PR status $block", async ({ block, ...metadata }) => {
+    const controller = await open();
+    mocks.freshness.mockResolvedValue(metadata);
+    await controller.checkFreshness();
+    expect(controller.getSnapshot().freshness ?? null).toBe(block);
+    expect(controller.getSnapshot().block).toBeNull();
+    expect(controller.getSnapshot().session?.headSha).toBe("head");
+  });
+
+  it("clears the notice after PR reopens with the working head", async () => {
+    const controller = await open();
+    const originalNow = Date.now;
+    let now = originalNow();
+    Date.now = () => now;
+    try {
+      mocks.freshness.mockResolvedValue({
+        headSha: "head",
+        closed: true,
+        merged: false,
+      });
+      await controller.checkFreshness();
+      expect(controller.getSnapshot()).toMatchObject({
+        freshness: "closed",
+        block: null,
+      });
+      now += 60_000;
+      mocks.freshness.mockRejectedValue(new Error("offline"));
+      await controller.checkFreshness();
+      expect(controller.getSnapshot().freshness).toBe("closed");
+      now += 60_000;
+      mocks.freshness.mockResolvedValue({
+        headSha: "head",
+        closed: false,
+        merged: false,
+      });
+      await controller.checkFreshness();
+      expect(controller.getSnapshot()).toMatchObject({
+        freshness: null,
+        block: null,
+      });
+      expect(controller.beginPublication()).not.toBeNull();
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  it("ignores network failure", async () => {
+    const controller = await open();
+    const state = controller.getSnapshot();
+    mocks.freshness.mockRejectedValue(new Error("offline"));
+    await controller.checkFreshness();
+    expect(controller.getSnapshot()).toEqual(state);
+  });
+
+  it("deduplicates probes and excludes publication and refresh", async () => {
+    const controller = await open();
+    const response = deferred<{
+      headSha: string;
+      closed: boolean;
+      merged: boolean;
+    }>();
+    mocks.freshness.mockReturnValue(response.promise);
+    const pending = controller.checkFreshness();
+    await controller.checkFreshness();
+    await controller.checkUpdates();
+    expect(controller.beginPublication()).toBeNull();
+    expect(mocks.freshness).toHaveBeenCalledTimes(1);
+    expect(mocks.resolve).toHaveBeenCalledTimes(1);
+    response.resolve({ headSha: "head", closed: false, merged: false });
+    await pending;
+    const ticket = controller.beginPublication()!;
+    await controller.checkFreshness();
+    expect(mocks.freshness).toHaveBeenCalledTimes(1);
+    controller.finishPublication(ticket);
+  });
+
+  it("ignores a probe after switching PR", async () => {
+    const first = await open();
+    const response = deferred<{
+      headSha: string;
+      closed: boolean;
+      merged: boolean;
+    }>();
+    mocks.freshness.mockReturnValue(response.promise);
+    const pending = first.checkFreshness();
+    first.deactivate();
+    const second = await open(2);
+    response.resolve({ headSha: "obsolete", closed: true, merged: true });
+    await pending;
+    expect(second.getSnapshot()).toMatchObject({
+      block: null,
+      session: session("head", 2),
+    });
   });
 
   it("prepares the selected document before applying the revision", async () => {

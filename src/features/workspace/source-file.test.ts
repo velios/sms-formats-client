@@ -37,6 +37,11 @@ const contentRequest = mock(
 );
 const treeRequest = mock(async () => []);
 mock.module("@/infrastructure/github", () => ({
+  fetchPullRequestFreshness: mock(async () => ({
+    headSha: "A",
+    closed: false,
+    merged: false,
+  })),
   fetchSourceHead: headRequest,
   fetchFileContent: contentRequest,
   fetchRepoTree: treeRequest,

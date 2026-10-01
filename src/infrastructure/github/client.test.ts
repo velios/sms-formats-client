@@ -74,6 +74,7 @@ const {
   fetchBlobsByRef,
   fetchFileContent,
   fetchSourceHead,
+  fetchPullRequestFreshness,
   GitHubRateLimitError,
   fetchPullRequestApprovalByCurrentUser,
   getCachedPullRequestApprovalPermission,
@@ -738,4 +739,29 @@ describe("source head REST contract and request budget", () => {
     expect(octokitMocks.getBranch.mock.calls.length).toBe(before);
     setGitHubUserToken(null);
   });
+});
+
+it("reads freshness with only one uncached PR request", async () => {
+  for (const value of Object.values(octokitMocks)) {
+    if (typeof value === "function" && "mockClear" in value) {
+      value.mockClear();
+    }
+  }
+  octokitMocks.getPullRequest.mockResolvedValue({
+    data: { head: { sha: "new" }, state: "closed", merged: true },
+  });
+  expect(
+    await fetchPullRequestFreshness(46, { owner: "owner", repo: "repo" })
+  ).toEqual({ headSha: "new", closed: true, merged: true });
+  expect(octokitMocks.getPullRequest).toHaveBeenCalledTimes(1);
+  expect(octokitMocks.getPullRequest.mock.calls[0]?.[0]).toMatchObject({
+    owner: "owner",
+    repo: "repo",
+    pull_number: 46,
+    _cb: expect.any(Number),
+  });
+  expect(octokitMocks.paginate).not.toHaveBeenCalled();
+  expect(octokitMocks.getRepository).not.toHaveBeenCalled();
+  expect(octokitMocks.compareCommitsWithBasehead).not.toHaveBeenCalled();
+  expect(octokitMocks.getContent).not.toHaveBeenCalled();
 });

@@ -10,6 +10,7 @@ import {
   subscribeGitHubAuthChange,
 } from "@/infrastructure/github";
 import { WorkspaceSessionController } from "./workspace-session";
+import { watchWorkspaceVisibility } from "./workspace-visibility";
 
 export function useWorkspaceSession(params: {
   locationPathname: string;
@@ -54,7 +55,9 @@ export function useWorkspaceSession(params: {
       return;
     }
     void controller.open();
+    const stopWatching = watchWorkspaceVisibility(controller.checkFreshness);
     return () => {
+      stopWatching();
       controller.deactivate();
     };
   }, [controller, authVersion, legacyRedirect, navigate, route]);

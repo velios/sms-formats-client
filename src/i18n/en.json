@@ -511,7 +511,7 @@
       "multiple-banks": "This PR changes multiple banks and is no longer supported by the editor.",
       "outside-bank-scope": "This PR changes files outside the bank and is no longer supported by the editor."
     },
-    "cachedStaleNotice": "PR changed since your edits. You are viewing the previous version. Discard local changes and refresh the PR to continue.",
+    "cachedStaleNotice": "PR changed on GitHub. The working version is out of date; local data is preserved.",
     "discardAndRefresh": "Discard local changes and refresh PR"
   },
   "regex": {

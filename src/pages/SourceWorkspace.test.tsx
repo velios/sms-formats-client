@@ -12,6 +12,7 @@ mock.module("idb-keyval", () => ({
   update: async () => undefined,
 }));
 mock.module("@/infrastructure/github", () => ({
+  fetchPullRequestFreshness: mock(),
   getGitHubUserToken: () => "test-token",
   getGitHubAuthChangeVersion: () => 0,
   subscribeGitHubAuthChange: () => () => undefined,

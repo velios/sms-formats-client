@@ -16,6 +16,7 @@ mock.module("idb-keyval", () => ({ get: mock(), set: mock(), del: mock() }));
 mock.module("@/infrastructure/github", () => ({
   getGitHubUserToken: () => "test-token",
   resolvePullRequestWorkspace: mocks.resolve,
+  fetchPullRequestFreshness: mock(),
   fetchRepoTree: mock(async () => []),
   updatePullRequestHead: mocks.update,
 }));
