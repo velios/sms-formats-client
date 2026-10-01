@@ -291,7 +291,6 @@ export class SourceExperimentController {
       }
     }
   };
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Atomic refresh guards changing selection before resetting the confirmed scope.
   refresh = async (): Promise<void> => {
     if (this.state.operation) {
       return;
