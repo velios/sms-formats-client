@@ -21,7 +21,6 @@ const fixture = (() => {
       examples: string[];
       onRegexChange: (regex: string) => void;
       onExampleChange: (index: number, text: string) => void;
-      onNormalizeExample: (index: number) => void;
       onColumnsChange: (columns: string[]) => void;
       onUndo: () => void;
       onRedo: () => void;
@@ -90,20 +89,6 @@ describe("one document across editor views", () => {
     fixture.sourceContent = undefined;
     fixture.sourceError = null;
     fixture.content = serializeFormat("^(A)$", ["comment"], ["A"]);
-  });
-  it("normalizes only the selected example, preserves layout and undoes as one edit", () => {
-    fixture.content =
-      "^(е\u0308)$\r\n\r\n-----COLUMNS-----\r\ncomment; extra  \r\n\r\n-----EXAMPLE-----\r\n  е\u0308 😀\r\n\r\n-----EXAMPLE-----\r\nи\u0306";
-    render(<FormatEditor filePath={path} mode="structured" />);
-    const original = fixture.content;
-    act(() => fixture.props?.onNormalizeExample(0));
-    expect(useDraftStore.getState().getDraft(path)?.content).toBe(
-      original.replace("  е\u0308 😀", "  ё 😀")
-    );
-    expect(fixture.props?.changeMarkers.examples).toEqual(["local", null]);
-    act(() => fixture.props?.onUndo());
-    expect(useDraftStore.getState().getDraft(path)?.content).toBe(original);
-    expect(fixture.props?.changeMarkers.examples).toEqual([null, null]);
   });
   it("updates section markers through edits, undo and main navigation", () => {
     fixture.sourceContent = serializeFormat("^(.*)$", ["comment"], ["A"]);

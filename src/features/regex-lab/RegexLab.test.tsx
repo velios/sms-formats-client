@@ -114,7 +114,6 @@ function RegexLabHarness() {
           prev.map((item, itemIndex) => (itemIndex === index ? value : item))
         )
       }
-      onNormalizeExample={() => undefined}
       onOpenIntersectionFileInApp={handleOpenIntersectionFileInApp}
       onRegexChange={() => undefined}
       onRemoveExample={() => undefined}
@@ -180,7 +179,6 @@ describe("RegexLab intersection example toggle", () => {
         onAddExample={() => undefined}
         onColumnsChange={() => undefined}
         onExampleChange={() => undefined}
-        onNormalizeExample={() => undefined}
         onOpenIntersectionFileInApp={handleOpenIntersectionFileInApp}
         onRegexChange={() => undefined}
         onRemoveExample={() => undefined}
@@ -200,43 +198,5 @@ describe("RegexLab intersection example toggle", () => {
     expect(handleOpenIntersectionFileInApp).toHaveBeenCalledWith(
       "banks/pumb/formats/another.txt"
     );
-  });
-});
-
-describe("NFC button availability", () => {
-  it("tracks the selected example and blocks readonly and intersection examples", () => {
-    const normalize = mock();
-    const props = {
-      activeExampleIndex: 0,
-      columns: [],
-      examples: ["е\u0308", "ё"],
-      intersectionExamples: [
-        { text: "и\u0306", filePath: "other.txt", fileName: "other.txt" },
-      ],
-      onActiveExampleChange: mock(),
-      onAddExample: mock(),
-      onColumnsChange: mock(),
-      onExampleChange: mock(),
-      onNormalizeExample: normalize,
-      onRegexChange: mock(),
-      onRemoveExample: mock(),
-      regex: "^(.*)$",
-    };
-    const view = render(<RegexLab {...props} />);
-    const button = screen.getByRole("button", {
-      name: "editor.normalizeExample",
-    });
-    expect(button).not.toBeDisabled();
-    fireEvent.click(button);
-    expect(normalize).toHaveBeenCalledWith(0);
-    view.rerender(<RegexLab {...props} activeExampleIndex={1} />);
-    expect(button).toBeDisabled();
-    view.rerender(<RegexLab {...props} readOnly />);
-    expect(button).toBeDisabled();
-    view.rerender(<RegexLab {...props} />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "editor.showIntersections" })
-    );
-    expect(button).toBeDisabled();
   });
 });

@@ -10,10 +10,6 @@ import {
 import { type ReactElement, type ReactNode, useState } from "react";
 import type { WorkspaceSessionController } from "@/features/workspace/workspace-session";
 
-mock.module("@/features/workspace/NormalizeBankExamplesButton", () => ({
-  NormalizeBankExamplesButton: () => null,
-}));
-
 const mocks = (() => {
   const routeState = {
     location: {
