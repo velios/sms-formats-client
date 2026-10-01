@@ -37,3 +37,14 @@ export function isSameDraftScope(
     makeSourceDraftScopeKey(nextSource)
   );
 }
+
+export function experimentScope(
+  repository: RepoRef,
+  source: { type: "main" } | { type: "pr"; prNumber: number }
+): string {
+  return `experiment:${repository.owner}/${repository.repo}:${source.type === "main" ? "main" : `pr:${source.prNumber}`}`;
+}
+
+export function isExperimentScope(scope: string | null): boolean {
+  return scope?.startsWith("experiment:") ?? false;
+}

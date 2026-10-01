@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { get, set } from "idb-keyval";
 import type { RepoRef } from "@/domain/types";
 import { fetchFileContent } from "@/infrastructure/github";
 import { queryClient } from "@/lib/query-client";
@@ -7,6 +8,16 @@ export interface FileRevision {
   repository: RepoRef;
   filePath: string;
   commitSha: string;
+}
+
+function revisionStorageKey(params: FileRevision): string {
+  return JSON.stringify([
+    "sms-formats-file",
+    params.repository.owner,
+    params.repository.repo,
+    params.commitSha,
+    params.filePath,
+  ]);
 }
 
 // Cache only immutable commit SHAs.
@@ -23,10 +34,24 @@ export function fileContentOptions({
       commitSha,
       filePath,
     ],
-    queryFn: () => fetchFileContent(filePath, commitSha, repository),
+    queryFn: async () => {
+      const key = revisionStorageKey({ repository, filePath, commitSha });
+      const stored = await Promise.resolve()
+        .then(() => get<string>(key))
+        .catch(() => undefined);
+      if (typeof stored === "string") {
+        return stored;
+      }
+      const content = await fetchFileContent(filePath, commitSha, repository);
+      await Promise.resolve()
+        .then(() => set(key, content))
+        .catch(() => undefined);
+      return content;
+    },
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 30 * 60_000,
     retry: false,
+    retryOnMount: false,
   });
 }
 
@@ -38,6 +63,9 @@ export function cacheFileContent(
   params: FileRevision & { content: string }
 ): void {
   queryClient.setQueryData(fileContentOptions(params).queryKey, params.content);
+  void Promise.resolve()
+    .then(() => set(revisionStorageKey(params), params.content))
+    .catch(() => undefined);
 }
 
 export function loadFileContent(params: FileRevision): Promise<string> {
@@ -95,6 +123,14 @@ export async function loadRevisionBlobs(
               (item) => item.path === filePath
             );
             if (result?.status === "loaded") {
+              await Promise.resolve()
+                .then(() =>
+                  set(
+                    revisionStorageKey({ repository, filePath, commitSha }),
+                    result.text
+                  )
+                )
+                .catch(() => undefined);
               return result.text;
             }
             skipped = result ?? { path: filePath, status: "missing" };

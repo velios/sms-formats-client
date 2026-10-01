@@ -9,6 +9,7 @@ import { useDraftStore, useSourceStore } from "@/store";
 export type WorkspaceEditorMode = "structured" | "raw";
 
 interface Props {
+  localOnly?: boolean;
   bankName: string;
   bankRepoUrl: string;
   showSenders: boolean;
@@ -29,6 +30,7 @@ const headerActionButtonClassName = "gap-1 whitespace-nowrap";
 const headerDividerClassName = "h-5 w-px shrink-0 bg-border";
 
 export function WorkspaceHeaderBar({
+  localOnly = false,
   bankName,
   bankRepoUrl,
   showSenders,
@@ -84,6 +86,7 @@ export function WorkspaceHeaderBar({
           allFormatFiles={allFormatFiles}
           filePath={filePath}
           isSenders={showSenders}
+          localOnly={localOnly}
           onRenameFile={onRenameFile}
           readOnly={readOnly}
         />
@@ -120,6 +123,7 @@ function resolveFileActionGating(params: {
   readOnly: boolean;
   isDeleted: boolean;
   isModified: boolean;
+  hasExamplePositionChanges: boolean;
   remoteBaseline: string | null;
   hasDocument: boolean;
 }): { canReset: boolean; canDelete: boolean; canRename: boolean } {
@@ -128,11 +132,13 @@ function resolveFileActionGating(params: {
     readOnly,
     isDeleted,
     isModified,
+    hasExamplePositionChanges,
     remoteBaseline,
     hasDocument,
   } = params;
   return {
-    canReset: !readOnly && (isModified || isDeleted),
+    canReset:
+      !readOnly && (isModified || isDeleted || hasExamplePositionChanges),
     canDelete: !(isSenders || readOnly || isDeleted) && hasDocument,
     canRename:
       !(isSenders || readOnly || isDeleted) &&
@@ -143,12 +149,14 @@ function resolveFileActionGating(params: {
 
 function WorkspaceFileControls({
   filePath,
+  localOnly = false,
   isSenders,
   readOnly,
   allFormatFiles,
   onRenameFile,
 }: {
   filePath: string;
+  localOnly?: boolean;
   isSenders: boolean;
   readOnly: boolean;
   allFormatFiles: string[];
@@ -167,12 +175,17 @@ function WorkspaceFileControls({
   const draft = draftStore.getDraft(filePath);
   const { data: headContent } = useWorkspaceFileContent({
     filePath,
-    enabled: draft?.headContent !== null,
+    enabled: !localOnly && draft?.headContent !== null,
   });
 
   const remoteBaseline = draft ? draft.headContent : (headContent ?? null);
   const isDeleted = draft?.isDeleted ?? false;
   const isModified = draft ? draft.content !== draft.headContent : false;
+  // Replacing an original with an identical local Example only changes identity.
+  const hasExamplePositionChanges = Boolean(
+    !isSenders &&
+      draft?.examplePositions?.some((position, index) => position !== index + 1)
+  );
   const canUndo = draftStore.canUndo(filePath);
   const canRedo = draftStore.canRedo(filePath);
   const {
@@ -184,6 +197,7 @@ function WorkspaceFileControls({
     readOnly,
     isDeleted,
     isModified,
+    hasExamplePositionChanges,
     remoteBaseline,
     hasDocument: Boolean(draft) || headContent !== undefined,
   });
@@ -272,7 +286,7 @@ function WorkspaceFileControls({
       </div>
       <div className={headerDividerClassName} />
       <div className="flex shrink-0 items-center gap-0.5">
-        {!isSenders && (
+        {!(isSenders || localOnly) && (
           <Button
             aria-label={t("editor.renameFormat")}
             className={headerActionButtonClassName}
@@ -311,7 +325,7 @@ function WorkspaceFileControls({
           {t("editor.redo")}
         </Button>
         <div className="mx-1.5 h-[18px] w-px shrink-0 bg-border" />
-        {!isSenders && (
+        {!(isSenders || localOnly) && (
           <Button
             aria-label={t("editor.deleteFormat")}
             className={headerActionButtonClassName}

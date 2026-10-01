@@ -2,24 +2,25 @@ import { createTravels, type Travels } from "travels";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { config } from "@/config";
-import type {
-  BankInfo,
-  FileEntry,
-  PullRequestSource,
-  RepoRef,
-} from "@/domain/types";
+import {
+  type ExamplePositions,
+  initialExamplePositions,
+  reconcileExamplePositions,
+} from "@/domain/format";
+import type { BankInfo, FileEntry, RepoRef, SourceRef } from "@/domain/types";
+import { isExperimentScope } from "./draft-scope";
 import { DRAFT_STORE_STORAGE_KEY, draftStoreStateStorage } from "./persistence";
 import type { SavedWorkspaceSession } from "./workspace-session";
 
 interface SourceState {
   repository: RepoRef;
-  sourceRef: PullRequestSource | null;
+  sourceRef: SourceRef | null;
   tree: FileEntry[];
   banks: BankInfo[];
   loading: boolean;
   error: string | null;
   setRepository: (repository: RepoRef) => void;
-  setSource: (ref: PullRequestSource | null) => void;
+  setSource: (ref: SourceRef | null) => void;
   setTree: (tree: FileEntry[]) => void;
   setBanks: (banks: BankInfo[]) => void;
   setLoading: (v: boolean) => void;
@@ -51,9 +52,12 @@ interface DraftEntry {
   headContent: string | null;
   isDeleted: boolean;
   timestamp: number;
+  examplePositions?: ExamplePositions;
 }
 
 interface DraftHistoryState {
+  rebasedStep?: number;
+  examplePositions: ExamplePositions;
   content: string;
   isDeleted: boolean;
 }
@@ -80,7 +84,8 @@ interface DraftState {
     filePath: string,
     content: string,
     baselineHeadSha: string,
-    headContent: string | null
+    headContent: string | null,
+    examplePositions?: ExamplePositions
   ) => void;
   setDraft: (
     filePath: string,
@@ -119,6 +124,7 @@ function createDraftEntry(params: {
   baselineHeadSha: string;
   headContent: string | null;
   isDeleted?: boolean;
+  examplePositions?: ExamplePositions;
 }): DraftEntry {
   const {
     filePath,
@@ -133,6 +139,13 @@ function createDraftEntry(params: {
     content,
     headContent,
     isDeleted,
+    examplePositions:
+      params.examplePositions ??
+      reconcileExamplePositions(
+        headContent ?? "",
+        content,
+        initialExamplePositions(headContent)
+      ),
     timestamp: Date.now(),
   };
 }
@@ -151,7 +164,13 @@ function ensureDraftHistory(
     return existing;
   }
   const history = createTravels<DraftHistoryState>(
-    { content, isDeleted },
+    {
+      content,
+      isDeleted,
+      examplePositions:
+        useDraftStore.getState().drafts.get(filePath)?.examplePositions ??
+        initialExamplePositions(content),
+    },
     { maxHistory: 200 }
   );
   draftHistoryByPath.set(filePath, history);
@@ -166,7 +185,13 @@ function resetDraftHistory(
   draftHistoryByPath.set(
     filePath,
     createTravels<DraftHistoryState>(
-      { content, isDeleted },
+      {
+        content,
+        isDeleted,
+        examplePositions:
+          useDraftStore.getState().drafts.get(filePath)?.examplePositions ??
+          initialExamplePositions(content),
+      },
       { maxHistory: 200 }
     )
   );
@@ -183,6 +208,7 @@ function syncEntryContentFromHistory(entry: DraftEntry, filePath: string) {
     baselineHeadSha: entry.baselineHeadSha,
     headContent: entry.headContent,
     isDeleted: history.getState().isDeleted,
+    examplePositions: history.getState().examplePositions,
   });
 }
 
@@ -193,23 +219,96 @@ function hasPersistedDraftChanges(entry: DraftEntry): boolean {
 function mapStoredDrafts(
   entries?: Record<string, DraftEntry>
 ): Map<string, DraftEntry> {
-  return new Map(Object.entries(entries ?? {}));
+  return new Map(
+    Object.entries(entries ?? {}).map(([path, entry]) => [
+      path,
+      entry.examplePositions
+        ? entry
+        : {
+            ...entry,
+            examplePositions: reconcileExamplePositions(
+              entry.headContent ?? "",
+              entry.content,
+              initialExamplePositions(entry.headContent)
+            ),
+          },
+    ])
+  );
 }
 
 function toStoredDraftRecord(
-  drafts: Map<string, DraftEntry>
+  drafts: Map<string, DraftEntry>,
+  keepBaseline = false
 ): Record<string, DraftEntry> {
   return Object.fromEntries(
-    Array.from(drafts.entries()).filter(([, entry]) =>
-      hasPersistedDraftChanges(entry)
+    Array.from(drafts.entries()).filter(
+      ([, entry]) =>
+        keepBaseline ||
+        hasPersistedDraftChanges(entry) ||
+        JSON.stringify(entry.examplePositions) !==
+          JSON.stringify(initialExamplePositions(entry.headContent))
     )
   );
+}
+
+function publishedExamplePositions(
+  content: string,
+  positions: ExamplePositions,
+  published: DraftEntry
+): ExamplePositions {
+  if (published.isDeleted) {
+    return reconcileExamplePositions("", content, []);
+  }
+  const captured =
+    published.examplePositions ??
+    initialExamplePositions(published.headContent);
+  const inferred = reconcileExamplePositions(
+    published.content,
+    content,
+    initialExamplePositions(published.content)
+  );
+  return positions.map((position, index) => {
+    if (position !== null) {
+      const sourceIndex = captured.indexOf(position);
+      return sourceIndex >= 0 ? sourceIndex + 1 : null;
+    }
+    const newPosition = inferred[index];
+    return newPosition && captured[newPosition - 1] === null
+      ? newPosition
+      : null;
+  });
+}
+
+function rebasePublishedHistory(filePath: string, published: DraftEntry) {
+  const history = getDraftHistory(filePath);
+  if (!history) {
+    return;
+  }
+  const states = history.getHistorySnapshot().map((state, index) => ({
+    ...state,
+    // Keep metadata-only undo steps even when rebasing makes their values equal.
+    rebasedStep: index,
+    examplePositions: publishedExamplePositions(
+      state.content,
+      state.examplePositions,
+      published
+    ),
+  }));
+  const nextHistory = createTravels<DraftHistoryState>(states[0]!, {
+    maxHistory: 200,
+  });
+  for (const state of states.slice(1)) {
+    nextHistory.setState(state);
+  }
+  nextHistory.go(history.getPosition());
+  draftHistoryByPath.set(filePath, nextHistory);
 }
 
 function rebasePublishedDrafts(
   drafts: Map<string, DraftEntry>,
   files: DraftEntry[],
-  headSha: string
+  headSha: string,
+  isActiveScope: boolean
 ): string[] {
   const removed: string[] = [];
   for (const published of files) {
@@ -233,12 +332,22 @@ function rebasePublishedDrafts(
       drafts.delete(published.filePath);
       removed.push(published.filePath);
     } else {
+      const headContent = published.isDeleted ? null : published.content;
+      if (isActiveScope) {
+        rebasePublishedHistory(published.filePath, published);
+      }
       drafts.set(
         published.filePath,
         createDraftEntry({
           ...current,
           baselineHeadSha: headSha,
-          headContent: published.isDeleted ? null : published.content,
+          headContent,
+          examplePositions: publishedExamplePositions(
+            current.content,
+            current.examplePositions ??
+              initialExamplePositions(current.headContent),
+            published
+          ),
         })
       );
     }
@@ -266,7 +375,10 @@ export const useDraftStore = create<DraftState>()(
         }
 
         const nextStoredDraftsByScope = { ...state.storedDraftsByScope };
-        const nextStoredDrafts = toStoredDraftRecord(nextDrafts);
+        const nextStoredDrafts = toStoredDraftRecord(
+          nextDrafts,
+          isExperimentScope(scopeKey)
+        );
         if (Object.keys(nextStoredDrafts).length === 0) {
           delete nextStoredDraftsByScope[scopeKey];
         } else {
@@ -330,6 +442,7 @@ export const useDraftStore = create<DraftState>()(
               baselineHeadSha,
               headContent,
               isDeleted: existing.isDeleted,
+              examplePositions: existing.examplePositions,
             });
             nextDrafts.set(filePath, nextEntry);
             setCurrentScopeDrafts(nextDrafts);
@@ -353,7 +466,13 @@ export const useDraftStore = create<DraftState>()(
           resetDraftHistory(filePath, content);
         },
 
-        applyUserEdit: (filePath, content, baselineHeadSha, headContent) => {
+        applyUserEdit: (
+          filePath,
+          content,
+          baselineHeadSha,
+          headContent,
+          examplePositions
+        ) => {
           const state = get();
           const existing: DraftEntry | undefined = state.drafts.get(filePath);
           const currentEntry =
@@ -371,15 +490,25 @@ export const useDraftStore = create<DraftState>()(
             currentEntry.isDeleted
           );
           const currentState = history.getState();
+          const nextPositions =
+            examplePositions ??
+            reconcileExamplePositions(
+              currentState.content,
+              content,
+              currentState.examplePositions
+            );
           if (
             currentState.content === content &&
-            currentState.isDeleted === false
+            currentState.isDeleted === false &&
+            JSON.stringify(currentState.examplePositions) ===
+              JSON.stringify(nextPositions)
           ) {
             if (existing) {
               return;
             }
           } else {
             history.setState((draft) => {
+              draft.examplePositions = nextPositions;
               draft.content = content;
               draft.isDeleted = false;
             });
@@ -391,6 +520,7 @@ export const useDraftStore = create<DraftState>()(
             baselineHeadSha,
             headContent,
             isDeleted: history.getState().isDeleted,
+            examplePositions: history.getState().examplePositions,
           });
           const nextDrafts = new Map(state.drafts);
           nextDrafts.set(filePath, nextEntry);
@@ -435,6 +565,7 @@ export const useDraftStore = create<DraftState>()(
             baselineHeadSha: oldEntry.baselineHeadSha,
             headContent: oldEntry.headContent,
             isDeleted: oldEntry.isDeleted,
+            examplePositions: oldEntry.examplePositions,
           });
           newDrafts.set(newFilePath, newEntry);
           setCurrentScopeDrafts(newDrafts);
@@ -476,6 +607,9 @@ export const useDraftStore = create<DraftState>()(
             history.getState().content !== entry.headContent
           ) {
             history.setState((draft) => {
+              draft.examplePositions = initialExamplePositions(
+                entry.headContent
+              );
               draft.content = entry.headContent ?? "";
               draft.isDeleted = true;
             });
@@ -587,7 +721,12 @@ export const useDraftStore = create<DraftState>()(
             : mapStoredDrafts(
                 scopeKey ? get().storedDraftsByScope[scopeKey] : undefined
               );
-          const removed = rebasePublishedDrafts(drafts, files, headSha);
+          const removed = rebasePublishedDrafts(
+            drafts,
+            files,
+            headSha,
+            isActiveScope
+          );
           if (isActiveScope) {
             for (const path of removed) {
               draftHistoryByPath.delete(path);

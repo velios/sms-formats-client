@@ -141,7 +141,8 @@ export function RegexLab({
       )
     : activeExampleIndex;
   const activeExample = visibleExampleTexts[visibleActiveExampleIndex] ?? "";
-  const isExampleInputReadOnly = readOnly || isShowingIntersectionExamples;
+  const isExampleInputReadOnly =
+    readOnly || isShowingIntersectionExamples || examples.length === 0;
   const [hoveredGroup, setHoveredGroup] = useState<number | null>(null);
   const rightPaneTab = useUIStore((state) => state.rightPaneTab);
   const setRightPaneTab = useUIStore((state) => state.setRightPaneTab);
@@ -673,7 +674,7 @@ export function RegexLab({
                       </Button>
                     )}
                   {!isShowingIntersectionExamples &&
-                    visibleExampleTexts.length > 1 && (
+                    visibleExampleTexts.length > 0 && (
                       <Button
                         aria-label={t("editor.removeExample")}
                         className="px-1 py-0.5 text-muted-foreground text-xs"

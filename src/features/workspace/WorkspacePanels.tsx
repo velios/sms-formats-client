@@ -37,6 +37,7 @@ const workspaceActionsDividerClassName =
   "mx-0.5 my-2 h-px shrink-0 bg-[color:var(--border)]";
 
 export function renderWorkspaceContent(params: {
+  anchorReady?: boolean;
   showSenders: boolean;
   bankPath: string;
   readOnly: boolean;
@@ -74,6 +75,7 @@ export function renderWorkspaceContent(params: {
   if (selectedFile) {
     return (
       <FormatEditor
+        anchorReady={params.anchorReady}
         filePath={selectedFile}
         intersectionExamples={selectedFileIntersectionExamples}
         key={selectedFile}

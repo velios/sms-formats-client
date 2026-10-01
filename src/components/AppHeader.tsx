@@ -1,5 +1,11 @@
 import { Settings } from "lucide-react";
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ModalDialog } from "@/components/ModalDialog";
@@ -25,7 +31,16 @@ export function AppHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const githubTokenInputId = useId();
-  const repository = useSourceStore((s) => s.repository);
+  const storedRepository = useSourceStore((s) => s.repository);
+  const repository = useMemo(() => {
+    const match = location.pathname.match(/^\/repo\/([^/]+)\/([^/]+)/);
+    return match
+      ? {
+          owner: decodeURIComponent(match[1]!),
+          repo: decodeURIComponent(match[2]!),
+        }
+      : storedRepository;
+  }, [location.pathname, storedRepository]);
   const setLocale = useUIStore((s) => s.setLocale);
   const locale = useUIStore((s) => s.locale);
   const authChangeVersion = useSyncExternalStore(

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { QueryObserver } from "@tanstack/react-query";
 
 const fetchFileContentMock = mock();
 mock.module("@/infrastructure/github", () => ({
@@ -6,7 +7,9 @@ mock.module("@/infrastructure/github", () => ({
 }));
 
 const { queryClient } = await import("@/lib/query-client");
-const { getFileContent, loadFileContent } = await import("./file-content");
+const { fileContentOptions, getFileContent, loadFileContent } = await import(
+  "./file-content"
+);
 const revision = {
   repository: { owner: "zenmoney", repo: "sms-formats" },
   filePath: "src/Bank/formats/a.txt",
@@ -46,6 +49,23 @@ describe("file revision cache", () => {
     await expect(loadFileContent(revision)).rejects.toThrow("offline");
     expect(getFileContent(revision)).toBeUndefined();
     expect(await loadFileContent(revision)).toBe("");
+  });
+
+  it("does not repeat a failed preparation when an editor observes the revision", async () => {
+    fetchFileContentMock.mockRejectedValueOnce(new Error("missing"));
+    await expect(loadFileContent(revision)).rejects.toThrow("missing");
+    const observer = new QueryObserver(
+      queryClient,
+      fileContentOptions(revision)
+    );
+    const unsubscribe = observer.subscribe(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchFileContentMock).toHaveBeenCalledTimes(1);
+    expect(observer.getCurrentResult().error?.message).toBe("missing");
+    unsubscribe();
+    fetchFileContentMock.mockResolvedValueOnce("restored");
+    expect(await loadFileContent(revision)).toBe("restored");
+    expect(fetchFileContentMock).toHaveBeenCalledTimes(2);
   });
 });
 

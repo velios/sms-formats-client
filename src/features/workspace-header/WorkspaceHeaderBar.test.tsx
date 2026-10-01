@@ -93,6 +93,31 @@ function renderHeaderBar(
 }
 
 describe("WorkspaceHeaderBar", () => {
+  it.each([false, true])(
+    "can reset identity-only edits after reload while respecting readOnly=%s",
+    (readOnly) => {
+      const content =
+        "^(.*)$\n\n-----COLUMNS-----\ncomment\n\n-----EXAMPLE-----\nA\n\n-----EXAMPLE-----\nB\n\n-----EXAMPLE-----\nC\n";
+      mocks.draftStore.getDraft.mockReturnValue({
+        content,
+        headContent: content,
+        isDeleted: false,
+        examplePositions: [1, null, 3],
+      });
+      renderHeaderBar({ localOnly: true, readOnly });
+      const reset = screen.getByRole("button", {
+        name: "editor.resetFileToSource",
+      });
+      expect(reset.hasAttribute("disabled")).toBe(readOnly);
+      expect(screen.queryByText("editor.modified")).not.toBeInTheDocument();
+      if (!readOnly) {
+        fireEvent.click(reset);
+        expect(mocks.draftStore.resetFileToRemote).toHaveBeenCalledWith(
+          "src/TBank_123/formats/current.txt"
+        );
+      }
+    }
+  );
   beforeEach(() => {
     mocks.draftStore.canRedo.mockReset();
     mocks.draftStore.canRedo.mockReturnValue(false);

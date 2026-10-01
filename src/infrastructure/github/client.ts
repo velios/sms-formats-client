@@ -5,7 +5,13 @@ import {
   type PullRequestWorkspaceResolution,
   resolvePullRequestWorkspaceSnapshot,
 } from "@/domain/pull-request-workspace";
-import type { FileEntry, PullRequestLabel, RepoRef } from "@/domain/types";
+import type {
+  CheckedSourceHead,
+  FileEntry,
+  PullRequestLabel,
+  RepoRef,
+  SourceTarget,
+} from "@/domain/types";
 import { queryClient } from "@/lib/query-client";
 import { decodeBase64Utf8, encodeBase64Utf8 } from "./encoding";
 
@@ -909,18 +915,129 @@ export async function fetchRepoTree(
     }));
 }
 
+export class GitHubRateLimitError extends Error {
+  readonly retryAt: number;
+
+  constructor(retryAt: number) {
+    super("GitHub request limit reached");
+    this.retryAt = retryAt;
+    this.name = "GitHubRateLimitError";
+  }
+}
+
+const blockedRequests = new Map<number, number>();
+
+function isRateLimitResponse(
+  candidate: { status?: number; message?: string },
+  headers: Record<string, string>
+): boolean {
+  return (
+    candidate.status === 429 ||
+    (candidate.status === 403 &&
+      (headers["x-ratelimit-remaining"] === "0" ||
+        !!candidate.message?.toLowerCase().includes("rate limit")))
+  );
+}
+
+async function sourceRequest<T>(request: () => Promise<T>): Promise<T> {
+  const authVersion = getGitHubAuthChangeVersion();
+  const retryAt = blockedRequests.get(authVersion) ?? 0;
+  if (Date.now() < retryAt) {
+    throw new GitHubRateLimitError(retryAt);
+  }
+  try {
+    const response = await request();
+    const headers = (response as { headers?: Record<string, string> }).headers;
+    if (headers?.["x-ratelimit-remaining"] === "0") {
+      blockedRequests.set(
+        authVersion,
+        Number(headers["x-ratelimit-reset"]) * 1000 || Date.now() + 60_000
+      );
+    }
+    return response;
+  } catch (error) {
+    const candidate = error as {
+      status?: number;
+      message?: string;
+      response?: { headers?: Record<string, string> };
+    };
+    const headers = candidate.response?.headers ?? {};
+    if (isRateLimitResponse(candidate, headers)) {
+      const retryAfter = headers["retry-after"];
+      const retrySeconds = Number(retryAfter);
+      const retryTime =
+        retryAfter && Number.isFinite(retrySeconds)
+          ? Date.now() + retrySeconds * 1000
+          : Date.parse(retryAfter ?? "");
+      const resetTime = Number(headers["x-ratelimit-reset"]) * 1000;
+      const blockedUntil = Math.max(
+        Date.now() + 60_000,
+        Number.isFinite(retryTime) ? retryTime : 0,
+        Number.isFinite(resetTime) ? resetTime : 0
+      );
+      blockedRequests.set(authVersion, blockedUntil);
+      throw new GitHubRateLimitError(blockedUntil);
+    }
+    throw error;
+  }
+}
+
+export async function fetchSourceHead(
+  source: SourceTarget,
+  repository: RepoRef
+): Promise<CheckedSourceHead> {
+  if (source.type === "main") {
+    const response = await sourceRequest(() =>
+      publicOctokit.repos.getBranch({
+        owner: repository.owner,
+        repo: repository.repo,
+        branch: "main",
+        ...cacheBustParam(true),
+      })
+    );
+    return {
+      sourceRef: { type: "main", name: "main", sha: response.data.commit.sha },
+      checkedAt: Date.now(),
+    };
+  }
+  const response = await sourceRequest(() =>
+    publicOctokit.pulls.get({
+      owner: repository.owner,
+      repo: repository.repo,
+      pull_number: source.prNumber,
+      ...cacheBustParam(true),
+    })
+  );
+  return {
+    sourceRef: {
+      type: "pr",
+      name: response.data.head.ref,
+      sha: response.data.head.sha,
+      prNumber: source.prNumber,
+    },
+    checkedAt: Date.now(),
+    prState: response.data.merged
+      ? "merged"
+      : response.data.state === "closed"
+        ? "closed"
+        : "open",
+  };
+}
+
 export async function fetchFileContent(
   path: string,
   ref: string,
   repoRef?: RepoRef
 ): Promise<string> {
   const repo = resolveRepo(repoRef);
-  const res = await publicOctokit.repos.getContent({
-    owner: repo.owner,
-    repo: repo.repo,
-    path,
-    ref,
-  });
+  const res = await sourceRequest(() =>
+    publicOctokit.repos.getContent({
+      owner: repo.owner,
+      repo: repo.repo,
+      path,
+      ref,
+    })
+  );
   const data = res.data as { content?: string; encoding?: string };
   if (typeof data.content === "string" && data.encoding === "base64") {
     return decodeBase64Utf8(data.content.replace(/\n/g, ""));

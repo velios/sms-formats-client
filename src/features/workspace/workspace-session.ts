@@ -11,6 +11,7 @@ import {
   useSourceStore,
   waitForDraftStoreHydration,
 } from "@/store";
+import { experimentScope, isExperimentScope } from "@/store/draft-scope";
 import { waitForDraftPersistence } from "@/store/persistence";
 import {
   loadWorkspaceSession,
@@ -30,6 +31,7 @@ export type WorkspaceBlock =
 
 export interface WorkspaceState {
   session: WorkspaceSession | null;
+  experiment?: boolean;
   nextSession: WorkspaceSession | null;
   block: WorkspaceBlock | null;
   operation:
@@ -89,6 +91,7 @@ export class WorkspaceSessionController {
   private readonly listeners = new Set<() => void>();
   private selectedFile: string | null = null;
   private readonly scopeKey: string;
+  private readonly experimentKey: string;
   private state: WorkspaceState;
 
   private readonly repository: RepoRef;
@@ -98,13 +101,15 @@ export class WorkspaceSessionController {
     this.repository = repository;
     this.prNumber = prNumber;
     this.scopeKey = workspaceScope(repository, prNumber);
+    this.experimentKey = experimentScope(repository, { type: "pr", prNumber });
     const saved = loadWorkspaceSession(repository, prNumber);
     const source = useSourceStore.getState();
     const reusable =
       saved &&
       source.repository.owner === repository.owner &&
       source.repository.repo === repository.repo &&
-      source.sourceRef?.prNumber === prNumber &&
+      source.sourceRef?.type === "pr" &&
+      source.sourceRef.prNumber === prNumber &&
       source.sourceRef.sha === saved.session.headSha &&
       source.tree.length > 0;
     this.state = {
@@ -153,13 +158,13 @@ export class WorkspaceSessionController {
   }
 
   private hasDrafts(): boolean {
+    const scope = this.state.experiment ? this.experimentKey : this.scopeKey;
     const drafts = useDraftStore.getState();
     return (
-      (drafts.draftScopeKey === this.scopeKey
+      drafts.draftScopeKey === scope
         ? drafts.getChangedFiles()
-        : drafts.getStoredDraftsForScope(this.scopeKey)
-      ).length > 0
-    );
+        : drafts.getStoredDraftsForScope(scope)
+    ).some((draft) => draft.content !== draft.headContent || draft.isDeleted);
   }
 
   private async prepare(
@@ -170,7 +175,8 @@ export class WorkspaceSessionController {
     const canReuse =
       source.repository.owner === this.repository.owner &&
       source.repository.repo === this.repository.repo &&
-      source.sourceRef?.prNumber === this.prNumber &&
+      source.sourceRef?.type === "pr" &&
+      source.sourceRef.prNumber === this.prNumber &&
       source.sourceRef.sha === session.headSha &&
       source.tree.length > 0;
     const tree = canReuse
@@ -187,11 +193,23 @@ export class WorkspaceSessionController {
         selected &&
         tree.some((entry) => entry.type === "blob" && entry.path === selected)
       ) {
-        await loadFileContent({
-          repository: this.repository,
-          commitSha: session.headSha,
-          filePath: selected,
-        });
+        const stored = useDraftStore
+          .getState()
+          .getStoredDraftsForScope(
+            this.state.experiment ? this.experimentKey : this.scopeKey
+          )
+          .find((draft) => draft.filePath === selected);
+        if (
+          !stored ||
+          stored.headContent === null ||
+          stored.baselineHeadSha !== session.headSha
+        ) {
+          await loadFileContent({
+            repository: this.repository,
+            commitSha: session.headSha,
+            filePath: selected,
+          });
+        }
       }
       if (!this.isCurrent(generation)) {
         return null;
@@ -225,8 +243,9 @@ export class WorkspaceSessionController {
       return false;
     }
     const drafts = useDraftStore.getState();
-    if (drafts.draftScopeKey !== this.scopeKey) {
-      drafts.activateScope(this.scopeKey, true);
+    const scope = this.state.experiment ? this.experimentKey : this.scopeKey;
+    if (drafts.draftScopeKey !== scope) {
+      drafts.activateScope(scope, true);
     }
     if (discard) {
       useDraftStore.getState().discardAll();
@@ -374,9 +393,11 @@ export class WorkspaceSessionController {
       );
       return;
     }
+    const experiment = Boolean(latestResolutionExperiment(resolution, saved));
+    this.update({ experiment });
     const drafts = useDraftStore
       .getState()
-      .getStoredDraftsForScope(this.scopeKey);
+      .getStoredDraftsForScope(experiment ? this.experimentKey : this.scopeKey);
     const latest = resolution.status === "supported" ? resolution : null;
     const stale =
       latest &&
@@ -426,6 +447,7 @@ export class WorkspaceSessionController {
   discardAndRefresh = (): Promise<void> =>
     this.state.block === "stale" ? this.refresh(true) : Promise.resolve();
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Lifecycle commands preserve publication receipts and draft scopes across permission changes.
   private async refresh(discard: boolean): Promise<void> {
     if (
       loadWorkspaceSession(this.repository, this.prNumber)
@@ -457,9 +479,19 @@ export class WorkspaceSessionController {
         this.observe(resolution);
         return;
       }
+      if (!discard && this.state.experiment && resolution.writable) {
+        await this.openResolved(
+          resolution,
+          loadWorkspaceSession(this.repository, this.prNumber),
+          generation
+        );
+        return;
+      }
       if (
         !discard &&
-        (resolution.headSha === this.state.session?.headSha || this.hasDrafts())
+        (this.state.experiment ||
+          resolution.headSha === this.state.session?.headSha ||
+          this.hasDrafts())
       ) {
         this.observe(resolution);
         return;
@@ -493,7 +525,12 @@ export class WorkspaceSessionController {
       return null;
     }
     const { session, block, operation } = this.state;
-    if (!session?.writable || block || operation) {
+    if (
+      !session?.writable ||
+      block ||
+      operation ||
+      isExperimentScope(useDraftStore.getState().draftScopeKey)
+    ) {
       return null;
     }
     const generation = ++this.generation;
@@ -601,4 +638,31 @@ export class WorkspaceSessionController {
       }
     }
   };
+}
+
+function latestResolutionExperiment(
+  resolution: PullRequestWorkspaceResolution,
+  saved: SavedWorkspaceSession | null
+): boolean {
+  const session =
+    resolution.status === "supported" ? resolution : saved?.session;
+  if (
+    !session ||
+    saved?.session.writable ||
+    useDraftStore
+      .getState()
+      .getStoredDraftsForScope(
+        workspaceScope(session.repository, session.prNumber)
+      ).length
+  ) {
+    return false;
+  }
+  if (resolution.status === "supported") {
+    return !resolution.writable;
+  }
+  const scope = experimentScope(session.repository, {
+    type: "pr",
+    prNumber: session.prNumber,
+  });
+  return useDraftStore.getState().getStoredDraftsForScope(scope).length > 0;
 }

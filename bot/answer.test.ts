@@ -13,7 +13,7 @@ import { DIRECT_USAGE_HINT, INITIALIZING_MESSAGE } from "./render";
 const DEMO_SMS = "Pokupka 1000 RUB. Karta *1234. Dostupno 5000 RUB";
 const SBER_URL =
   "https://github.com/zenmoney/sms-formats/blob/abc/src/sberbank/formats/12.txt";
-const RECOGNIZED = `main:\n- <a href="${SBER_URL}">sberbank/12</a>`;
+const RECOGNIZED = `main:\n- <a href="${SBER_URL}">sberbank/12</a> (<a href="https://sms.zentable.ru/repo/zenmoney/sms-formats/main?file=src%2Fsberbank%2Fformats%2F12.txt#add-sms=UG9rdXBrYSAxMDAwIFJVQi4gS2FydGEgKjEyMzQuIERvc3R1cG5vIDUwMDAgUlVC">zensms</a>)`;
 
 const formats: CorpusFormat[] = [
   {
