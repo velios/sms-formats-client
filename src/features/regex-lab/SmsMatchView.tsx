@@ -194,8 +194,24 @@ function buildFullMatchSegments(
     boundedFullMatchStart,
     boundedFullMatchEnd
   );
+  const hovered = sortedGroups.find((group) => group.index === hoveredGroup);
+  // NFC can map distinct captures to the same original cluster; give the hovered capture priority.
+  const displayGroups = hovered
+    ? normalizeGroupsForBounds(
+        sortedGroups.flatMap((group) =>
+          group === hovered
+            ? [group]
+            : [
+                { ...group, end: Math.min(group.end, hovered.start) },
+                { ...group, start: Math.max(group.start, hovered.end) },
+              ]
+        ),
+        boundedFullMatchStart,
+        boundedFullMatchEnd
+      )
+    : sortedGroups;
 
-  for (const group of sortedGroups) {
+  for (const group of displayGroups) {
     const groupStart = Math.max(group.start, cursor);
     const groupEnd = Math.max(groupStart, group.end);
     if (groupEnd <= cursor) {

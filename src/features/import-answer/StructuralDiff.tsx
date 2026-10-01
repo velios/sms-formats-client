@@ -1,6 +1,6 @@
 import { presentableDiff } from "@codemirror/merge";
 import { useTranslation } from "react-i18next";
-import { normalizeSmsText, parseFormatFile } from "@/domain/format";
+import { parseFormatFile } from "@/domain/format";
 
 export type DiffKind = "changed" | "created" | "deleted" | "identical";
 
@@ -148,7 +148,7 @@ function SendersDiff({
 }
 
 function normalizeExample(example: string): string {
-  return normalizeSmsText(example);
+  return example.replace(/[\n\r]+/g, " ").trim();
 }
 
 function FormatDiff({
