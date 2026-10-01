@@ -100,93 +100,6 @@ export function SourceWorkspace() {
     state.operation === "opening" ||
     state.operation === "selecting" ||
     state.operation === "refreshing";
-  const notices = (
-    <div className="flex shrink-0 flex-wrap items-center gap-2">
-      <StatusBadge variant="info">{t("experiment.localOnly")}</StatusBadge>
-      {(state.nextHead ?? state.head)?.prState && (
-        <StatusBadge variant="info">
-          {t(`experiment.prState.${(state.nextHead ?? state.head)?.prState}`)}
-        </StatusBadge>
-      )}
-      {draft && (
-        <span className="font-mono text-xs">
-          {t("experiment.baseline", { sha: draft.baselineHeadSha })}
-        </span>
-      )}
-      {state.nextHead && (
-        <StatusBadge variant="warning">
-          {t("experiment.sourceUpdated")}{" "}
-          {t(
-            draft && draft.content !== draft.headContent
-              ? "experiment.editsSaved"
-              : "experiment.baselineSaved"
-          )}
-        </StatusBadge>
-      )}
-      {state.error && (
-        <StatusBadge variant="error">
-          {state.head ? t("experiment.freshnessFailed") : t("app.error")}:{" "}
-          {state.error}
-        </StatusBadge>
-      )}
-      <Button
-        disabled={state.operation !== null}
-        onClick={() => {
-          void (state.head
-            ? state.error && file && !draft
-              ? controller.select(file, true)
-              : controller.checkUpdates()
-            : controller.open(requested));
-        }}
-        size="sm"
-        variant="ghost"
-      >
-        {t(
-          state.error
-            ? "app.retry"
-            : state.head
-              ? "workspace.checkUpdates"
-              : "app.retry"
-        )}
-      </Button>
-      {state.nextHead && (
-        <Button
-          disabled={state.operation !== null}
-          onClick={() => {
-            if (
-              window.confirm(
-                t(
-                  !fullBank
-                    ? "experiment.refreshFileConfirm"
-                    : params.prNumber
-                      ? "experiment.refreshPrConfirm"
-                      : "experiment.refreshBankConfirm",
-                  { bank: bankPath }
-                )
-              )
-            ) {
-              void controller.refresh();
-            }
-          }}
-          size="sm"
-          variant="ghost"
-        >
-          {t("experiment.refreshAction")}
-        </Button>
-      )}
-      {draft && (
-        <Button
-          onClick={() => {
-            void navigator.clipboard.writeText(draft.content);
-          }}
-          size="sm"
-          variant="ghost"
-        >
-          {t("experiment.copy")}
-        </Button>
-      )}
-    </div>
-  );
   const editor =
     busy || (requested && file !== requested) ? (
       <div className="ui-state">{t("app.loading")}</div>
@@ -221,7 +134,25 @@ export function SourceWorkspace() {
         sendersPath={`${bankPath}/senders.txt`}
         showSenders={showSenders}
       />
-      {notices}
+      {state.error && (
+        <div className="flex shrink-0 items-center gap-2">
+          <StatusBadge variant="error">
+            {t("app.error")}: {state.error}
+          </StatusBadge>
+          <Button
+            disabled={busy}
+            onClick={() => {
+              void (state.head && file && !draft
+                ? controller.select(file, true)
+                : controller.open(requested));
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("app.retry")}
+          </Button>
+        </div>
+      )}
       {fullBank ? (
         <ResizablePanels side="left">
           <div className="ui-panel flex min-h-0 flex-col">

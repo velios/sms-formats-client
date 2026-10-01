@@ -160,8 +160,7 @@
     "invalidExampleNumber": "Invalid Example number",
     "exampleMissing": "Example #{{number}} is missing",
     "exampleDeleted": "Example #{{number}} was deleted locally",
-    "importReadOnly": "Import is unavailable in a protected document",
-    "copyLink": "Copy link"
+    "importReadOnly": "Import is unavailable in a protected document"
   },
   "columns": {
     "add": "Add column",
@@ -509,31 +508,15 @@
       "outside-bank-scope": "This PR changes files outside the bank and is no longer supported by the editor."
     },
     "cachedStaleNotice": "PR changed since your edits. You are viewing the previous version. Discard local changes and refresh the PR to continue.",
-    "discardAndRefresh": "Discard local changes and refresh PR",
-    "checkUpdates": "Check updates"
+    "discardAndRefresh": "Discard local changes and refresh PR"
   },
   "regex": {
     "captureValue": "Value"
   },
   "experiment": {
-    "prState": {
-      "open": "PR open",
-      "closed": "PR closed",
-      "merged": "PR merged"
-    },
-    "localOnly": "Local experiment — publishing unavailable",
-    "baseline": "Baseline: {{sha}}",
-    "sourceUpdated": "Source has changed.",
-    "editsSaved": "Local edits preserved.",
-    "baselineSaved": "Previous baseline preserved.",
-    "freshnessFailed": "Could not check version freshness",
-    "refreshFileConfirm": "Discard all local edits to the current file only and update to head?",
-    "refreshBankConfirm": "Discard all experiments in bank {{bank}} of this main source and update to head? Other banks and sources will be preserved.",
     "refreshPrConfirm": "Discard all local edits in this repository/PR and update to head? Other PRs and sources will be preserved.",
-    "copy": "Copy format",
     "missing": "File is missing in the current source: {{path}}",
     "chooseFile": "Select a file or open a link with the file parameter.",
-    "bank": "Bank",
-    "refreshAction": "Discard edits and update to head"
+    "bank": "Bank"
   }
 }

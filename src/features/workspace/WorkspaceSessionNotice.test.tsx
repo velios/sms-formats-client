@@ -43,15 +43,19 @@ describe("WorkspaceSessionNotice", () => {
     }
   });
 
-  it("offers an explicit freshness check without polling in a ready workspace", () => {
-    render(
-      <WorkspaceSessionNotice controller={controller} state={readyState} />
+  it.each([
+    readyState,
+    {
+      ...readyState,
+      experiment: true,
+      session: { ...readyState.session!, writable: false },
+    },
+  ])("renders no idle controls or experiment metadata", (state) => {
+    const { container } = render(
+      <WorkspaceSessionNotice controller={controller} state={state} />
     );
+    expect(container).toBeEmptyDOMElement();
     expect(actions.checkUpdates).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("button", { name: "workspace.checkUpdates" })
-    );
-    expect(actions.checkUpdates).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -59,6 +63,11 @@ describe("WorkspaceSessionNotice", () => {
       state: { ...readyState, session: null, error: "opening failed" },
       label: "app.retry",
       action: "open" as const,
+    },
+    {
+      state: { ...readyState, error: "head check failed" },
+      label: "app.retry",
+      action: "checkUpdates" as const,
     },
     {
       state: { ...readyState, block: "sync-pending" as const },
@@ -69,6 +78,8 @@ describe("WorkspaceSessionNotice", () => {
     render(<WorkspaceSessionNotice controller={controller} state={state} />);
     fireEvent.click(screen.getByRole("button", { name: label }));
     expect(actions[action]).toHaveBeenCalledTimes(1);
-    expect(actions.checkUpdates).not.toHaveBeenCalled();
+    if (action !== "checkUpdates") {
+      expect(actions.checkUpdates).not.toHaveBeenCalled();
+    }
   });
 });
