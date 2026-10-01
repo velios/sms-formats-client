@@ -15,7 +15,6 @@ import {
 import { extractFormatFileName } from "@/features/workspace/use-bank-search";
 import type { WorkspaceEditorMode } from "@/features/workspace-header/WorkspaceHeaderBar";
 import { cn } from "@/lib/utils";
-import { NormalizeBankExamplesButton } from "./NormalizeBankExamplesButton";
 
 const workspaceFileRowClassName = (params: {
   isDeleted: boolean;
@@ -100,7 +99,6 @@ export function renderWorkspaceContent(params: {
 }
 
 export function BankActionsPanel(params: {
-  normalization: Parameters<typeof NormalizeBankExamplesButton>[0];
   onApprovePullRequest: () => void;
   onCalculateIntersections: () => void;
   onOpenPromptPackage: () => void;
@@ -272,7 +270,6 @@ export function BankActionsPanel(params: {
           {t("importAnswer.openAction")}
         </Button>
       </span>
-      <NormalizeBankExamplesButton {...params.normalization} />
       <div className={workspaceActionsDividerClassName} />
       <Button
         className={cn(

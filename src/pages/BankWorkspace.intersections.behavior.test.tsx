@@ -19,10 +19,6 @@ import { type ReactElement, type ReactNode, useState } from "react";
 const scrollIntoViewMock = mock();
 const localStorageState = new Map<string, string>();
 
-mock.module("@/features/workspace/NormalizeBankExamplesButton", () => ({
-  NormalizeBankExamplesButton: () => null,
-}));
-
 const mocks = (() => {
   const routeState = {
     location: {

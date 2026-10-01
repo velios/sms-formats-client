@@ -13,7 +13,6 @@ import {
   serializeFormat,
   tryCompile,
 } from "@/domain/format";
-import { normalizeExampleSections } from "@/domain/format/normalize-examples";
 import type { SourceFileStatus } from "@/features/bank-inventory/core";
 import { RegexLab } from "@/features/regex-lab/RegexLab";
 import { useWorkspaceFileContent } from "@/hooks/useWorkspaceFileContent";
@@ -405,12 +404,6 @@ function FormatEditorCore({
           onAddExample={handleAddExample}
           onColumnsChange={handleColumnsChange}
           onExampleChange={handleExampleChange}
-          onNormalizeExample={(index) =>
-            writeDocument(
-              normalizeExampleSections(currentContent, index),
-              positions
-            )
-          }
           onOpenIntersectionFileInApp={onOpenIntersectionFileInApp}
           onOpenSmsByTemplate={onOpenSmsByTemplate}
           onOpenTemplateBySms={onOpenTemplateBySms}

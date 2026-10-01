@@ -95,8 +95,6 @@
     "resetToSource": "Discard all local changes"
   },
   "editor": {
-    "normalizeExample": "Normalize SMS",
-    "normalizeAllExamples": "Normalize all SMS examples",
     "localChange": "Local changes",
     "sourceChange": "Changed in PR",
     "changeComparisonFailed": "Could not load the PR comparison base",
