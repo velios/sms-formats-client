@@ -79,6 +79,25 @@ describe("answerGuestMessage", () => {
     expect(guestMessageText(answerGuestQuery)).toBe(RECOGNIZED);
   });
 
+  it("sends an HTML-safe usage hint for /sms without a message", async () => {
+    const answerGuestQuery = mock().mockResolvedValue({});
+    const ctx: GuestQueryContext = {
+      guestMessage: {
+        text: "@zenmoneysms_bot /sms",
+        entities: [{ type: "mention", offset: 0, length: 16 }],
+      },
+      answerGuestQuery,
+    };
+
+    await answerGuestMessage(ctx, corpus, { dryRun: false });
+
+    expect(guestMessageText(answerGuestQuery)).toContain("&lt;текст SMS&gt;");
+    expect(guestMessageText(answerGuestQuery)).not.toContain("<");
+    expect(answerGuestQuery.mock.calls[0]?.[0]).toMatchObject({
+      input_message_content: { parse_mode: "HTML" },
+    });
+  });
+
   it("prefers the quoted fragment of the replied-to message", async () => {
     const answerGuestQuery = mock().mockResolvedValue({});
     const ctx: GuestQueryContext = {
@@ -191,23 +210,24 @@ describe("answerPrivateMessage", () => {
     expect(reply.mock.calls[0]?.[0]).toBe(RECOGNIZED);
   });
 
-  it("answers the direct usage hint for /start", async () => {
-    const reply = mock().mockResolvedValue({});
-    const ctx: PrivateMessageContext = { message: { text: "/start" }, reply };
+  for (const command of ["/start", "/help", "/sms"]) {
+    it(`sends an HTML-safe usage hint for ${command}`, async () => {
+      const reply = mock().mockResolvedValue({});
+      const ctx: PrivateMessageContext = {
+        message: { text: command },
+        reply,
+      };
 
-    await answerPrivateMessage(ctx, corpus, { dryRun: false });
+      await answerPrivateMessage(ctx, corpus, { dryRun: false });
 
-    expect(reply.mock.calls[0]?.[0]).toBe(DIRECT_USAGE_HINT);
-  });
-
-  it("answers the direct usage hint for an empty /sms", async () => {
-    const reply = mock().mockResolvedValue({});
-    const ctx: PrivateMessageContext = { message: { text: "/sms" }, reply };
-
-    await answerPrivateMessage(ctx, corpus, { dryRun: false });
-
-    expect(reply.mock.calls[0]?.[0]).toBe(DIRECT_USAGE_HINT);
-  });
+      expect(reply.mock.calls[0]?.[0]).toContain("&lt;текст&gt;");
+      expect(reply.mock.calls[0]?.[0]).not.toContain("<");
+      expect(reply.mock.calls[0]?.[1]).toEqual({
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+      });
+    });
+  }
 
   it("answers the direct usage hint for a textless message", async () => {
     const reply = mock().mockResolvedValue({});
