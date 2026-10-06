@@ -3,13 +3,13 @@ import { type CorpusFormat, openPrCount, type Source } from "./corpus";
 import type { RecognizedFormat } from "./recognize";
 
 export const GUEST_USAGE_HINT =
-  "Чтобы распознать SMS: сделайте reply с сообщением @zenmoneysms_bot /sms или напишите @zenmoneysms_bot /sms <текст SMS>";
+  "Чтобы распознать SMS: сделайте reply с сообщением @zenmoneysms_bot /sms или напишите @zenmoneysms_bot /sms &lt;текст SMS&gt;";
 
 export const CONFLICT_HINT =
   "Вы указали SMS сразу двумя способами — в ответе на сообщение и текстом после /sms. Оставьте что-то одно.";
 
 export const DIRECT_USAGE_HINT =
-  "Пришлите SMS текстом — просто сообщением или командой /sms <текст>, — и я покажу, какие форматы его распознают.";
+  "Пришлите SMS текстом — просто сообщением или командой /sms &lt;текст&gt;, — и я покажу, какие форматы его распознают.";
 
 export const INITIALIZING_MESSAGE =
   "Бот запускается — попробуйте через несколько секунд.";
