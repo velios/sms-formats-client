@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { parseAnswer } from "@/features/import-answer/core";
 import {
   buildPromptPackage,
   PROMPT_PRESETS,
@@ -18,7 +19,16 @@ EXAMPLE действующих версий копируй посимвольн�
 
 Перед ответом проверь имена новых и изменяемых форматов, включая файлы с ID. Основа имени — первый пригодный EXAMPLE: по правилам Python Unicode замени серии [^\\w]+ и каждую \\d пробелами, схлопни пробелы и срежь края, возьми первые 50 символов, срежь края, затем замени _ пробелами и снова схлопни/срежь пробелы. Именам con/prn/aux/nul/com1…com9/lpt1…lpt9 добавь « file» (без учёта регистра). Не транслитерируй и не дописывай оборванное слово. При слиянии или перестановке примеров пересчитай имя; существующий суффикс _ID сохрани, новый ID не выдумывай.
 
-Ответ: краткий отчёт об изменениях и обоснованных исключениях, затем <file path="…"> с полным новым содержимым каждого нового/изменённого файла; удаление — <delete path="…"> с однострочной причиной. Переименование — новый <file> и <delete> старого пути. Используй псевдо-XML пакета, без diff и сокращённых тел.`;
+Ответ: краткий отчёт об изменениях и обоснованных исключениях, затем блоки file с полным новым содержимым каждого нового/изменённого файла и блоки delete с причиной удаления по образцам ниже. Каждый открывающий и закрывающий тег пиши с начала отдельной строки; между ними — тело файла или одна строка причины удаления. Переименование — новый <file> и <delete> старого пути. Используй псевдо-XML пакета, без diff и сокращённых тел.
+
+Образцы процитированы: в ответе убери префикс «> ».
+> <file path="src/Банк_ID/formats/Новый.txt">
+> Полное новое содержимое файла
+> </file>
+>
+> <delete path="src/Банк_ID/formats/Старый.txt">
+> Причина удаления
+> </delete>`;
 
 const BANK_PATH = "banks/tinkoff";
 
@@ -162,6 +172,61 @@ describe("buildPromptPackage text", () => {
       expect(text).not.toContain("только явной кнопкой");
     }
   });
+
+  it("prints answer examples accepted by the importer after unquoting", () => {
+    const { text } = buildPackage();
+    const examples = text
+      .split("\n")
+      .filter((line) => line.startsWith(">"))
+      .map((line) => line.replace(/^> ?/, ""))
+      .join("\n");
+    const parsed = parseAnswer(examples);
+
+    expect(parsed.status).toBe("parsed");
+    expect(parsed.problems).toEqual([]);
+    if (parsed.status !== "parsed") {
+      return;
+    }
+    expect(parsed.changes).toEqual([
+      {
+        kind: "write",
+        path: "src/Банк_ID/formats/Новый.txt",
+        content: "Полное новое содержимое файла",
+        line: 1,
+      },
+      {
+        kind: "delete",
+        path: "src/Банк_ID/formats/Старый.txt",
+        reason: "Причина удаления",
+        line: 5,
+      },
+    ]);
+  });
+
+  it.each(["main", "pr", "draft"] as const)(
+    "prints an importable deletion in the %s layer",
+    (layer) => {
+      const path = `${BANK_PATH}/formats/Удалённый.txt`;
+      const { text } = buildPackage({
+        layers: {
+          main: [],
+          pr: [],
+          draft: [],
+          [layer]: [{ path, content: null }],
+        },
+      });
+      const parsed = parseAnswer(text);
+
+      expect(parsed.status).toBe("parsed");
+      expect(parsed.problems).toEqual([]);
+      if (parsed.status !== "parsed") {
+        return;
+      }
+      expect(parsed.changes).toEqual([
+        expect.objectContaining({ kind: "delete", path, reason: "" }),
+      ]);
+    }
+  );
 
   it("puts the task text into the task block", () => {
     const { text } = buildPackage({ task: "Перепиши по cookbook" });
