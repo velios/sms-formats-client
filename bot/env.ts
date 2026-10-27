@@ -11,6 +11,7 @@ export interface BotEnv {
   checkoutDir: string;
   githubToken?: string;
   freshnessTtlMs: number;
+  adminChatId?: string;
 }
 
 function required(name: string): string {
@@ -33,6 +34,7 @@ export function loadBotEnv(): BotEnv {
     port: Number(process.env.RECOGNITION_BOT_PORT ?? "8080"),
     dryRun: process.env.RECOGNITION_BOT_DRY_RUN === "1",
     offline: process.env.RECOGNITION_BOT_OFFLINE === "1",
+    adminChatId: process.env.RECOGNITION_BOT_ADMIN_CHAT_ID?.trim() || undefined,
     proxyUrl: process.env.RECOGNITION_BOT_PROXY_URL || undefined,
     sourceRepo:
       process.env.RECOGNITION_BOT_SOURCE_REPO || "zenmoney/sms-formats",
