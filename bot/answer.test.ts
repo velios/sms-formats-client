@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { GrammyError } from "grammy";
 import { compileRegexes } from "@/domain/format";
 import {
   answerGuestMessage,
@@ -61,14 +62,126 @@ class TooManyRequestsError extends Error {
   }
 }
 
-function guestMessageText(answerGuestQuery: ReturnType<typeof mock>): string {
-  const result = answerGuestQuery.mock.calls[0]?.[0] as {
+function guestMessageText(
+  answerGuestQuery: ReturnType<typeof mock>,
+  callIndex = 0
+): string {
+  const result = answerGuestQuery.mock.calls[callIndex]?.[0] as {
     input_message_content: { message_text: string };
   };
   return result.input_message_content.message_text;
 }
 
+function entitiesTooLongError(method: string): GrammyError {
+  return new GrammyError(
+    `Call to '${method}' failed!`,
+    {
+      ok: false,
+      error_code: 400,
+      description: "Bad Request: ENTITIES_TOO_LONG",
+    },
+    method,
+    {}
+  );
+}
+
 describe("answerGuestMessage", () => {
+  it("retries without zensms links after ENTITIES_TOO_LONG, preserving sources and GitHub links", async () => {
+    const prUrl =
+      "https://github.com/zenmoney/sms-formats/blob/def/src/other/formats/2.txt";
+    const mixedFormats: CorpusFormat[] = [
+      ...formats,
+      {
+        ...formats[0]!,
+        source: { kind: "pr", number: 45, title: "Fix <&>" },
+        bank: "other",
+        formatId: "2",
+        fileUrl: prUrl,
+      },
+    ];
+    const mixedCorpus: CompiledCorpus = {
+      formats: mixedFormats,
+      compiled: compileRegexes(mixedFormats.map((format) => format.regex)),
+    };
+    const answerGuestQuery = mock()
+      .mockRejectedValueOnce(entitiesTooLongError("answerGuestQuery"))
+      .mockResolvedValue({});
+    spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await answerGuestMessage({ guestMessage, answerGuestQuery }, mixedCorpus, {
+      dryRun: false,
+    });
+
+    expect(answerGuestQuery).toHaveBeenCalledTimes(2);
+    expect(
+      guestMessageText(answerGuestQuery).match(/>zensms<\/a>/g)
+    ).toHaveLength(2);
+    expect(guestMessageText(answerGuestQuery, 1)).toBe(
+      `main:\n- <a href="${SBER_URL}">sberbank/12</a>\nPR #45 «Fix &lt;&amp;&gt;»\n- <a href="${prUrl}">other/2</a>`
+    );
+    expect(answerGuestQuery.mock.calls[1]?.[0]).toMatchObject({
+      input_message_content: {
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+      },
+    });
+  });
+
+  it("acknowledges and logs a failed shortened retry without a third attempt", async () => {
+    const answerGuestQuery = mock().mockRejectedValue(
+      entitiesTooLongError("answerGuestQuery")
+    );
+    const errWrite = spyOn(process.stderr, "write").mockImplementation(
+      () => true
+    );
+
+    await expect(
+      answerGuestMessage({ guestMessage, answerGuestQuery }, corpus, {
+        dryRun: false,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(answerGuestQuery).toHaveBeenCalledTimes(2);
+    expect(errWrite).toHaveBeenCalledWith(
+      expect.stringContaining("answerGuestQuery shortened reply failed")
+    );
+  });
+
+  it("does not retry ENTITIES_TOO_LONG when the response has no zensms links", async () => {
+    const answerGuestQuery = mock().mockRejectedValue(
+      entitiesTooLongError("answerGuestQuery")
+    );
+    spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await answerGuestMessage({ guestMessage, answerGuestQuery }, null, {
+      dryRun: false,
+    });
+
+    expect(answerGuestQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry another Telegram 400 error", async () => {
+    const answerGuestQuery = mock().mockRejectedValue(
+      new GrammyError(
+        "Call to 'answerGuestQuery' failed!",
+        {
+          ok: false,
+          error_code: 400,
+          description: "Bad Request: can't parse entities",
+        },
+        "answerGuestQuery",
+        {}
+      )
+    );
+    spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await answerGuestMessage({ guestMessage, answerGuestQuery }, corpus, {
+      dryRun: false,
+    });
+
+    expect(answerGuestQuery).toHaveBeenCalledTimes(1);
+  });
+
   it("answers the recognized format via answerGuestQuery on the happy path", async () => {
     const answerGuestQuery = mock().mockResolvedValue({});
     const ctx: GuestQueryContext = { guestMessage, answerGuestQuery };
@@ -165,6 +278,24 @@ describe("answerGuestMessage", () => {
 });
 
 describe("answerPrivateMessage", () => {
+  it("retries without zensms links after ENTITIES_TOO_LONG", async () => {
+    const reply = mock()
+      .mockRejectedValueOnce(entitiesTooLongError("sendMessage"))
+      .mockResolvedValue({});
+    spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await answerPrivateMessage({ message: { text: DEMO_SMS }, reply }, corpus, {
+      dryRun: false,
+    });
+
+    expect(reply).toHaveBeenCalledTimes(2);
+    expect(reply.mock.calls[0]?.[0]).toBe(RECOGNIZED);
+    expect(reply.mock.calls[1]).toEqual([
+      `main:\n- <a href="${SBER_URL}">sberbank/12</a>`,
+      { parse_mode: "HTML", link_preview_options: { is_disabled: true } },
+    ]);
+  });
+
   it("recognizes the whole message text and replies with the formats", async () => {
     const reply = mock().mockResolvedValue({});
     const ctx: PrivateMessageContext = { message: { text: DEMO_SMS }, reply };

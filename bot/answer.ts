@@ -1,3 +1,4 @@
+import { GrammyError } from "grammy";
 import type { InlineQueryResult } from "grammy/types";
 import {
   extractDirectSms,
@@ -53,6 +54,24 @@ async function answer(
   } catch (error) {
     // Acknowledge the webhook to avoid duplicate replies.
     process.stderr.write(`${send.label} failed for one update: ${error}\n`);
+    if (
+      !(error instanceof GrammyError) ||
+      error.error_code !== 400 ||
+      error.description !== "Bad Request: ENTITIES_TOO_LONG"
+    ) {
+      return;
+    }
+    const shortened = body.replaceAll(/ \(<a href="[^"]*">zensms<\/a>\)/g, "");
+    if (shortened === body) {
+      return;
+    }
+    try {
+      await send.deliver(shortened);
+    } catch (retryError) {
+      process.stderr.write(
+        `${send.label} shortened reply failed for one update: ${retryError}\n`
+      );
+    }
   }
 }
 
