@@ -86,6 +86,54 @@ function entitiesTooLongError(method: string): GrammyError {
 }
 
 describe("answerGuestMessage", () => {
+  it("reports the original SMS and successful shortened retry as one incident", async () => {
+    const error = entitiesTooLongError("answerGuestQuery");
+    const answerGuestQuery = mock()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue({});
+    const onDeliveryError = mock().mockResolvedValue(undefined);
+    spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await answerGuestMessage({ guestMessage, answerGuestQuery }, corpus, {
+      dryRun: false,
+      onDeliveryError,
+    });
+
+    expect(onDeliveryError).toHaveBeenCalledTimes(1);
+    expect(onDeliveryError.mock.calls[0]?.[0]).toMatchObject({
+      id: expect.any(String),
+      occurredAt: expect.any(String),
+      method: "answerGuestQuery",
+      sms: DEMO_SMS,
+      error,
+      retry: "sent",
+      responseBytes: Buffer.byteLength(RECOGNIZED),
+      corpusSize: 1,
+    });
+  });
+
+  it("reports both delivery errors when the shortened response also fails", async () => {
+    const error = entitiesTooLongError("answerGuestQuery");
+    const retryError = new ExpiredQueryError();
+    const answerGuestQuery = mock()
+      .mockRejectedValueOnce(error)
+      .mockRejectedValueOnce(retryError);
+    const onDeliveryError = mock().mockResolvedValue(undefined);
+    spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await answerGuestMessage({ guestMessage, answerGuestQuery }, corpus, {
+      dryRun: false,
+      onDeliveryError,
+    });
+
+    expect(onDeliveryError).toHaveBeenCalledTimes(1);
+    expect(onDeliveryError.mock.calls[0]?.[0]).toMatchObject({
+      error,
+      retryError,
+      retry: "failed",
+    });
+  });
+
   it("retries without zensms links after ENTITIES_TOO_LONG, preserving sources and GitHub links", async () => {
     const prUrl =
       "https://github.com/zenmoney/sms-formats/blob/def/src/other/formats/2.txt";
@@ -278,6 +326,65 @@ describe("answerGuestMessage", () => {
 });
 
 describe("answerPrivateMessage", () => {
+  it("reports a delivery error even when it cannot be retried", async () => {
+    const error = new TooManyRequestsError();
+    const reply = mock().mockRejectedValue(error);
+    const onDeliveryError = mock().mockResolvedValue(undefined);
+    spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await answerPrivateMessage({ message: { text: DEMO_SMS }, reply }, corpus, {
+      dryRun: false,
+      onDeliveryError,
+    });
+
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(onDeliveryError.mock.calls[0]?.[0]).toMatchObject({
+      method: "reply",
+      sms: DEMO_SMS,
+      error,
+      retry: "not-attempted",
+    });
+  });
+
+  it("acknowledges an admin notification failure without recursively reporting it", async () => {
+    const reply = mock().mockRejectedValue(new TooManyRequestsError());
+    const onDeliveryError = mock().mockRejectedValue(
+      new Error("admin blocked bot")
+    );
+    const errWrite = spyOn(process.stderr, "write").mockImplementation(
+      () => true
+    );
+
+    await expect(
+      answerPrivateMessage({ message: { text: DEMO_SMS }, reply }, corpus, {
+        dryRun: false,
+        onDeliveryError,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(onDeliveryError).toHaveBeenCalledTimes(1);
+    expect(errWrite).toHaveBeenCalledWith(
+      expect.stringContaining("Admin notification failed")
+    );
+  });
+
+  it("does not report a successful response or dry-run", async () => {
+    const reply = mock().mockResolvedValue({});
+    const onDeliveryError = mock().mockResolvedValue(undefined);
+    spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await answerPrivateMessage({ message: { text: DEMO_SMS }, reply }, corpus, {
+      dryRun: false,
+      onDeliveryError,
+    });
+    await answerPrivateMessage({ message: { text: DEMO_SMS }, reply }, corpus, {
+      dryRun: true,
+      onDeliveryError,
+    });
+
+    expect(onDeliveryError).not.toHaveBeenCalled();
+  });
+
   it("retries without zensms links after ENTITIES_TOO_LONG", async () => {
     const reply = mock()
       .mockRejectedValueOnce(entitiesTooLongError("sendMessage"))

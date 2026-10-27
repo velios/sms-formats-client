@@ -35,11 +35,30 @@ interface Send {
   deliver(body: string): Promise<unknown>;
 }
 
+export interface DeliveryFailure {
+  id: string;
+  occurredAt: string;
+  method: string;
+  intent: Intent["kind"];
+  sms?: string;
+  error: unknown;
+  retry: "not-attempted" | "sent" | "failed";
+  retryError?: unknown;
+  responseBytes: number;
+  shortenedResponseBytes?: number;
+  corpusSize: number;
+}
+
+interface AnswerOptions {
+  dryRun: boolean;
+  onDeliveryError?: (failure: DeliveryFailure) => Promise<unknown>;
+}
+
 async function answer(
   intent: Intent,
   corpus: CompiledCorpus | null,
   send: Send,
-  options: { dryRun: boolean }
+  options: AnswerOptions
 ): Promise<void> {
   const body = respond(intent, corpus);
   if (body === null) {
@@ -53,23 +72,44 @@ async function answer(
     await send.deliver(body);
   } catch (error) {
     // Acknowledge the webhook to avoid duplicate replies.
-    process.stderr.write(`${send.label} failed for one update: ${error}\n`);
-    if (
-      !(error instanceof GrammyError) ||
-      error.error_code !== 400 ||
-      error.description !== "Bad Request: ENTITIES_TOO_LONG"
-    ) {
-      return;
-    }
+    const failure: DeliveryFailure = {
+      id: crypto.randomUUID(),
+      occurredAt: new Date().toISOString(),
+      method: send.label,
+      intent: intent.kind,
+      sms: intent.kind === "sms" ? intent.sms : undefined,
+      error,
+      retry: "not-attempted",
+      responseBytes: Buffer.byteLength(body),
+      corpusSize: corpus?.formats.length ?? 0,
+    };
+    process.stderr.write(
+      `${send.label} failed for one update [${failure.id}]: ${error}\n`
+    );
     const shortened = body.replaceAll(/ \(<a href="[^"]*">zensms<\/a>\)/g, "");
-    if (shortened === body) {
-      return;
+    if (
+      error instanceof GrammyError &&
+      error.error_code === 400 &&
+      error.description === "Bad Request: ENTITIES_TOO_LONG" &&
+      shortened !== body
+    ) {
+      failure.shortenedResponseBytes = Buffer.byteLength(shortened);
+      try {
+        await send.deliver(shortened);
+        failure.retry = "sent";
+      } catch (retryError) {
+        failure.retry = "failed";
+        failure.retryError = retryError;
+        process.stderr.write(
+          `${send.label} shortened reply failed for one update [${failure.id}]: ${retryError}\n`
+        );
+      }
     }
     try {
-      await send.deliver(shortened);
-    } catch (retryError) {
+      await options.onDeliveryError?.(failure);
+    } catch (notificationError) {
       process.stderr.write(
-        `${send.label} shortened reply failed for one update: ${retryError}\n`
+        `Admin notification failed [${failure.id}]: ${notificationError}\n`
       );
     }
   }
@@ -78,7 +118,7 @@ async function answer(
 export function answerGuestMessage(
   ctx: GuestQueryContext,
   corpus: CompiledCorpus | null,
-  options: { dryRun: boolean }
+  options: AnswerOptions
 ): Promise<void> {
   const message = ctx.guestMessage;
   if (!message) {
@@ -114,7 +154,7 @@ export function answerGuestMessage(
 export function answerPrivateMessage(
   ctx: PrivateMessageContext,
   corpus: CompiledCorpus | null,
-  options: { dryRun: boolean }
+  options: AnswerOptions
 ): Promise<void> {
   const intent = extractDirectSms(ctx.message?.text);
   return answer(

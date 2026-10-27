@@ -1,13 +1,18 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { serve } from "bun";
-import { Bot, webhookCallback } from "grammy";
+import { Bot, type Context, webhookCallback } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
-import { answerGuestMessage, answerPrivateMessage } from "./answer";
+import {
+  answerGuestMessage,
+  answerPrivateMessage,
+  type DeliveryFailure,
+} from "./answer";
 import { buildMainCorpus } from "./corpus";
 import { buildSnapshot, CorpusStore } from "./corpus-store";
 import { createCorpusSync } from "./corpus-sync";
 import { loadBotEnv } from "./env";
+import { notifyAdmin } from "./incidents";
 import { ensureMainCheckout } from "./main-checkout";
 
 const env = loadBotEnv();
@@ -71,11 +76,21 @@ const bot = new Bot(env.token, {
     : {}),
 });
 
+function answerOptions(ctx: Context) {
+  const mainSha = store.current?.mainSha;
+  const adminChatId = env.adminChatId;
+  return {
+    dryRun: env.dryRun,
+    onDeliveryError: adminChatId
+      ? (failure: DeliveryFailure) =>
+          notifyAdmin(bot.api, adminChatId, ctx, failure, mainSha)
+      : undefined,
+  };
+}
+
 bot.on("guest_message", (ctx) => {
   store.noteDemand();
-  return answerGuestMessage(ctx, store.current, {
-    dryRun: env.dryRun,
-  });
+  return answerGuestMessage(ctx, store.current, answerOptions(ctx));
 });
 
 bot.on("message", (ctx) => {
@@ -83,9 +98,7 @@ bot.on("message", (ctx) => {
     return;
   }
   store.noteDemand();
-  return answerPrivateMessage(ctx, store.current, {
-    dryRun: env.dryRun,
-  });
+  return answerPrivateMessage(ctx, store.current, answerOptions(ctx));
 });
 
 const handleUpdate = webhookCallback(bot, "std/http", {

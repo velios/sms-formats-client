@@ -29,4 +29,6 @@ bun run bot:dev
 
 `RECOGNITION_BOT_DRY_RUN=1` отключает отправку в Telegram; `RECOGNITION_BOT_OFFLINE=1` использует подготовленный checkout без обновления сети. Локальная проверка — `bun run bot:roundtrip`. Синхронизация корпуса описана в [ADR-0004](adr/0004-corpus-sync-git-clone-pr-refs-etag-ttl.md).
 
+`RECOGNITION_BOT_ADMIN_CHAT_ID` включает уведомления об ошибках отправки ответа. Значение задаётся в окружении сервера. Отчёт содержит исходный SMS, ошибки, результат повторной отправки, ID инцидента для поиска в логах и метаданные Telegram/корпуса. Большой отчёт приходит JSON-файлом; без настройки и в dry-run уведомления не отправляются.
+
 Workflows публикуют образы SPA/бота в GHCR и развёртывают их в Dokku после проверок. Инфраструктура — [zen-hub](https://github.com/velios/zen-hub).
